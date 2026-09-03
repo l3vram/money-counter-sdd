@@ -1,0 +1,22 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+app/build
+
+# Secrets & signing material — never commit
+*.jks
+*.keystore
+/key.properties
+*.p12
+*.pk8
+
+# Tooling / agent state
+.opencode/
+.flow/
+
