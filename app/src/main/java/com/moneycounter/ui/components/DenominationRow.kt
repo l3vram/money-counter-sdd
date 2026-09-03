@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -46,6 +47,7 @@ fun DenominationRow(
 ) {
     var isEditing by remember { mutableStateOf(false) }
     var editText by remember { mutableStateOf("") }
+    val focusManager = LocalFocusManager.current
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -56,13 +58,13 @@ fun DenominationRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
                 text = "$${formatMoney(denomination.value)}",
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.weight(0.24f)
             )
@@ -78,7 +80,7 @@ fun DenominationRow(
                         editText = ""
                         onDecrement()
                     },
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         Icons.Default.Remove,
@@ -97,6 +99,7 @@ fun DenominationRow(
                         if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
                             editText = newValue
                             isEditing = true
+                            onQuantityChanged((QuantityParser.parse(newValue) ?: 0L).coerceAtLeast(0))
                         }
                     },
                     modifier = Modifier
@@ -117,10 +120,11 @@ fun DenominationRow(
                             val parsed = QuantityParser.parse(editText) ?: 0L
                             onQuantityChanged(parsed.coerceAtLeast(0))
                             isEditing = false
+                            focusManager.clearFocus()
                         }
                     ),
                     singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
                         color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center
                     )
@@ -132,7 +136,7 @@ fun DenominationRow(
                         editText = ""
                         onIncrement()
                     },
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         Icons.Default.Add,
@@ -144,7 +148,7 @@ fun DenominationRow(
 
             Text(
                 text = "$${formatMoneyBigDecimal(subtotal)}",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.weight(0.24f),

@@ -8,14 +8,19 @@ import com.moneycounter.domain.CounterStatus
 import com.moneycounter.domain.Denomination
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.MoneyCounterCalculator
+import com.moneycounter.domain.SavedCount
+import com.moneycounter.domain.SavedCountItem
 import com.moneycounter.repository.DenominationRepository
 import com.moneycounter.repository.JsonDenominationRepository
+import com.moneycounter.repository.JsonSavedCountRepository
+import com.moneycounter.repository.SavedCountRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
+import java.util.UUID
 
 data class MoneyCounterUiState(
     val targetAmount: BigDecimal? = null,
@@ -24,18 +29,23 @@ data class MoneyCounterUiState(
     val result: CounterResult = CounterResult(
         Money.ZERO, Money.ZERO, Money.ZERO, CounterStatus.EMPTY
     ),
-    val hasActiveCount: Boolean = false
+    val hasActiveCount: Boolean = false,
+    val history: List<SavedCount> = emptyList(),
+    val lastSavedId: String? = null,
+    val savedCountId: String? = null
 )
 
 class MoneyCounterViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository: DenominationRepository = JsonDenominationRepository(application)
+    private val historyRepository: SavedCountRepository = JsonSavedCountRepository(application)
 
     private val _uiState = MutableStateFlow(MoneyCounterUiState())
     val uiState: StateFlow<MoneyCounterUiState> = _uiState.asStateFlow()
 
     init {
         loadDenominations()
+        loadHistory()
     }
 
     private fun loadDenominations() {
@@ -50,16 +60,19 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun setTargetAmount(amount: BigDecimal?) {
-        _uiState.update { it.copy(targetAmount = amount) }
+        _uiState.update { it.copy(targetAmount = amount, savedCountId = null) }
         recalculate()
     }
 
     fun updateQuantity(denominationId: String, quantity: Long) {
         if (quantity < 0) return
         _uiState.update { state ->
-            state.copy(quantities = state.quantities.toMutableMap().apply {
-                put(denominationId, quantity)
-            })
+            state.copy(
+                quantities = state.quantities.toMutableMap().apply {
+                    put(denominationId, quantity)
+                },
+                savedCountId = null
+            )
         }
         recalculate()
     }
@@ -146,8 +159,57 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
 
     fun clearAll() {
         val quantities = _uiState.value.denominations.associate { it.id to 0L }
-        _uiState.update { it.copy(targetAmount = null, quantities = quantities) }
+        _uiState.update { it.copy(targetAmount = null, quantities = quantities, savedCountId = null) }
         recalculate()
+    }
+
+    private fun loadHistory() {
+        viewModelScope.launch {
+            val history = historyRepository.load()
+            _uiState.update { it.copy(history = history) }
+        }
+    }
+
+    fun saveCount(): String? {
+        val state = _uiState.value
+        if (state.result.status != CounterStatus.COMPLETED) return null
+        if (state.targetAmount == null) return null
+
+        val items = state.denominations
+            .mapNotNull { den ->
+                val qty = state.quantities[den.id] ?: 0L
+                if (qty <= 0) null
+                else SavedCountItem(den.value, qty, Money.fromLong(den.value * qty))
+            }
+
+        val saved = SavedCount(
+            id = UUID.randomUUID().toString(),
+            savedAt = System.currentTimeMillis(),
+            targetAmount = state.targetAmount,
+            items = items
+        )
+
+        _uiState.update { st ->
+            st.copy(
+                history = listOf(saved) + st.history,
+                lastSavedId = saved.id,
+                savedCountId = saved.id
+            )
+        }
+        persistHistory()
+        return saved.id
+    }
+
+    fun deleteSavedCount(id: String) {
+        _uiState.update { st ->
+            st.copy(history = st.history.filterNot { it.id == id })
+        }
+        persistHistory()
+    }
+
+    private fun persistHistory() {
+        val history = _uiState.value.history
+        viewModelScope.launch { historyRepository.saveAll(history) }
     }
 
     private fun recalculate() {

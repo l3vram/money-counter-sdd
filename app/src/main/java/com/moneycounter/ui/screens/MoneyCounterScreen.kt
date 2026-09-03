@@ -7,17 +7,21 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,11 +41,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.KeyboardActions
 import com.moneycounter.domain.CounterStatus
 import com.moneycounter.domain.Money
 import com.moneycounter.ui.components.DenominationRow
@@ -53,7 +61,8 @@ import java.math.BigDecimal
 @Composable
 fun MoneyCounterScreen(
     viewModel: MoneyCounterViewModel,
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    onNavigateToHistory: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var targetInput by remember { mutableStateOf("") }
@@ -62,12 +71,19 @@ fun MoneyCounterScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Contador de dinero - El Luiso") },
+                title = { Text("Contador de dinero\nEl Luiso") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 actions = {
+                    IconButton(onClick = onNavigateToHistory) {
+                        Icon(
+                            Icons.Default.History,
+                            contentDescription = "Ver historial",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(
                             Icons.Default.Settings,
@@ -83,10 +99,11 @@ fun MoneyCounterScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .imePadding()
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item { Spacer(modifier = Modifier.height(8.dp)) }
+            item { Spacer(modifier = Modifier.height(4.dp)) }
 
             item {
                 TargetSection(
@@ -107,18 +124,41 @@ fun MoneyCounterScreen(
             item {
                 SummarySection(
                     result = uiState.result,
-                    targetAmount = uiState.targetAmount
+                    targetAmount = uiState.targetAmount,
+                    savedCountId = uiState.savedCountId,
+                    onSave = { viewModel.saveCount() }
                 )
             }
 
             item {
-                Text(
-                    text = "DENOMINACIONES",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "DENOMINACIONES",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    IconButton(onClick = {
+                        if (uiState.hasActiveCount) {
+                            showClearDialog = true
+                        } else {
+                            viewModel.clearAll()
+                            targetInput = ""
+                        }
+                    }) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Borrar todo",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
             }
 
             items(uiState.denominations, key = { it.id }) { denomination ->
@@ -138,30 +178,7 @@ fun MoneyCounterScreen(
                 )
             }
 
-            item { Spacer(modifier = Modifier.height(16.dp)) }
-
-            item {
-                FilledTonalButton(
-                    onClick = {
-                        if (uiState.hasActiveCount) {
-                            showClearDialog = true
-                        } else {
-                            viewModel.clearAll()
-                            targetInput = ""
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Text("BORRAR TODO")
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(24.dp)) }
+            item { Spacer(modifier = Modifier.height(12.dp)) }
         }
     }
 
@@ -196,13 +213,15 @@ private fun TargetSection(
     onTargetSet: (BigDecimal?) -> Unit,
     onTargetClear: () -> Unit
 ) {
+    val focusManager = LocalFocusManager.current
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Text(
                 text = "OBJETIVO",
                 style = MaterialTheme.typography.titleSmall,
@@ -219,33 +238,38 @@ private fun TargetSection(
                     onValueChange = { newValue ->
                         if (newValue.isEmpty() || Regex("^\\d*(?:[.,]\\d{0,2})?$").matches(newValue)) {
                             onTargetInputChange(newValue)
+                            val amount = parseDecimalInput(newValue)
+                            if (amount != null && amount > BigDecimal.ZERO) {
+                                onTargetSet(amount)
+                            } else {
+                                onTargetClear()
+                            }
                         }
                     },
                     modifier = Modifier.weight(1f),
                     label = { Text("Monto objetivo") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            focusManager.clearFocus()
+                        }
+                    ),
                     singleLine = true,
                     prefix = { Text("$ ") }
                 )
-                IconButton(onClick = onTargetClear) {
+                IconButton(onClick = {
+                    focusManager.clearFocus()
+                    onTargetClear()
+                }) {
                     Icon(
                         Icons.Default.Delete,
                         contentDescription = "Limpiar objetivo",
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            FilledTonalButton(
-                onClick = {
-                    val amount = parseDecimalInput(targetInput)
-                    if (amount != null && amount > BigDecimal.ZERO) {
-                        onTargetSet(amount)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Establecer objetivo")
             }
         }
     }
@@ -254,7 +278,9 @@ private fun TargetSection(
 @Composable
 private fun SummarySection(
     result: com.moneycounter.domain.CounterResult,
-    targetAmount: BigDecimal?
+    targetAmount: BigDecimal?,
+    savedCountId: String?,
+    onSave: () -> Unit
 ) {
     val zero = Money.ZERO
     Card(
@@ -264,7 +290,7 @@ private fun SummarySection(
         )
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (targetAmount != null && targetAmount > zero) {
@@ -295,7 +321,7 @@ private fun SummarySection(
                     progress = progress.coerceAtMost(1f),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(8.dp),
+                        .height(6.dp),
                     color = when (result.status) {
                         CounterStatus.COMPLETED -> Color(0xFF1B6B3A)
                         CounterStatus.OVER -> MaterialTheme.colorScheme.error
@@ -322,6 +348,33 @@ private fun SummarySection(
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth()
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        if (savedCountId != null) {
+                            Button(
+                                onClick = {},
+                                enabled = false,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.padding(end = 8.dp)
+                                )
+                                Text("GUARDADO")
+                            }
+                        } else {
+                            Button(
+                                onClick = onSave,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.padding(end = 8.dp)
+                                )
+                                Text("GUARDAR EN HISTORIAL")
+                            }
+                        }
                     }
                     CounterStatus.OVER -> {
                         Text(
