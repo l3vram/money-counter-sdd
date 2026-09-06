@@ -4,6 +4,7 @@ import android.content.Context
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.SavedCount
 import com.moneycounter.domain.SavedCountItem
+import com.moneycounter.domain.SavedProductItem
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -40,7 +41,7 @@ class JsonSavedCountRepository(private val context: Context) : SavedCountReposit
 
 object SavedCountJson {
 
-    private const val VERSION = 1
+    private const val VERSION = 2
 
     fun toJson(history: List<SavedCount>): String {
         val root = JSONObject()
@@ -52,6 +53,7 @@ object SavedCountJson {
             item.put("id", saved.id)
             item.put("savedAt", saved.savedAt)
             item.put("targetAmount", saved.targetAmount.toPlainString())
+            item.put("currency", saved.currency)
 
             val itemsArray = JSONArray()
             for (entry in saved.items) {
@@ -62,6 +64,19 @@ object SavedCountJson {
                 itemsArray.put(ei)
             }
             item.put("items", itemsArray)
+
+            val productsArray = JSONArray()
+            for (p in saved.products) {
+                val pi = JSONObject()
+                pi.put("name", p.name)
+                pi.put("unit", p.unit)
+                pi.put("quantity", p.quantity.toPlainString())
+                pi.put("unitPrice", p.unitPrice.toPlainString())
+                pi.put("surcharge", p.surcharge.toPlainString())
+                pi.put("subtotal", p.subtotal.toPlainString())
+                productsArray.put(pi)
+            }
+            item.put("products", productsArray)
             historyArray.put(item)
         }
 
@@ -72,7 +87,8 @@ object SavedCountJson {
     fun fromJson(json: String): List<SavedCount> {
         if (json.isBlank()) return emptyList()
         val root = runCatching { JSONObject(json) }.getOrElse { return emptyList() }
-        if (root.optInt("version", 1) != VERSION) return emptyList()
+        val version = root.optInt("version", 1)
+        if (version != VERSION && version != 1) return emptyList()
 
         val historyArray = root.optJSONArray("history") ?: return emptyList()
         val result = mutableListOf<SavedCount>()
@@ -102,7 +118,42 @@ object SavedCountJson {
                 }
             }
 
-            result.add(SavedCount(id = id, savedAt = savedAt, targetAmount = target, items = items))
+            val products = mutableListOf<SavedProductItem>()
+            val productsArray = entry.optJSONArray("products")
+            if (productsArray != null) {
+                for (j in 0 until productsArray.length()) {
+                    val pi = productsArray.optJSONObject(j) ?: continue
+                    val pName = pi.optString("name", "")
+                    val pUnit = pi.optString("unit", "")
+                    if (pName.isBlank() || pUnit.isBlank()) continue
+                    val pQty = runCatching { BigDecimal(pi.optString("quantity", "")) }.getOrNull() ?: continue
+                    if (pQty.signum() < 0) continue
+                    val pUnitPrice = runCatching { BigDecimal(pi.optString("unitPrice", "")) }.getOrNull()
+                        ?: continue
+                    val pSurcharge = runCatching { BigDecimal(pi.optString("surcharge", "0")) }
+                        .getOrElse { BigDecimal.ZERO }
+                    val pSubtotal = runCatching { BigDecimal(pi.optString("subtotal", "")) }.getOrNull()
+                        ?: pUnitPrice.add(pSurcharge).multiply(pQty).setScale(Money.SCALE)
+                    products.add(SavedProductItem(
+                        name = pName,
+                        unit = pUnit,
+                        quantity = pQty,
+                        unitPrice = pUnitPrice,
+                        surcharge = pSurcharge,
+                        subtotal = pSubtotal
+                    ))
+                }
+            }
+
+            val currency = entry.optString("currency", "$")
+            result.add(SavedCount(
+                id = id,
+                savedAt = savedAt,
+                targetAmount = target,
+                items = items,
+                currency = currency,
+                products = products
+            ))
         }
 
         return result.sortedByDescending { it.savedAt }

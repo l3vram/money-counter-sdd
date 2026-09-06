@@ -6,7 +6,9 @@ data class SavedCount(
     val id: String,
     val savedAt: Long,
     val targetAmount: BigDecimal,
-    val items: List<SavedCountItem>
+    val items: List<SavedCountItem>,
+    val currency: String = "$",
+    val products: List<SavedProductItem> = emptyList()
 ) {
     init {
         require(id.isNotBlank()) { "id must not be blank" }

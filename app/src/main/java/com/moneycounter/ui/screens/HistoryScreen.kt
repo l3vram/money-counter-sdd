@@ -154,7 +154,7 @@ private fun HistoryItemCard(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "$${formatMoneyBigDecimal(saved.targetAmount)}",
+                    text = formatMoneyBigDecimal(saved.targetAmount, saved.currency),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary

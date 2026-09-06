@@ -43,6 +43,7 @@ fun DenominationRow(
     onIncrement: () -> Unit,
     onDecrement: () -> Unit,
     onQuantityChanged: (Long) -> Unit,
+    symbol: String = "$",
     modifier: Modifier = Modifier
 ) {
     var isEditing by remember { mutableStateOf(false) }
@@ -63,7 +64,7 @@ fun DenominationRow(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = "$${formatMoney(denomination.value)}",
+                text = formatMoney(denomination.value, symbol),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.weight(0.24f)
@@ -147,7 +148,7 @@ fun DenominationRow(
             }
 
             Text(
-                text = "$${formatMoneyBigDecimal(subtotal)}",
+                text = formatMoneyBigDecimal(subtotal, symbol),
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -158,16 +159,16 @@ fun DenominationRow(
     }
 }
 
-fun formatMoney(value: Long): String {
-    return value.toString().reversed().chunked(3).joinToString(".").reversed()
+fun formatMoney(value: Long, symbol: String = "$"): String {
+    return "$symbol${value.toString().reversed().chunked(3).joinToString(".").reversed()}"
 }
 
-fun formatMoneyBigDecimal(value: BigDecimal): String {
+fun formatMoneyBigDecimal(value: BigDecimal, symbol: String = "$"): String {
     val scaled = value.stripTrailingZeros()
     val plain = scaled.toPlainString()
     val parts = plain.split(".")
     val intPart = parts[0]
     val decPart = parts.getOrElse(1) { "00" }.padEnd(2, '0').take(2)
     val formattedInt = intPart.reversed().chunked(3).joinToString(".").reversed()
-    return "$formattedInt,$decPart"
+    return "$symbol$formattedInt,$decPart"
 }

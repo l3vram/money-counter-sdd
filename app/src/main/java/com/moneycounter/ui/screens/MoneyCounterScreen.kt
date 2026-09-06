@@ -1,6 +1,7 @@
 package com.moneycounter.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,11 +10,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
@@ -22,11 +27,14 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -41,17 +49,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.text.KeyboardActions
+import com.moneycounter.domain.CounterResult
 import com.moneycounter.domain.CounterStatus
+import com.moneycounter.domain.Currency
 import com.moneycounter.domain.Money
+import com.moneycounter.domain.Product
+import com.moneycounter.domain.ProductSelection
 import com.moneycounter.ui.components.DenominationRow
 import com.moneycounter.ui.components.formatMoneyBigDecimal
 import com.moneycounter.viewmodel.MoneyCounterViewModel
@@ -65,8 +75,10 @@ fun MoneyCounterScreen(
     onNavigateToHistory: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var targetInput by remember { mutableStateOf("") }
     var showClearDialog by remember { mutableStateOf(false) }
+    val currency = uiState.currencies.firstOrNull { it.id == uiState.selectedCurrencyId }
+        ?: com.moneycounter.domain.DefaultCurrencies.CUP
+    val currencySymbol = currency.symbol
 
     Scaffold(
         topBar = {
@@ -87,7 +99,7 @@ fun MoneyCounterScreen(
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(
                             Icons.Default.Settings,
-                            contentDescription = "Configurar denominaciones",
+                            contentDescription = "Configurar",
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
@@ -106,25 +118,26 @@ fun MoneyCounterScreen(
             item { Spacer(modifier = Modifier.height(4.dp)) }
 
             item {
-                TargetSection(
-                    targetAmount = uiState.targetAmount,
-                    targetInput = targetInput,
-                    onTargetInputChange = { targetInput = it },
-                    onTargetSet = { amount ->
-                        viewModel.setTargetAmount(amount)
-                        targetInput = if (amount != null) amount.toPlainString() else ""
-                    },
-                    onTargetClear = {
-                        viewModel.setTargetAmount(null)
-                        targetInput = ""
-                    }
+                ProductsSection(
+                    selections = uiState.productSelections,
+                    products = uiState.products,
+                    currencies = uiState.currencies,
+                    selectedCurrencyId = currency.id,
+                    productLineTotal = { viewModel.productLineTotal(it) },
+                    onAddRow = { viewModel.addProductRow() },
+                    onRemoveRow = { index -> viewModel.removeProductRow(index) },
+                    onSelectProduct = { index, productId -> viewModel.updateProductSelection(index, productId) },
+                    onQuantityChange = { index, text -> viewModel.updateProductQuantity(index, text) },
+                    onSelectCurrency = { viewModel.selectCurrency(it) },
+                    onNavigateToSettings = onNavigateToSettings
                 )
             }
 
             item {
                 SummarySection(
                     result = uiState.result,
-                    targetAmount = uiState.targetAmount,
+                    targetAmount = viewModel.productsTotal().takeIf { it.signum() > 0 },
+                    currencySymbol = currencySymbol,
                     savedCountId = uiState.savedCountId,
                     onSave = { viewModel.saveCount() }
                 )
@@ -149,7 +162,6 @@ fun MoneyCounterScreen(
                             showClearDialog = true
                         } else {
                             viewModel.clearAll()
-                            targetInput = ""
                         }
                     }) {
                         Icon(
@@ -170,6 +182,7 @@ fun MoneyCounterScreen(
                     denomination = denomination,
                     quantity = quantity,
                     subtotal = subtotal,
+                    symbol = currencySymbol,
                     onIncrement = { viewModel.incrementQuantity(denomination.id) },
                     onDecrement = { viewModel.decrementQuantity(denomination.id) },
                     onQuantityChanged = { newQty ->
@@ -186,11 +199,11 @@ fun MoneyCounterScreen(
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
             title = { Text("Borrar todo") },
-            text = { Text("Se eliminará el objetivo y todas las cantidades. Las denominaciones configuradas se mantendrán.") },
+            text = { Text("Se eliminará la selección de productos y todas las cantidades. Los productos y denominaciones configurados se mantendrán.") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.clearAll()
-                    targetInput = ""
+                    viewModel.clearProductSelections()
                     showClearDialog = false
                 }) {
                     Text("Confirmar")
@@ -206,69 +219,88 @@ fun MoneyCounterScreen(
 }
 
 @Composable
-private fun TargetSection(
-    targetAmount: BigDecimal?,
-    targetInput: String,
-    onTargetInputChange: (String) -> Unit,
-    onTargetSet: (BigDecimal?) -> Unit,
-    onTargetClear: () -> Unit
+private fun ProductsSection(
+    selections: List<ProductSelection>,
+    products: List<Product>,
+    currencies: List<Currency>,
+    selectedCurrencyId: String,
+    productLineTotal: (ProductSelection) -> BigDecimal,
+    onAddRow: () -> Unit,
+    onRemoveRow: (Int) -> Unit,
+    onSelectProduct: (Int, String) -> Unit,
+    onQuantityChange: (Int, String) -> Unit,
+    onSelectCurrency: (String) -> Unit,
+    onNavigateToSettings: () -> Unit
 ) {
-    val focusManager = LocalFocusManager.current
-
+    val currency = currencies.firstOrNull { it.id == selectedCurrencyId } ?: currencies.firstOrNull()
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
+            containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = "OBJETIVO",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-            Spacer(modifier = Modifier.height(8.dp))
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                OutlinedTextField(
-                    value = targetInput,
-                    onValueChange = { newValue ->
-                        if (newValue.isEmpty() || Regex("^\\d*(?:[.,]\\d{0,2})?$").matches(newValue)) {
-                            onTargetInputChange(newValue)
-                            val amount = parseDecimalInput(newValue)
-                            if (amount != null && amount > BigDecimal.ZERO) {
-                                onTargetSet(amount)
-                            } else {
-                                onTargetClear()
-                            }
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    label = { Text("Monto objetivo") },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Decimal,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = {
-                            focusManager.clearFocus()
-                        }
-                    ),
-                    singleLine = true,
-                    prefix = { Text("$ ") }
+                Text(
+                    text = "PRODUCTOS",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
                 )
-                IconButton(onClick = {
-                    focusManager.clearFocus()
-                    onTargetClear()
-                }) {
+                CurrencySelector(
+                    currencies = currencies,
+                    selectedCurrencyId = selectedCurrencyId,
+                    onSelectCurrency = onSelectCurrency
+                )
+            }
+
+            if (products.isEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "No hay productos configurados. Ve a Ajustes para agregarlos.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                FilledTonalButton(
+                    onClick = onNavigateToSettings,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Limpiar objetivo",
-                        tint = MaterialTheme.colorScheme.error
+                        Icons.Default.Settings,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 8.dp)
                     )
+                    Text("CONFIGURAR PRODUCTOS")
+                }
+            } else {
+                selections.forEachIndexed { index, selection ->
+                    ProductRow(
+                        selection = selection,
+                        products = products,
+                        symbol = currency?.symbol ?: "$",
+                        lineTotal = productLineTotal(selection),
+                        onSelectProduct = { productId -> onSelectProduct(index, productId) },
+                        onQuantityChange = { text -> onQuantityChange(index, text) },
+                        onRemove = { onRemoveRow(index) }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+                FilledTonalButton(
+                    onClick = onAddRow,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                    Text("AGREGAR PRODUCTO")
                 }
             }
         }
@@ -276,9 +308,202 @@ private fun TargetSection(
 }
 
 @Composable
+private fun ProductRow(
+    selection: ProductSelection,
+    products: List<Product>,
+    symbol: String,
+    lineTotal: BigDecimal,
+    onSelectProduct: (String) -> Unit,
+    onQuantityChange: (String) -> Unit,
+    onRemove: () -> Unit
+) {
+    val selectedProduct = products.firstOrNull { it.id == selection.productId }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                ProductSelector(
+                    products = products,
+                    selectedProduct = selectedProduct,
+                    onSelect = onSelectProduct,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Quitar producto",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = selection.quantityText,
+                    onValueChange = { newValue ->
+                        if (newValue.isEmpty() || newValue.trim().replace(',', '.').matches(Regex("\\d*\\.?\\d*"))) {
+                            onQuantityChange(newValue)
+                        }
+                    },
+                    modifier = Modifier.weight(0.32f),
+                    label = { Text("Cantidad") },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = ImeAction.Done
+                    ),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium
+                )
+
+                Text(
+                    text = selectedProduct?.unit ?: "—",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(0.10f)
+                )
+
+                Column(
+                    modifier = Modifier.weight(0.58f),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text(
+                        text = if (selectedProduct != null && lineTotal.signum() > 0) {
+                            formatMoneyBigDecimal(lineTotal, symbol)
+                        } else {
+                            "—"
+                        },
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.End,
+                        overflow = TextOverflow.Ellipsis,
+                        maxLines = 1
+                    )
+                    if (selectedProduct != null && selectedProduct.surcharge.signum() > 0 && lineTotal.signum() > 0) {
+                        Text(
+                            text = "incluye recargo ${selectedProduct.surcharge.stripTrailingZeros().toPlainString()}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.End,
+                            overflow = TextOverflow.Ellipsis,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+
+            if (selectedProduct != null) {
+                Text(
+                    text = "${symbol}${selectedProduct.effectiveUnitPrice.stripTrailingZeros().toPlainString()} por ${selectedProduct.unit}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProductSelector(
+    products: List<Product>,
+    selectedProduct: Product?,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier = modifier) {
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = selectedProduct?.name ?: "Seleccionar…",
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            products.forEach { product ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = "${product.name} (${product.unit})",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
+                    onClick = {
+                        onSelect(product.id)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CurrencySelector(
+    currencies: List<Currency>,
+    selectedCurrencyId: String,
+    onSelectCurrency: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selected = currencies.firstOrNull { it.id == selectedCurrencyId } ?: currencies.firstOrNull()
+
+    Box {
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier.width(96.dp)
+        ) {
+            Text(
+                text = selected?.let { "${it.symbol} ${it.code}" } ?: "—",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            currencies.forEach { currency ->
+                DropdownMenuItem(
+                    text = { Text("${currency.symbol} ${currency.code} — ${currency.name}") },
+                    onClick = {
+                        onSelectCurrency(currency.id)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun SummarySection(
-    result: com.moneycounter.domain.CounterResult,
+    result: CounterResult,
     targetAmount: BigDecimal?,
+    currencySymbol: String,
     savedCountId: String?,
     onSave: () -> Unit
 ) {
@@ -296,14 +521,14 @@ private fun SummarySection(
             if (targetAmount != null && targetAmount > zero) {
                 SummaryRow(
                     label = "OBJETIVO",
-                    value = "$${formatMoneyBigDecimal(targetAmount)}",
+                    value = formatMoneyBigDecimal(targetAmount, currencySymbol),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
             SummaryRow(
                 label = "CONTADO",
-                value = "$${formatMoneyBigDecimal(result.countedTotal)}",
+                value = formatMoneyBigDecimal(result.countedTotal, currencySymbol),
                 color = when (result.status) {
                     CounterStatus.COMPLETED -> Color(0xFF1B6B3A)
                     CounterStatus.OVER -> MaterialTheme.colorScheme.error
@@ -386,7 +611,7 @@ private fun SummarySection(
                             modifier = Modifier.fillMaxWidth()
                         )
                         Text(
-                            text = "+$${formatMoneyBigDecimal(result.excess)}",
+                            text = "+${formatMoneyBigDecimal(result.excess, currencySymbol)}",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.error,
@@ -404,7 +629,7 @@ private fun SummarySection(
                             modifier = Modifier.fillMaxWidth()
                         )
                         Text(
-                            text = "$${formatMoneyBigDecimal(result.remaining)}",
+                            text = formatMoneyBigDecimal(result.remaining, currencySymbol),
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary,
@@ -414,7 +639,7 @@ private fun SummarySection(
                     }
                     CounterStatus.EMPTY -> {
                         Text(
-                            text = "Ingresa un objetivo y comienza a contar",
+                            text = "Selecciona productos para comenzar",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
@@ -425,7 +650,7 @@ private fun SummarySection(
             } else {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Ingresa un objetivo para ver el progreso",
+                    text = "Agrega productos y cantidades para ver el progreso",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -461,14 +686,5 @@ private fun SummaryRow(
             fontWeight = FontWeight.Bold,
             color = color
         )
-    }
-}
-
-private fun parseDecimalInput(input: String): BigDecimal? {
-    if (input.isBlank()) return null
-    return try {
-        Money.of(input.replace(',', '.'))
-    } catch (e: Exception) {
-        null
     }
 }

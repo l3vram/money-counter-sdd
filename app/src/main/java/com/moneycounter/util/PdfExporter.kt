@@ -70,6 +70,10 @@ class PdfExporter(private val context: Context) {
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
             isAntiAlias = true
         }
+        val linePaint = Paint().apply {
+            color = Color.parseColor("#CCCCCC")
+            strokeWidth = 1f
+        }
 
         // Title
         canvas.drawText("Reporte de conteo", margin, y, titlePaint)
@@ -82,24 +86,51 @@ class PdfExporter(private val context: Context) {
 
         // Total
         canvas.drawText(
-            "Monto total: $${formatMoneyBigDecimal(saved.targetAmount)}",
+            "Moneda: ${saved.currency}",
+            margin,
+            y,
+            headerPaint
+        )
+        y += 20f
+        canvas.drawText(
+            "Monto total: ${formatMoneyBigDecimal(saved.targetAmount, saved.currency)}",
             margin,
             y,
             headerPaint
         )
         y += 36f
 
-        // Column header
+        // Products section (if any)
+        if (saved.products.isNotEmpty()) {
+            canvas.drawText("PRODUCTOS", margin, y, headerPaint)
+            y += 16f
+            canvas.drawLine(margin, y + 6f, pageWidth - margin, y + 6f, linePaint)
+            y += 20f
+            canvas.drawText("PRODUCTO", margin, y, labelPaint)
+            canvas.drawText("CANT.", 240f, y, labelPaint)
+            canvas.drawText("TOTAL", 380f, y, labelPaint)
+            y += 16f
+            canvas.drawLine(margin, y + 6f, pageWidth - margin, y + 6f, linePaint)
+            y += 20f
+            for (product in saved.products) {
+                newPageIfNeeded(20f)
+                canvas.drawText(product.name, margin, y, bodyPaint)
+                canvas.drawText("${product.quantity.stripTrailingZeros().toPlainString()} ${product.unit}", 240f, y, bodyPaint)
+                canvas.drawText(formatMoneyBigDecimal(product.subtotal, saved.currency), 380f, y, bodyPaint)
+                y += 22f
+            }
+            y += 16f
+        }
+
+        // Denomination header
+        canvas.drawText("DENOMINACIONES", margin, y, headerPaint)
+        y += 16f
+        canvas.drawLine(margin, y + 6f, pageWidth - margin, y + 6f, linePaint)
+        y += 20f
         canvas.drawText("DENOMINACIÓN", margin, y, labelPaint)
         canvas.drawText("CANTIDAD", 240f, y, labelPaint)
         canvas.drawText("TOTAL", 380f, y, labelPaint)
         y += 16f
-
-        // Separator
-        val linePaint = Paint().apply {
-            color = Color.parseColor("#CCCCCC")
-            strokeWidth = 1f
-        }
         canvas.drawLine(margin, y + 6f, pageWidth - margin, y + 6f, linePaint)
         y += 20f
 
@@ -108,8 +139,8 @@ class PdfExporter(private val context: Context) {
         } else {
             for (item in saved.items) {
                 newPageIfNeeded(20f)
-                val denom = "$${formatMoney(item.denominationValue)}"
-                val subtotal = "$${formatMoneyBigDecimal(item.subtotal)}"
+                val denom = formatMoney(item.denominationValue, saved.currency)
+                val subtotal = formatMoneyBigDecimal(item.subtotal, saved.currency)
                 canvas.drawText(denom, margin, y, bodyPaint)
                 canvas.drawText(item.quantity.toString(), 240f, y, bodyPaint)
                 canvas.drawText(subtotal, 380f, y, bodyPaint)
