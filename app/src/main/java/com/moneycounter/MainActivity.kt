@@ -26,6 +26,8 @@ import com.moneycounter.ui.screens.DenominationManagementScreen
 import com.moneycounter.ui.screens.HistoryDetailScreen
 import com.moneycounter.ui.screens.HistoryScreen
 import com.moneycounter.ui.screens.MoneyCounterScreen
+import com.moneycounter.ui.screens.StockReportScreen
+import com.moneycounter.ui.screens.StockScreen
 import com.moneycounter.ui.theme.MoneyCounterTheme
 import com.moneycounter.viewmodel.MoneyCounterViewModel
 
@@ -79,6 +81,14 @@ fun MoneyCounterApp() {
                     viewModel = viewModel,
                     onNavigateToSettings = { currentScreen = "settings" },
                     onNavigateToHistory = { currentScreen = "history" }
+                )
+                "stock" -> StockScreen(
+                    viewModel = viewModel,
+                    onNavigateToReport = { currentScreen = "report" }
+                )
+                "report" -> StockReportScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { currentScreen = "stock" }
                 )
                 "settings" -> DenominationManagementScreen(
                     viewModel = viewModel,
