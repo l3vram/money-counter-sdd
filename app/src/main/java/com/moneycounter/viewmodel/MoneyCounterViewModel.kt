@@ -342,31 +342,31 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         return true
     }
 
-    fun addProduct(name: String, unit: String, unitPrice: BigDecimal, surcharge: BigDecimal): Boolean {
+    fun addProduct(name: String, unit: String, stock: BigDecimal, unitPrice: BigDecimal, surcharge: BigDecimal): Boolean {
         val cleanName = name.trim()
         val cleanUnit = unit.trim()
         if (cleanName.isEmpty() || cleanUnit.isEmpty()) return false
-        if (unitPrice.signum() < 0 || surcharge.signum() < 0) return false
+        if (unitPrice.signum() < 0 || surcharge.signum() < 0 || stock.signum() < 0) return false
         val state = _uiState.value
         if (unitPrice.signum() == 0 && surcharge.signum() == 0) return false
 
-        val new = Product(generateProductId(state.products), cleanName, cleanUnit, unitPrice, surcharge)
+        val new = Product(generateProductId(state.products), cleanName, cleanUnit, unitPrice, surcharge, stock)
         val newProducts = state.products + new
         _uiState.update { it.copy(products = newProducts) }
         persistProducts(newProducts)
         return true
     }
 
-    fun editProduct(id: String, name: String, unit: String, unitPrice: BigDecimal, surcharge: BigDecimal): Boolean {
+    fun editProduct(id: String, name: String, unit: String, stock: BigDecimal, unitPrice: BigDecimal, surcharge: BigDecimal): Boolean {
         val cleanName = name.trim()
         val cleanUnit = unit.trim()
         if (cleanName.isEmpty() || cleanUnit.isEmpty()) return false
-        if (unitPrice.signum() < 0 || surcharge.signum() < 0) return false
+        if (unitPrice.signum() < 0 || surcharge.signum() < 0 || stock.signum() < 0) return false
         val state = _uiState.value
         if (state.products.none { it.id == id }) return false
 
         val newProducts = state.products.map {
-            if (it.id == id) it.copy(name = cleanName, unit = cleanUnit, unitPrice = unitPrice, surcharge = surcharge) else it
+            if (it.id == id) it.copy(name = cleanName, unit = cleanUnit, unitPrice = unitPrice, surcharge = surcharge, stock = stock) else it
         }
         _uiState.update { it.copy(products = newProducts) }
         persistProducts(newProducts)

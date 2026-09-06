@@ -438,7 +438,7 @@ fun DenominationManagementScreen(
             initialSurcharge = "0",
             confirmText = "GUARDAR",
             onConfirm = { name, unit, price, surcharge ->
-                if (viewModel.addProduct(name, unit, price, surcharge)) {
+                if (viewModel.addProduct(name, unit, BigDecimal.ZERO, price, surcharge)) {
                     showAddProductDialog = false
                     errorMessage = null
                 } else {
@@ -463,7 +463,7 @@ fun DenominationManagementScreen(
             initialSurcharge = product.surcharge.stripTrailingZeros().toPlainString(),
             confirmText = "GUARDAR",
             onConfirm = { name, unit, price, surcharge ->
-                if (viewModel.editProduct(product.id, name, unit, price, surcharge)) {
+                if (viewModel.editProduct(product.id, name, unit, BigDecimal.ZERO, price, surcharge)) {
                     showEditProductDialog = null
                     errorMessage = null
                 } else {
