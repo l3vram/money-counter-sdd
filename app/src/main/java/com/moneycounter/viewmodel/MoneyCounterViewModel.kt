@@ -493,6 +493,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                 savedCountId = saved.id
             )
         }
+        val newProducts = applyStockDeduction(state.products, state.productSelections)
+        _uiState.update { it.copy(products = newProducts) }
+        persistProducts(newProducts)
         persistHistory()
         return saved.id
     }
