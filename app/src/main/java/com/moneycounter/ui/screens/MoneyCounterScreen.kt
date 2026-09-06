@@ -408,11 +408,21 @@ private fun ProductRow(
             }
 
             if (selectedProduct != null) {
+                val outOfRange = selection.quantity() > selectedProduct.stock
                 Text(
-                    text = "${symbol}${selectedProduct.effectiveUnitPrice.stripTrailingZeros().toPlainString()} por ${selectedProduct.unit}",
+                    text = "${symbol}${selectedProduct.effectiveUnitPrice.stripTrailingZeros().toPlainString()} por ${selectedProduct.unit}" +
+                            " · disp: ${selectedProduct.stock.stripTrailingZeros().toPlainString()} ${selectedProduct.unit}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (outOfRange) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (outOfRange) {
+                    Text(
+                        text = "⚠ Cantidad mayor que el stock disponible (${selectedProduct.stock.stripTrailingZeros().toPlainString()} ${selectedProduct.unit})",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
     }
