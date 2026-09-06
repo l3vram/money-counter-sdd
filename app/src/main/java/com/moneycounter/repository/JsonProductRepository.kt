@@ -59,7 +59,7 @@ object ProductJson {
                 .getOrDefault(Money.ZERO)
             val stock = runCatching { BigDecimal(stockStr).setScale(Money.SCALE) }
                 .getOrDefault(Money.ZERO)
-            if (unitPrice.signum() < 0 || surcharge.signum() < 0 || stock.signum() < 0) continue
+            if (unitPrice.signum() < 0 || surcharge.signum() < 0) continue
 
             products.add(Product(id, name, unit, unitPrice, surcharge, stock))
         }

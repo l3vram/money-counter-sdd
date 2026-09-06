@@ -16,7 +16,6 @@ data class Product(
         require(unit.isNotBlank()) { "Product unit must not be blank" }
         require(unitPrice.signum() >= 0) { "Unit price must be non-negative" }
         require(surcharge.signum() >= 0) { "Surcharge must be non-negative" }
-        require(stock.signum() >= 0) { "Stock must be non-negative" }
     }
 
     val effectiveUnitPrice: BigDecimal

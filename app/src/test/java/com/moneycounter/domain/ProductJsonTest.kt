@@ -65,22 +65,22 @@ class ProductJsonTest {
     }
 
     @Test
-    fun `negative stock entry is skipped`() {
-        val json = """
-            {
-              "version": 2,
-              "products": [
-                {"id": "p1", "name": "Mal", "unit": "Lb", "unitPrice": "25.00", "surcharge": "0.00", "stock": "-5.00"},
-                {"id": "p2", "name": "Bien", "unit": "Lb", "unitPrice": "10.00", "surcharge": "0.00", "stock": "3.00"}
-              ]
-            }
-        """.trimIndent()
+    fun `negative stock entry survives round trip`() {
+        val product = Product(
+            id = "p1",
+            name = "Mal",
+            unit = "Lb",
+            unitPrice = BigDecimal("25.00"),
+            surcharge = BigDecimal("0.00"),
+            stock = BigDecimal("-3.00")
+        )
 
+        val json = ProductJson.toJson(listOf(product))
         val loaded = ProductJson.fromJson(json)
 
         assertEquals(1, loaded.size)
-        assertEquals("p2", loaded[0].id)
-        assertEquals(BigDecimal("3.00"), loaded[0].stock)
+        assertEquals("p1", loaded[0].id)
+        assertEquals(BigDecimal("-3.00"), loaded[0].stock)
     }
 
     @Test
