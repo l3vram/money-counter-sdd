@@ -493,6 +493,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                 savedCountId = saved.id
             )
         }
+        val newProducts = applyStockDeduction(state.products, state.productSelections)
+        _uiState.update { it.copy(products = newProducts) }
+        persistProducts(newProducts)
         persistHistory()
         return saved.id
     }
@@ -564,6 +567,26 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             val candidate = "p$counter"
             if (candidate !in existingIds) return candidate
             counter++
+        }
+    }
+
+    companion object {
+        /** Returns products with stock reduced by the sold quantity per selection.
+         *  Quantities never restore; over-selling may push stock negative (warn-and-allow). */
+        fun applyStockDeduction(
+            products: List<Product>,
+            selections: List<ProductSelection>
+        ): List<Product> {
+            val soldByProduct: Map<String, BigDecimal> = selections
+                .filter { !it.productId.isNullOrBlank() }
+                .groupingBy { it.productId!! }
+                .fold(BigDecimal.ZERO) { acc, s -> acc.add(s.quantity()) }
+
+            return products.map { product ->
+                val sold = soldByProduct[product.id] ?: BigDecimal.ZERO
+                if (sold.signum() <= 0) product
+                else product.copy(stock = product.stock.subtract(sold).setScale(Money.SCALE))
+            }
         }
     }
 }
