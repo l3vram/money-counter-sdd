@@ -34,8 +34,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.moneycounter.domain.SavedCountItem
+import com.moneycounter.domain.SavedProductItem
 import com.moneycounter.ui.components.formatMoney
 import com.moneycounter.ui.components.formatMoneyBigDecimal
+import com.moneycounter.util.ExcelExporter
 import com.moneycounter.util.PdfExporter
 import com.moneycounter.viewmodel.MoneyCounterViewModel
 
@@ -107,11 +109,57 @@ fun HistoryDetailScreen(
                             DetailRow("Fecha", formatDate(saved.savedAt))
                             Spacer(modifier = Modifier.height(4.dp))
                             DetailRow(
+                                "MONEDA",
+                                saved.currency,
+                                emphasize = true
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            DetailRow(
                                 "Monto total",
-                                "$${formatMoneyBigDecimal(saved.targetAmount)}",
+                                formatMoneyBigDecimal(saved.targetAmount, saved.currency),
                                 emphasize = true
                             )
                         }
+                    }
+                }
+
+                if (saved.products.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "PRODUCTOS",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "PRODUCTO",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "CANTIDAD",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "TOTAL",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    items(saved.products, key = { "${saved.id}-${it.name}-${it.quantity.toPlainString()}-${it.subtotal.toPlainString()}" }) { item ->
+                        ProductLine(item = item, symbol = saved.currency)
                     }
                 }
 
@@ -160,7 +208,7 @@ fun HistoryDetailScreen(
                     }
                 } else {
                     items(saved.items, key = { "${saved.id}-${it.denominationValue}" }) { item ->
-                        ItemLine(item)
+                        ItemLine(item, saved.currency)
                     }
                 }
 
@@ -176,6 +224,20 @@ fun HistoryDetailScreen(
                             modifier = Modifier.padding(end = 8.dp)
                         )
                         Text("EXPORTAR PDF")
+                    }
+                }
+
+                item {
+                    FilledTonalButton(
+                        onClick = { ExcelExporter(context).export(saved) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            Icons.Default.Share,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Text("EXPORTAR EXCEL (CSV)")
                     }
                 }
 
@@ -209,7 +271,7 @@ private fun DetailRow(label: String, value: String, emphasize: Boolean = false) 
 }
 
 @Composable
-private fun ItemLine(item: SavedCountItem) {
+private fun ItemLine(item: SavedCountItem, symbol: String = "$") {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -224,7 +286,7 @@ private fun ItemLine(item: SavedCountItem) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "$${formatMoney(item.denominationValue)}",
+                text = formatMoney(item.denominationValue, symbol),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium
             )
@@ -234,7 +296,42 @@ private fun ItemLine(item: SavedCountItem) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "$${formatMoneyBigDecimal(item.subtotal)}",
+                text = formatMoneyBigDecimal(item.subtotal, symbol),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProductLine(item: SavedProductItem, symbol: String = "$") {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = item.name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = "${item.quantity.toPlainString()} ${item.unit}",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = formatMoneyBigDecimal(item.subtotal, symbol),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
