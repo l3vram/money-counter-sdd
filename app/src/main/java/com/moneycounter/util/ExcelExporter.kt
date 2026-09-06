@@ -3,6 +3,8 @@ package com.moneycounter.util
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
+import com.moneycounter.domain.Money
+import com.moneycounter.domain.Product
 import com.moneycounter.domain.SavedCount
 import com.moneycounter.ui.components.formatMoney
 import com.moneycounter.ui.components.formatMoneyBigDecimal
@@ -16,6 +18,11 @@ class ExcelExporter(private val context: Context) {
 
     fun export(saved: SavedCount) {
         val file = buildCsv(saved)
+        share(file)
+    }
+
+    fun exportStockReport(products: List<Product>, currency: String, generatedAt: Long) {
+        val file = buildStockCsv(products, currency, generatedAt)
         share(file)
     }
 
@@ -69,6 +76,48 @@ class ExcelExporter(private val context: Context) {
         val stamp = SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.getDefault())
             .format(Date(saved.savedAt))
         val file = File(context.cacheDir, "reporte_$stamp.csv")
+        FileOutputStream(file).use { fos ->
+            // UTF-8 BOM so Excel detects the encoding and keeps accents
+            fos.write(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))
+            fos.write(content.toByteArray(Charsets.UTF_8))
+        }
+        return file
+    }
+
+    private fun buildStockCsv(products: List<Product>, currency: String, generatedAt: Long): File {
+        val lines = mutableListOf<String>()
+
+        lines += csvRow("Reporte de existencias")
+        val dateMs = if (generatedAt > 0) generatedAt else System.currentTimeMillis()
+        lines += csvRow(
+            "Fecha",
+            SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(dateMs))
+        )
+        lines += csvRow("Moneda", currency)
+        lines += ""
+
+        lines += csvRow("Producto", "Unidad", "Cantidad", "Precio unitario", "Recargo", "Valor total")
+        for (p in products.filter { it.stock.signum() != 0 }) {
+            lines += csvRow(
+                p.name,
+                p.unit,
+                p.stock.stripTrailingZeros().toPlainString(),
+                formatMoneyBigDecimal(p.effectiveUnitPrice, currency),
+                if (p.surcharge.signum() > 0) formatMoneyBigDecimal(p.surcharge, currency) else "",
+                formatMoneyBigDecimal(p.stockValue, currency)
+            )
+        }
+        lines += ""
+
+        val total = products.filter { it.stock.signum() != 0 }
+            .fold(Money.ZERO) { acc, product -> acc.add(product.stockValue) }
+        lines += csvRow("Total en existencia", formatMoneyBigDecimal(total, currency))
+
+        val content = lines.joinToString("\r\n")
+
+        val stamp = SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.getDefault())
+            .format(Date(dateMs))
+        val file = File(context.cacheDir, "existencias_$stamp.csv")
         FileOutputStream(file).use { fos ->
             // UTF-8 BOM so Excel detects the encoding and keeps accents
             fos.write(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))
