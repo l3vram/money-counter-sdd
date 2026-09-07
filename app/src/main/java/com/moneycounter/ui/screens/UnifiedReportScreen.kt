@@ -126,6 +126,12 @@ fun UnifiedReportScreen(
 
                     item {
                         LuisoCard(modifier = Modifier.fillMaxWidth()) {
+                            DetailRow("MONEDA", "${u.currencySymbol} (${u.currencyCode})")
+                        }
+                    }
+
+                    item {
+                        LuisoCard(modifier = Modifier.fillMaxWidth()) {
                             DetailRow(
                                 "VENTAS",
                                 "${u.count}"
