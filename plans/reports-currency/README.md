@@ -29,7 +29,7 @@ previous (006 → 007 → 008 → 009). Wave 5 = 010 (post-demo feedback redesig
 | 007  | Product currency in UI: Stock dialog + counter filter + remove History icon | P1 | M | 006 | 2 | DONE |
 | 008  | Reportes: 3rd tab, grouped/selectable reports screen, currency filter | P1 | L | 006, 007 | 3 | DONE |
 | 009  | Unified report: merge selected counts, PDF/CSV export with format chooser | P1 | M | 006, 008 | 4 | DONE |
-| 010  | Reports list redesign (selection mode, sort Asc/Desc, day totals, export on top) + fix USD filter bug | P1 | M | 008 | 5 | IN PROGRESS |
+| 010  | Reports list redesign (selection mode, sort Asc/Desc, day totals, export on top) + fix USD filter bug | P1 | M | 008 | 5 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).
 
