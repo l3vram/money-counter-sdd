@@ -6,8 +6,14 @@
 > report — do not improvise. When done, update the status row for this plan
 > in `plans/el-luiso-redesign/README.md`.
 >
-> **Drift check (run first)**: `git diff --stat 999dec4..HEAD -- app/src/main/java/com/moneycounter/ui app/src/main/java/com/moneycounter/MainActivity.kt app/src/main/res/values/strings.xml`
-> On a mismatch, treat it as a STOP condition.
+> **Drift check (run first)**:
+> `git diff --name-only 999dec4..HEAD`
+> All changed paths MUST be limited to: `app/src/main/java/com/moneycounter/ui/**`,
+> `app/src/main/java/com/moneycounter/MainActivity.kt`,
+> `app/src/main/res/**`, `plans/el-luiso-redesign/**`, `.flow/**`.
+> If anything under domain/, repository/, viewmodel/, util/, data/, or
+> tests changed, treat it as a STOP condition. (ui/res drift is EXPECTED —
+> plans 001–007 legitimately reskinned the app.)
 
 ## Status
 
