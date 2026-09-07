@@ -21,10 +21,6 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -32,8 +28,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -48,10 +42,15 @@ import androidx.compose.ui.unit.dp
 import com.moneycounter.domain.Currency
 import com.moneycounter.domain.Denomination
 import com.moneycounter.domain.MeasurementUnit
+import com.moneycounter.ui.components.LuisoButton
+import com.moneycounter.ui.components.LuisoCard
+import com.moneycounter.ui.components.LuisoOutlineButton
+import com.moneycounter.ui.components.LuisoSectionHeader
+import com.moneycounter.ui.components.LuisoTextField
+import com.moneycounter.ui.components.LuisoTopBar
 import com.moneycounter.ui.components.formatMoney
 import com.moneycounter.viewmodel.MoneyCounterViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DenominationManagementScreen(
     viewModel: MoneyCounterViewModel,
@@ -72,8 +71,8 @@ fun DenominationManagementScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Ajustes") },
+            LuisoTopBar(
+                title = "Ajustes",
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -82,11 +81,7 @@ fun DenominationManagementScreen(
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
+                }
             )
         }
     ) { padding ->
@@ -100,7 +95,7 @@ fun DenominationManagementScreen(
             item { Spacer(modifier = Modifier.height(8.dp)) }
 
             item {
-                SectionTitle("MONEDA")
+                LuisoSectionHeader(text = "MONEDA")
             }
 
             items(uiState.currencies, key = { it.id }) { currency ->
@@ -117,26 +112,21 @@ fun DenominationManagementScreen(
             }
 
             item {
-                FilledTonalButton(
+                LuisoButton(
+                    text = "AGREGAR MONEDA",
                     onClick = {
                         showAddCurrencyDialog = true
                         errorMessage = null
                     },
+                    leadingIcon = Icons.Default.Add,
                     modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Text("AGREGAR MONEDA")
-                }
+                )
             }
 
             item { Spacer(modifier = Modifier.height(16.dp)) }
 
             item {
-                SectionTitle("UNIDADES DE MEDIDA")
+                LuisoSectionHeader(text = "UNIDADES DE MEDIDA")
             }
 
             items(uiState.units, key = { it.id }) { unit ->
@@ -151,39 +141,30 @@ fun DenominationManagementScreen(
             }
 
             item {
-                FilledTonalButton(
+                LuisoButton(
+                    text = "AGREGAR UNIDAD",
                     onClick = {
                         showAddUnitDialog = true
                         errorMessage = null
                     },
+                    leadingIcon = Icons.Default.Add,
                     modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Text("AGREGAR UNIDAD")
-                }
+                )
             }
 
             item { Spacer(modifier = Modifier.height(16.dp)) }
 
             item {
-                SectionTitle("DENOMINACIONES")
+                LuisoSectionHeader(text = "DENOMINACIONES")
             }
 
             if (uiState.hasActiveCount) {
                 item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
-                        )
+                    LuisoCard(
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
                             text = "No puedes modificar las denominaciones mientras haya un conteo activo. Borra el conteo primero.",
-                            modifier = Modifier.padding(16.dp),
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             style = MaterialTheme.typography.bodyMedium
                         )
@@ -209,20 +190,15 @@ fun DenominationManagementScreen(
             }
 
             item {
-                FilledTonalButton(
+                LuisoButton(
+                    text = "AGREGAR DENOMINACIÓN",
                     onClick = {
                         showAddDenominationDialog = true
                         errorMessage = null
                     },
+                    leadingIcon = Icons.Default.Add,
                     modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Text("AGREGAR DENOMINACIÓN")
-                }
+                )
             }
 
             item { Spacer(modifier = Modifier.height(24.dp)) }
@@ -442,16 +418,6 @@ fun DenominationManagementScreen(
 }
 
 @Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary
-    )
-}
-
-@Composable
 private fun CurrencyManagementRow(
     currency: Currency,
     isSelected: Boolean,
@@ -459,17 +425,11 @@ private fun CurrencyManagementRow(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) MaterialTheme.colorScheme.secondaryContainer
-            else MaterialTheme.colorScheme.surface
-        )
+    LuisoCard(
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -504,7 +464,7 @@ private fun CurrencyManagementRow(
                     Icon(
                         Icons.Default.Edit,
                         contentDescription = "Editar",
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = onDelete, enabled = !isSelected) {
@@ -526,16 +486,11 @@ private fun UnitManagementRow(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+    LuisoCard(
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -551,7 +506,7 @@ private fun UnitManagementRow(
                     Icon(
                         Icons.Default.Edit,
                         contentDescription = "Editar",
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = onDelete) {
@@ -578,17 +533,11 @@ private fun DenominationManagementRow(
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isDisabled) MaterialTheme.colorScheme.surfaceVariant
-            else MaterialTheme.colorScheme.surface
-        )
+    LuisoCard(
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -636,7 +585,7 @@ private fun DenominationManagementRow(
                         Icons.Default.Edit,
                         contentDescription = "Editar",
                         tint = if (isDisabled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                        else MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(
@@ -671,11 +620,6 @@ private fun DenominationValueDialog(
         title = { Text(title) },
         text = {
             Column {
-                Text(
-                    text = "Valor",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
                 OutlinedTextField(
                     value = input,
                     onValueChange = { newValue ->
@@ -686,6 +630,7 @@ private fun DenominationValueDialog(
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
+                    label = { Text("Valor") },
                     prefix = { Text("$ ") }
                 )
                 if (errorMessage != null) {
@@ -699,17 +644,19 @@ private fun DenominationValueDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                val value = input.toLongOrNull() ?: 0L
-                onConfirm(value)
-            }) {
-                Text(confirmText)
-            }
+            LuisoButton(
+                text = confirmText,
+                onClick = {
+                    val value = input.toLongOrNull() ?: 0L
+                    onConfirm(value)
+                }
+            )
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("CANCELAR")
-            }
+            LuisoOutlineButton(
+                text = "CANCELAR",
+                onClick = onDismiss
+            )
         }
     )
 }
@@ -730,12 +677,10 @@ private fun UnitDialog(
         title = { Text(title) },
         text = {
             Column {
-                OutlinedTextField(
+                LuisoTextField(
                     value = input,
                     onValueChange = { input = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Nombre (ej: Lb, Galón, Unidad)") },
-                    singleLine = true
+                    label = "Nombre (ej: Lb, Galón, Unidad)"
                 )
                 if (errorMessage != null) {
                     Text(
@@ -748,14 +693,16 @@ private fun UnitDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(input) }) {
-                Text(confirmText)
-            }
+            LuisoButton(
+                text = confirmText,
+                onClick = { onConfirm(input) }
+            )
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("CANCELAR")
-            }
+            LuisoOutlineButton(
+                text = "CANCELAR",
+                onClick = onDismiss
+            )
         }
     )
 }
@@ -780,28 +727,22 @@ private fun CurrencyDialog(
         title = { Text(title) },
         text = {
             Column {
-                OutlinedTextField(
+                LuisoTextField(
                     value = code,
                     onValueChange = { if (it.length <= 3) code = it.filter { c -> c.isLetterOrDigit() }.uppercase() },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Código (3 letras)") },
-                    singleLine = true
+                    label = "Código (3 letras)"
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
+                LuisoTextField(
                     value = name,
                     onValueChange = { name = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Nombre") },
-                    singleLine = true
+                    label = "Nombre"
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
+                LuisoTextField(
                     value = symbol,
                     onValueChange = { if (it.length <= 8) symbol = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Símbolo") },
-                    singleLine = true
+                    label = "Símbolo"
                 )
                 if (errorMessage != null) {
                     Text(
@@ -814,14 +755,16 @@ private fun CurrencyDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(code, name, symbol) }) {
-                Text(confirmText)
-            }
+            LuisoButton(
+                text = confirmText,
+                onClick = { onConfirm(code, name, symbol) }
+            )
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("CANCELAR")
-            }
+            LuisoOutlineButton(
+                text = "CANCELAR",
+                onClick = onDismiss
+            )
         }
     )
 }
