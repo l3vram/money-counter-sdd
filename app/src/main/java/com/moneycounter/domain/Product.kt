@@ -8,7 +8,8 @@ data class Product(
     val unit: String,
     val unitPrice: BigDecimal,
     val surcharge: BigDecimal = Money.ZERO,
-    val stock: BigDecimal = Money.ZERO
+    val stock: BigDecimal = Money.ZERO,
+    val currencyId: String = DefaultCurrencies.CUP.id
 ) {
     init {
         require(id.isNotBlank()) { "Product ID must not be blank" }

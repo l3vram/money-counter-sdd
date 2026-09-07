@@ -342,7 +342,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         return true
     }
 
-    fun addProduct(name: String, unit: String, stock: BigDecimal, unitPrice: BigDecimal, surcharge: BigDecimal): Boolean {
+    fun addProduct(name: String, unit: String, stock: BigDecimal, currencyId: String, unitPrice: BigDecimal, surcharge: BigDecimal): Boolean {
         val cleanName = name.trim()
         val cleanUnit = unit.trim()
         if (cleanName.isEmpty() || cleanUnit.isEmpty()) return false
@@ -350,14 +350,14 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         val state = _uiState.value
         if (unitPrice.signum() == 0 && surcharge.signum() == 0) return false
 
-        val new = Product(generateProductId(state.products), cleanName, cleanUnit, unitPrice, surcharge, stock)
+        val new = Product(generateProductId(state.products), cleanName, cleanUnit, unitPrice, surcharge, stock, currencyId)
         val newProducts = state.products + new
         _uiState.update { it.copy(products = newProducts) }
         persistProducts(newProducts)
         return true
     }
 
-    fun editProduct(id: String, name: String, unit: String, stock: BigDecimal, unitPrice: BigDecimal, surcharge: BigDecimal): Boolean {
+    fun editProduct(id: String, name: String, unit: String, stock: BigDecimal, currencyId: String, unitPrice: BigDecimal, surcharge: BigDecimal): Boolean {
         val cleanName = name.trim()
         val cleanUnit = unit.trim()
         if (cleanName.isEmpty() || cleanUnit.isEmpty()) return false
@@ -366,7 +366,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         if (state.products.none { it.id == id }) return false
 
         val newProducts = state.products.map {
-            if (it.id == id) it.copy(name = cleanName, unit = cleanUnit, unitPrice = unitPrice, surcharge = surcharge, stock = stock) else it
+            if (it.id == id) it.copy(name = cleanName, unit = cleanUnit, unitPrice = unitPrice, surcharge = surcharge, stock = stock, currencyId = currencyId) else it
         }
         _uiState.update { it.copy(products = newProducts) }
         persistProducts(newProducts)
@@ -400,6 +400,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         _uiState.update { it.copy(productSelections = newSelections) }
         recalculate()
     }
+
+    fun productsForCurrency(currencyId: String): List<Product> =
+        productsForCurrency(_uiState.value.products, currencyId)
 
     fun updateProductSelection(index: Int, productId: String) {
         val state = _uiState.value
@@ -571,6 +574,10 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     }
 
     companion object {
+        /** Returns products whose currency matches the given currencyId. */
+        fun productsForCurrency(products: List<Product>, currencyId: String): List<Product> =
+            products.filter { it.currencyId == currencyId }
+
         /** Returns products with stock reduced by the sold quantity per selection.
          *  Quantities never restore; over-selling may push stock negative (warn-and-allow). */
         fun applyStockDeduction(

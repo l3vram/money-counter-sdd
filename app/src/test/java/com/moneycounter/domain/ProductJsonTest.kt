@@ -54,7 +54,7 @@ class ProductJsonTest {
     fun `unsupported version returns empty list`() {
         val json = """
             {
-              "version": 3,
+              "version": 4,
               "products": [
                 {"id": "p1", "name": "Arroz", "unit": "Lb", "unitPrice": "25.00", "surcharge": "0.00", "stock": "10.00"}
               ]

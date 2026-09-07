@@ -1,6 +1,7 @@
 package com.moneycounter.repository
 
 import android.content.Context
+import com.moneycounter.domain.DefaultCurrencies
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.Product
 import org.json.JSONArray
@@ -10,7 +11,7 @@ import java.math.BigDecimal
 
 object ProductJson {
 
-    private const val VERSION = 2
+    private const val VERSION = 3
 
     fun toJson(products: List<Product>): String {
         val root = JSONObject()
@@ -25,6 +26,7 @@ object ProductJson {
             item.put("unitPrice", product.unitPrice.toPlainString())
             item.put("surcharge", product.surcharge.toPlainString())
             item.put("stock", product.stock.toPlainString())
+            item.put("currencyId", product.currencyId)
             array.put(item)
         }
         root.put("products", array)
@@ -35,7 +37,7 @@ object ProductJson {
         if (json.isBlank()) return emptyList()
         val root = runCatching { JSONObject(json) }.getOrElse { return emptyList() }
         val version = root.optInt("version", 1)
-        if (version != VERSION && version != 1) return emptyList()
+        if (version != VERSION && version != 1 && version != 2) return emptyList()
 
         val array = root.optJSONArray("products") ?: return emptyList()
         val products = mutableListOf<Product>()
@@ -59,9 +61,10 @@ object ProductJson {
                 .getOrDefault(Money.ZERO)
             val stock = runCatching { BigDecimal(stockStr).setScale(Money.SCALE) }
                 .getOrDefault(Money.ZERO)
+            val currencyId = item.optString("currencyId", DefaultCurrencies.CUP.id)
             if (unitPrice.signum() < 0 || surcharge.signum() < 0) continue
 
-            products.add(Product(id, name, unit, unitPrice, surcharge, stock))
+            products.add(Product(id, name, unit, unitPrice, surcharge, stock, currencyId))
         }
 
         return products

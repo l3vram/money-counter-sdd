@@ -1,6 +1,7 @@
 package com.moneycounter.repository
 
 import android.content.Context
+import com.moneycounter.domain.DefaultCurrencies
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.SavedCount
 import com.moneycounter.domain.SavedCountItem
@@ -41,7 +42,7 @@ class JsonSavedCountRepository(private val context: Context) : SavedCountReposit
 
 object SavedCountJson {
 
-    private const val VERSION = 2
+    private const val VERSION = 3
 
     fun toJson(history: List<SavedCount>): String {
         val root = JSONObject()
@@ -54,6 +55,7 @@ object SavedCountJson {
             item.put("savedAt", saved.savedAt)
             item.put("targetAmount", saved.targetAmount.toPlainString())
             item.put("currency", saved.currency)
+            item.put("currencyId", saved.currencyId)
 
             val itemsArray = JSONArray()
             for (entry in saved.items) {
@@ -88,7 +90,7 @@ object SavedCountJson {
         if (json.isBlank()) return emptyList()
         val root = runCatching { JSONObject(json) }.getOrElse { return emptyList() }
         val version = root.optInt("version", 1)
-        if (version != VERSION && version != 1) return emptyList()
+        if (version != VERSION && version != 1 && version != 2) return emptyList()
 
         val historyArray = root.optJSONArray("history") ?: return emptyList()
         val result = mutableListOf<SavedCount>()
@@ -146,13 +148,19 @@ object SavedCountJson {
             }
 
             val currency = entry.optString("currency", "$")
+            val currencyId = entry.optString("currencyId", "")
+                .ifBlank {
+                    DefaultCurrencies.get().associate { it.symbol to it.id }[currency]
+                        ?: DefaultCurrencies.CUP.id
+                }
             result.add(SavedCount(
                 id = id,
                 savedAt = savedAt,
                 targetAmount = target,
                 items = items,
                 currency = currency,
-                products = products
+                products = products,
+                currencyId = currencyId
             ))
         }
 

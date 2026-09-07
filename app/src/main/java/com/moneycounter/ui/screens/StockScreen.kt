@@ -156,7 +156,7 @@ fun StockScreen(
             initialSurcharge = "0",
             confirmText = "GUARDAR",
             onConfirm = { name, unit, stock, price, surcharge ->
-                if (viewModel.addProduct(name, unit, stock, price, surcharge)) {
+                if (viewModel.addProduct(name, unit, stock, uiState.selectedCurrencyId, price, surcharge)) {
                     showAddProductDialog = false
                     errorMessage = null
                 } else {
@@ -182,7 +182,7 @@ fun StockScreen(
             initialSurcharge = product.surcharge.stripTrailingZeros().toPlainString(),
             confirmText = "GUARDAR",
             onConfirm = { name, unit, stock, price, surcharge ->
-                if (viewModel.editProduct(product.id, name, unit, stock, price, surcharge)) {
+                if (viewModel.editProduct(product.id, name, unit, stock, uiState.selectedCurrencyId, price, surcharge)) {
                     showEditProductDialog = null
                     errorMessage = null
                 } else {
