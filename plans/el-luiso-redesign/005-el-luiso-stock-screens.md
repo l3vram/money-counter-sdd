@@ -7,7 +7,7 @@
 > in `plans/el-luiso-redesign/README.md`.
 >
 > **Drift check (run first)**: `git diff --stat 999dec4..HEAD -- app/src/main/java/com/moneycounter/ui/screens/StockScreen.kt app/src/main/java/com/moneycounter/ui/screens/StockReportScreen.kt`
-> On a mismatch, treat it as a STOP condition.
+> On a mismatch, treat it as a STOP condition. Empty (no diff) is expected.
 
 ## Status
 
@@ -17,31 +17,46 @@
 - **Depends on**: plans/el-luiso-redesign/001-*.md, plans/el-luiso-redesign/002-*.md
 - **Category**: design-system
 - **Planned at**: commit `999dec4`, 2026-09-07
+- **Revised at**: wave-3 re-plan — removed the stock-state chip deliverable
+  after the first executor correctly STOPPED (states don't exist in this
+  codebase; adding them requires business logic, out of scope).
 
 ## Why this matters
 
-The stock screens are the "Inventario" tab. The El Luiso kit (`DESIGN_SYSTEM.md`
-§9 Inventario) demands: name, price, stock, state, with state colors — normal →
-green `#22C55E`, low → yellow `#FACC15`, out → red; a search, filters, and a
-prominent "+ Agregar producto" primary action. This plan restyles both stock
-screens to the brand's component system without touching stock logic,
-repository access, stock-report PDF/CSV behavior or number formats.
+The stock screens are the "Inventario" tab. The El Luiso kit demands a clean,
+branded inventory list with name, price, stock, and prominent actions. **There
+is no stock-state feature today** (no Normal/Bajo/Agotado chips, no search, no
+filters, no low-stock threshold in the domain). This plan restyles BOTH stock
+screens to the brand's component system WITHOUT touching stock logic,
+repository access, stock-report PDF/CSV behavior, or number formats. State
+chips / search / filters are product features — NOT this plan.
 
-## Current state
+## Current state (verified against code)
 
 - `app/src/main/java/com/moneycounter/ui/screens/StockScreen.kt`:
-  - `StockScreen(:56)` — top-level content; hosts header/actions and product list.
-  - `SectionTitle(text)(:229)` — section heading helper.
-  - `ProductRow(:239)` — name, unit price, stock count, stock-state hint
-    (colors currently custom hardcoded).
-  - `ProductDialog(:300)` — add/edit dialog with fields.
-  - `parseDecimalInput(input)(:471)` — decimal parse helper (do not touch).
-- `app/src/main/java/com/moneycounter/ui/screens/StockReportScreen.kt` — stock
-  PDF/CSV report screen (export buttons, summary). Inspect its current colors:
-  `grep -n 'Color(0x\|Color.White' app/src/main/java/com/moneycounter/ui/screens/StockReportScreen.kt`.
-- The app already exports via icons `Icons.Filled.Description` / `Share`
-  (repo uses `Icons.Default.*`/`Icons.Filled.*` only).
-- Tokens/components: plans 001–002 (see their files).
+  - `StockScreen(:57)` — `Scaffold` + `TopAppBar("Stock")` tinted primary;
+    `LazyColumn` with `SectionTitle("PRODUCTOS")`, product `ProductRow`s, the
+    empty-state `Text` ("No hay productos en el stock…"), `AGREGAR PRODUCTO`
+    and `REPORTE DE EXISTENCIA` as `FilledTonalButton`, and the add/edit/
+    delete `ProductDialog`s.
+  - `SectionTitle(text)(:229)` — plain `Text`, `titleMedium`, Bold, primary.
+  - `ProductRow(:239)` — `Card` (surface) with name + one `bodySmall` line
+    (stock · unit price · currency · optional "+ recargo"); `Edit`/`Delete`
+    `IconButton`s (delete tinted `error`). **No stock-state chip exists.**
+  - `ProductDialog(:300)` — `AlertDialog` with `OutlinedTextField`s (Nombre,
+    Cantidad, Precio, Recargo), `OutlinedButton` dropdowns (Unidad, Moneda),
+    `TextButton` confirm/cancel.
+  - `parseDecimalInput(input)(:471)` — decimal parse helper (DO NOT TOUCH).
+- `app/src/main/java/com/moneycounter/ui/screens/StockReportScreen.kt`:
+  - `StockReportScreen(:44)` — `TopAppBar("Existencias")` w/ `ArrowBack`
+    nav icon, summary `Card` (TOTAL EN EXISTENCIA + products count), a
+    PRODUCTO/CANTIDAD/V.UNIT/TOTAL label row, per-product `StockLine` cards,
+    empty text ("No hay existencias registradas."), and `EXPORTAR PDF` /
+    `EXPORTAR EXCEL (CSV)` as `FilledTonalButton`s (use `Icons.Default.Share`).
+  - `StockLine(:217)` — name + stock + `effectiveUnitPrice` + `stockValue`
+    (primary, Bold). Uses `formatMoneyBigDecimal` already.
+  - Both files already use `MaterialTheme.colorScheme.*` roles only → `grep
+    'Color(0x\|Color.White'` on both currently returns **0**.
 
 ## Commands you will need
 
@@ -49,7 +64,7 @@ repository access, stock-report PDF/CSV behavior or number formats.
 |---|---|---|
 | Compile | `./gradlew compileDebugKotlin --console=plain` | exit 0 |
 | Tests | `./gradlew test --console=plain` | exit 0 |
-| Greps | `grep -n 'Color(0x\|Color.White' <the two stock screens>` | 0 matches after step 3 |
+| Greps | `grep -n 'Color(0x\|Color.White' <the two stock screens>` | 0 matches |
 
 ## Scope
 
@@ -58,11 +73,10 @@ repository access, stock-report PDF/CSV behavior or number formats.
 - `app/src/main/java/com/moneycounter/ui/screens/StockReportScreen.kt`
 
 **Out of scope** (do NOT touch):
-- `ui/theme/*`, any other screen, `StockRepository`/`JsonStockRepository`
-  (repository naming: verify), `.pdf`/`.csv` exporters, ViewModel logic.
-- Adding real search/filter controls — the current screen may not have them;
-  if it lacks a stock-search control, STOP and report (it may be a follow-up,
-  NOT part of this plan).
+- `ui/theme/*`, any other screen, `StockRepository`/`JsonStockRepository`,
+  `.pdf`/`.csv` exporters, ViewModel logic.
+- **Do NOT invent stock states (Normal/Bajo/Agotado), thresholds, search, or
+  filters** — they don't exist today and adding them needs domain/VM work.
 
 ## Git workflow
 
@@ -74,39 +88,47 @@ repository access, stock-report PDF/CSV behavior or number formats.
 
 ### Step 1: StockScreen header + actions
 
-Restyle the top of `StockScreen` with `LuisoTopBar(title = "Inventario", …)`
-(keep any existing back/settings icon wired to the current callback), the
-brand accent stripe, and the primary FAB/button "+ Agregar producto" →
-`LuisoButton`. Keep `ProductDialog` opening behavior identical. Use the exact
-existing label of the add button (currently likely "Agregar producto" or
-"+ Agregar producto") — preserve business-facing strings; copy polish is plan
-008.
+- Replace `TopAppBar` with `LuisoTopBar(title = "Inventario")` (keep the
+  existing import style of the file; there is no back/settings icon on this
+  screen — do not add one).
+- `SectionTitle` → `LuisoSectionHeader(text = "PRODUCTOS")` (keep the
+  `LuisoSectionHeader` modifier default; you may drop the local `SectionTitle`
+  helper if nothing else uses it).
+- Empty state `Text` → `LuisoEmptyState(message = "No hay productos en el
+  stock. Agrega uno con cantidad, precio y recargo.")`. Use the yellow accent
+  variant: `LuisoEmptyState(message = …, accentColor = LuisoYellow)`.
+- `AGREGAR PRODUCTO` and `REPORTE DE EXISTENCIA` `FilledTonalButton`s →
+  `LuisoButton(text = …)` (keep identical labels, keep `fillMaxWidth()`
+  modifier via the `modifier` parameter). Keep their `Icon`s (Add /
+  Description) via `leadingIcon = Icons.Default.Add` / `.Description`.
 
 **Verify**: `./gradlew compileDebugKotlin --console=plain` → exit 0.
 
-### Step 2: Stock-state colors + product rows
+### Step 2: Product rows
 
-- `SectionTitle` → `LuisoSectionHeader`.
-- `ProductRow`: restyle with `LuisoCard`, name in `titleSmall`, unit price via
-  `formatMoneyBigDecimal(price, currencySymbol)` from `DenominationRow.kt`
-  (match existing format calls), stock count in `bodyMedium`.
-- Stock-state chip colors exactly per kit: **normal → `secondary`
-  (`LuisoGreenBright`, green)**, **low → `LuisoYellow` (amber, dark text
-  `LuisoInk`)**, **out → `error`**. Use `Color` literals ONLY via the brand
-  constants (`LuisoGreenBright`, `LuisoYellow`, `LuisoError` imported from
-  `ui.theme`), or `MaterialTheme.colorScheme` roles where the scheme already
-  carries them (`secondary`, `error`). Do not leave the old custom hex.
+- `ProductRow` inner `Card` → `LuisoCard` (keep the existing inner `Row`
+  layout and all fields/text as-is — name `bodyLarge/Medium`, secondary
+  `bodySmall` line).
+- Keep `Edit` tint `primary`, `Delete` tint `error` (already correct).
+- **No stock-state chip**: do not add any colored state indicator; one does
+  not exist and adding it is out of scope.
 
 **Verify**: `./gradlew compileDebugKotlin --console=plain` → exit 0.
 
 ### Step 3: Dialogs + stock report
 
-- `ProductDialog` fields → `LuisoTextField`; confirm/save button →
-  `LuisoButton`; cancel → `LuisoOutlineButton`; destructive deletes keep
-  `error` colors.
-- `StockReportScreen` → `LuisoTopBar` header, export buttons as
-  `LuisoButton`/`LuisoOutlineButton`, summary figures via `LuisoStatCard`,
-  replace any hardcoded colors with tokens/roles.
+- `ProductDialog`'s `OutlinedTextField`s (Nombre, Cantidad, Precio, Recargo) →
+  `LuisoTextField` (label preserved; `keyboardOptions` decimal values kept).
+- Keep the Unidad/Moneda `OutlinedButton` dropdowns as-is (they are selector
+  menus, not in the Luiso kit).
+- Delete confirm `TextButton` stays `TextButton` with `Text("Eliminar", color =
+  MaterialTheme.colorScheme.error)` (destructive, keep red).
+- `StockReportScreen`: `TopAppBar` → `LuisoTopBar(title = "Existencias",
+  navigationIcon = <existing ArrowBack IconButton>)`; summary `Card` →
+  `LuisoCard` (keep `DetailRow` content); `StockLine` `Card`s → `LuisoCard`;
+  `EXPORTAR PDF`/`EXPORTAR EXCEL (CSV)` buttons → `LuisoButton(text = …,
+  leadingIcon = Icons.Default.Share, modifier = Modifier.fillMaxWidth())`.
+- The label row + empty text stay as-is (already themed).
 
 **Verify**: `./gradlew compileDebugKotlin --console=plain` → exit 0.
 
@@ -128,8 +150,8 @@ All must hold:
 
 - [ ] Both stock screens compile and `test` exits 0
 - [ ] `grep -n 'Color(0x\|Color.White'` on both files returns 0
-- [ ] Stock states mapped: normal=green (`secondary`), low=yellow (`LuisoYellow`/`tertiaryContainer`), out=red (`error`)
-- [ ] Header + add-product action use Luiso components
+- [ ] Header + both action buttons use Luiso components; section title is a
+      `LuisoSectionHeader`; rows/dialog-fields use `LuisoCard`/`LuisoTextField`
 - [ ] No logic/export/ViewModel/format changes (diff is UI-only)
 - [ ] `plans/el-luiso-redesign/README.md` status row for 005 → DONE
 
@@ -138,15 +160,14 @@ All must hold:
 Stop and report (do not improvise) if:
 
 - The stock screens' code doesn't match "Current state" (drifted).
-- The feature has no stock-search/filter control today and adding one would
-  require new repository/ViewModel surface — that's OUT of scope; report it as a
-  finding instead.
-- You need colors not present in tokens/roles.
+- A step cannot be done with existing tokens/components and would require new
+  Material3 components or new dependencies.
+- You believe a stock-state/search/filter feature is required — it is NOT;
+  report it as a finding, do not implement it.
 
 ## Maintenance notes
 
-- Stock states rely on color + text simultaneously (kit §Accessibility and the
-  established chip labels) — keep the label ("Normal"/"Bajo"/"Agotado") next to
-  the colored chip; never color-only.
-- The add/product dialog pattern established here is the template the
-  DenominationManagement dialogs (007) will follow.
+- Kit §9 (Inventario) mentions stock states Normal→green/low→yellow/out→red,
+  plus search+filters. None exist in this codebase. LOG this as a finding for
+  a future feature plan; do not fake it here.
+- The add/product dialog pattern established here mirrors 007's dialogs.
