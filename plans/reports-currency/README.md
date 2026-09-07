@@ -25,10 +25,10 @@ previous (006 → 007 → 008 → 009).
 
 | Plan | Title | Priority | Effort | Depends on | Wave | Status |
 |------|-------|----------|--------|------------|------|--------|
-| 006  | Add `currencyId` to Product + SavedCount: model, JSON v3, migration, ViewModel, tests | P1 | M | — | 1 | TODO |
-| 007  | Product currency in UI: Stock dialog + counter filter + remove History icon | P1 | M | 006 | 2 | TODO |
-| 008  | Reportes: 3rd tab, grouped/selectable reports screen, currency filter | P1 | L | 006, 007 | 3 | TODO |
-| 009  | Unified report: merge selected counts, PDF/CSV export with format chooser | P1 | M | 006, 008 | 4 | TODO |
+| 006  | Add `currencyId` to Product + SavedCount: model, JSON v3, migration, ViewModel, tests | P1 | M | — | 1 | DONE |
+| 007  | Product currency in UI: Stock dialog + counter filter + remove History icon | P1 | M | 006 | 2 | DONE |
+| 008  | Reportes: 3rd tab, grouped/selectable reports screen, currency filter | P1 | L | 006, 007 | 3 | DONE |
+| 009  | Unified report: merge selected counts, PDF/CSV export with format chooser | P1 | M | 006, 008 | 4 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).
 
