@@ -50,11 +50,11 @@ Wave 1 = plan 001 (foundation). Wave 2 = 002–005 in parallel (all depend only 
 
 | Plan | Title | Priority | Effort | Depends on | Wave | Status |
 |------|-------|----------|--------|------------|------|--------|
-| 001  | Add `stock` to Product: model, products.json v2, ViewModel, tests | P1 | M | — | 1 | TODO |
-| 002  | Stock tab screen + bottom navigation + remove PRODUCTOS from Ajustes | P1 | L | 001 | 2 | TODO |
-| 003  | Main screen shows available stock + over-stock warning | P1 | S | 001 | 2 | TODO |
-| 004  | Deduct stock when a count is saved to history | P1 | S | 001 | 2 | TODO |
-| 005  | Existence report screen + PDF/CSV export | P1 | M | 001 | 2 | TODO |
+| 001  | Add `stock` to Product: model, products.json v2, ViewModel, tests | P1 | M | — | 1 | DONE |
+| 002  | Stock tab screen + bottom navigation + remove PRODUCTOS from Ajustes | P1 | L | 001 | 2 | DONE |
+| 003  | Main screen shows available stock + over-stock warning | P1 | S | 001 | 2 | DONE |
+| 004  | Deduct stock when a count is saved to history | P1 | S | 001 | 2 | DONE |
+| 005  | Existence report screen + PDF/CSV export | P1 | M | 001, 002 | 3 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).
 
