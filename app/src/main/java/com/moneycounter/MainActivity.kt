@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Paid
+import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -24,10 +25,11 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.moneycounter.ui.screens.DenominationManagementScreen
 import com.moneycounter.ui.screens.HistoryDetailScreen
-import com.moneycounter.ui.screens.HistoryScreen
 import com.moneycounter.ui.screens.MoneyCounterScreen
+import com.moneycounter.ui.screens.ReportsScreen
 import com.moneycounter.ui.screens.StockReportScreen
 import com.moneycounter.ui.screens.StockScreen
+import com.moneycounter.ui.screens.UnifiedReportScreen
 import com.moneycounter.ui.theme.MoneyCounterTheme
 import com.moneycounter.viewmodel.MoneyCounterViewModel
 
@@ -48,8 +50,10 @@ fun MoneyCounterApp() {
     val viewModel: MoneyCounterViewModel = viewModel()
     var currentScreen by remember { mutableStateOf("counter") }
     var selectedHistoryId by remember { mutableStateOf<String?>(null) }
+    var selectedReportIds by remember { mutableStateOf<List<String>>(emptyList()) }
 
-    val showBottomBar = currentScreen == "counter" || currentScreen == "stock"
+    val showBottomBar =
+        currentScreen == "counter" || currentScreen == "stock" || currentScreen == "reports"
 
     Scaffold(
         bottomBar = {
@@ -66,6 +70,12 @@ fun MoneyCounterApp() {
                         onClick = { currentScreen = "stock" },
                         icon = { Icon(Icons.Filled.Inventory2, contentDescription = null) },
                         label = { Text("Stock") }
+                    )
+                    NavigationBarItem(
+                        selected = currentScreen == "reports",
+                        onClick = { currentScreen = "reports" },
+                        icon = { Icon(Icons.Filled.Receipt, contentDescription = null) },
+                        label = { Text("Reportes") }
                     )
                 }
             }
@@ -93,18 +103,26 @@ fun MoneyCounterApp() {
                     viewModel = viewModel,
                     onNavigateBack = { currentScreen = "counter" }
                 )
-                "history" -> HistoryScreen(
+                "reports" -> ReportsScreen(
                     viewModel = viewModel,
-                    onNavigateBack = { currentScreen = "counter" },
                     onOpenDetail = { id ->
                         selectedHistoryId = id
                         currentScreen = "detail"
+                    },
+                    onOpenSummary = { ids ->
+                        selectedReportIds = ids
+                        currentScreen = "summary"
                     }
+                )
+                "summary" -> UnifiedReportScreen(
+                    viewModel = viewModel,
+                    selectedCountIds = selectedReportIds,
+                    onNavigateBack = { currentScreen = "reports" }
                 )
                 "detail" -> HistoryDetailScreen(
                     viewModel = viewModel,
                     savedCountId = selectedHistoryId.orEmpty(),
-                    onNavigateBack = { currentScreen = "history" }
+                    onNavigateBack = { currentScreen = "reports" }
                 )
             }
         }
