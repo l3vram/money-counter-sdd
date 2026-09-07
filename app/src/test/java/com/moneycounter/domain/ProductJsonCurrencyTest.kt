@@ -187,19 +187,49 @@ class ProductJsonCurrencyTest {
     }
 
     @Test
-    fun `productsForCurrency filters to the given currency`() {
+    fun `productsWithPrice filters to the given currency`() {
         val products = listOf(
             product("p1", "CUP product", DefaultCurrencies.CUP.id),
             product("p2", "USD product", DefaultCurrencies.USD.id),
             product("p3", "Another CUP product", DefaultCurrencies.CUP.id)
         )
 
-        val cupOnly = MoneyCounterViewModel.productsForCurrency(products, DefaultCurrencies.CUP.id)
+        val cupOnly = MoneyCounterViewModel.productsWithPrice(products, DefaultCurrencies.CUP.id)
 
         assertEquals(2, cupOnly.size)
         assertEquals(listOf("p1", "p3"), cupOnly.map { it.id })
 
-        val usdOnly = MoneyCounterViewModel.productsForCurrency(products, DefaultCurrencies.USD.id)
+        val usdOnly = MoneyCounterViewModel.productsWithPrice(products, DefaultCurrencies.USD.id)
         assertEquals(listOf("p2"), usdOnly.map { it.id })
+    }
+
+    @Test
+    fun `productsWithPrice filters to products with price in that currency`() {
+        val both = Product(
+            id = "p3",
+            name = "Arroz premium",
+            unit = "Lb",
+            stock = BigDecimal("10.00"),
+            prices = mapOf(
+                DefaultCurrencies.CUP.id to ProductPrice(BigDecimal("30.00"), Money.ZERO),
+                DefaultCurrencies.USD.id to ProductPrice(BigDecimal("0.50"), Money.ZERO)
+            )
+        )
+        val products = listOf(
+            product("p1", "CUP only", DefaultCurrencies.CUP.id),
+            product("p2", "USD only", DefaultCurrencies.USD.id),
+            both
+        )
+
+        val cup = MoneyCounterViewModel.productsWithPrice(products, DefaultCurrencies.CUP.id)
+        assertEquals(2, cup.size)
+        assertEquals(listOf("p1", "p3"), cup.map { it.id })
+
+        val usd = MoneyCounterViewModel.productsWithPrice(products, DefaultCurrencies.USD.id)
+        assertEquals(2, usd.size)
+        assertEquals(listOf("p2", "p3"), usd.map { it.id })
+
+        val eur = MoneyCounterViewModel.productsWithPrice(products, "eur")
+        assertEquals(0, eur.size)
     }
 }
