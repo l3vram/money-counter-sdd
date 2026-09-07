@@ -28,6 +28,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import com.moneycounter.domain.Currency
 import com.moneycounter.domain.MeasurementUnit
 import com.moneycounter.domain.Product
+import com.moneycounter.domain.ProductPrice
 import com.moneycounter.ui.components.LuisoButton
 import com.moneycounter.ui.components.LuisoCard
 import com.moneycounter.ui.components.LuisoEmptyState
@@ -91,6 +93,7 @@ fun StockScreen(
                     ProductRow(
                         product = product,
                         symbolOf = { id -> uiState.currencies.firstOrNull { it.id == id }?.symbol ?: id },
+                        currencyCodeOf = { id -> uiState.currencies.firstOrNull { it.id == id }?.code ?: id },
                         onEdit = {
                             showEditProductDialog = product
                             errorMessage = null
@@ -126,23 +129,22 @@ fun StockScreen(
     }
 
     if (showAddProductDialog) {
+        val emptyPrices = uiState.currencies.associate { it.id to ("0" to "0") }
         ProductDialog(
             title = "Nuevo producto",
             units = uiState.units,
             currencies = uiState.currencies,
             initialName = "",
             initialUnit = uiState.units.firstOrNull()?.name ?: "",
-            initialCurrencyId = uiState.selectedCurrencyId,
             initialStock = "0",
-            initialPrice = "",
-            initialSurcharge = "0",
+            initialPrices = emptyPrices,
             confirmText = "GUARDAR",
-            onConfirm = { name, unit, stock, price, surcharge, currencyId ->
-                if (viewModel.addProduct(name, unit, stock, currencyId, price, surcharge)) {
+            onConfirm = { name, unit, stock, prices ->
+                if (viewModel.addProduct(name, unit, stock, prices)) {
                     showAddProductDialog = false
                     errorMessage = null
                 } else {
-                    errorMessage = "Revisa los datos: nombre y unidad obligatorios, precio y recargo no negativos y al menos uno mayor que cero."
+                    errorMessage = "Revisa los datos: nombre y unidad obligatorios, al menos un precio mayor que cero."
                 }
             },
             onDismiss = {
@@ -154,26 +156,25 @@ fun StockScreen(
     }
 
     showEditProductDialog?.let { product ->
-        val editCurrencyId = if (product.hasPriceIn(uiState.selectedCurrencyId)) uiState.selectedCurrencyId
-            else product.prices.keys.firstOrNull() ?: uiState.selectedCurrencyId
-        val editPrice = product.priceFor(editCurrencyId)
+        val editPrices = uiState.currencies.associate { c ->
+            val pp = product.prices[c.id]
+            c.id to ((pp?.unitPrice?.stripTrailingZeros()?.toPlainString() ?: "0") to (pp?.surcharge?.stripTrailingZeros()?.toPlainString() ?: "0"))
+        }
         ProductDialog(
             title = "Editar producto",
             units = uiState.units,
             currencies = uiState.currencies,
             initialName = product.name,
             initialUnit = product.unit,
-            initialCurrencyId = editCurrencyId,
             initialStock = product.stock.stripTrailingZeros().toPlainString(),
-            initialPrice = editPrice?.unitPrice?.stripTrailingZeros()?.toPlainString() ?: "",
-            initialSurcharge = editPrice?.surcharge?.stripTrailingZeros()?.toPlainString() ?: "0",
+            initialPrices = editPrices,
             confirmText = "GUARDAR",
-            onConfirm = { name, unit, stock, price, surcharge, currencyId ->
-                if (viewModel.editProduct(product.id, name, unit, stock, currencyId, price, surcharge)) {
+            onConfirm = { name, unit, stock, prices ->
+                if (viewModel.editProduct(product.id, name, unit, stock, prices)) {
                     showEditProductDialog = null
                     errorMessage = null
                 } else {
-                    errorMessage = "Revisa los datos: nombre y unidad obligatorios, precio y recargo no negativos."
+                    errorMessage = "Revisa los datos: nombre y unidad obligatorios."
                 }
             },
             onDismiss = {
@@ -210,6 +211,7 @@ fun StockScreen(
 private fun ProductRow(
     product: Product,
     symbolOf: (String) -> String = { it },
+    currencyCodeOf: (String) -> String = { it },
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -232,9 +234,11 @@ private fun ProductRow(
                 Text(
                     text = "${product.stock.stripTrailingZeros().toPlainString()} ${product.unit}" +
                             product.prices.entries.joinToString(" · ") { (currencyId, pp) ->
-                                "${symbolOf(currencyId)}${pp.unitPrice.stripTrailingZeros().toPlainString()}" +
+                                val sym = symbolOf(currencyId)
+                                val code = currencyCodeOf(currencyId)
+                                "$sym${pp.unitPrice.stripTrailingZeros().toPlainString()} ($code)" +
                                         if (pp.surcharge.signum() > 0)
-                                            " +${symbolOf(currencyId)}${pp.surcharge.stripTrailingZeros().toPlainString()}"
+                                            " +$sym${pp.surcharge.stripTrailingZeros().toPlainString()}"
                                         else ""
                             },
                     style = MaterialTheme.typography.bodySmall,
@@ -269,12 +273,10 @@ private fun ProductDialog(
     currencies: List<Currency>,
     initialName: String,
     initialUnit: String,
-    initialCurrencyId: String,
     initialStock: String,
-    initialPrice: String,
-    initialSurcharge: String,
+    initialPrices: Map<String, Pair<String, String>>,
     confirmText: String,
-    onConfirm: (name: String, unit: String, stock: BigDecimal, unitPrice: BigDecimal, surcharge: BigDecimal, currencyId: String) -> Unit,
+    onConfirm: (name: String, unit: String, stock: BigDecimal, prices: Map<String, ProductPrice>) -> Unit,
     onDismiss: () -> Unit,
     errorMessage: String? = null
 ) {
@@ -284,17 +286,16 @@ private fun ProductDialog(
             if (units.any { it.name == initialUnit }) initialUnit else units.firstOrNull()?.name ?: ""
         )
     }
-    var currencyId by remember {
-        mutableStateOf(
-            if (currencies.any { it.id == initialCurrencyId }) initialCurrencyId
-            else currencies.firstOrNull()?.id.orEmpty()
-        )
-    }
     var stock by remember { mutableStateOf(initialStock) }
-    var price by remember { mutableStateOf(initialPrice) }
-    var surcharge by remember { mutableStateOf(initialSurcharge) }
+    val priceStates: Map<String, Pair<MutableState<String>, MutableState<String>>> = remember(currencies) {
+        currencies.associate { c ->
+            val initial = initialPrices[c.id] ?: ("0" to "0")
+            c.id to (
+                mutableStateOf(initial.first) to mutableStateOf(initial.second)
+            )
+        }
+    }
     var unitMenuOpen by remember { mutableStateOf(false) }
-    var currencyMenuOpen by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -336,34 +337,6 @@ private fun ProductDialog(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
 
-                val selectedCurrency = currencies.firstOrNull { it.id == currencyId }
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(
-                        onClick = { currencyMenuOpen = true },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "Moneda: ${selectedCurrency?.let { "${it.symbol} ${it.code}" } ?: ""}",
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = currencyMenuOpen,
-                        onDismissRequest = { currencyMenuOpen = false }
-                    ) {
-                        currencies.forEach { c ->
-                            DropdownMenuItem(
-                                text = { Text("${c.symbol} ${c.code} — ${c.name}") },
-                                onClick = {
-                                    currencyId = c.id
-                                    currencyMenuOpen = false
-                                }
-                            )
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-
                 LuisoTextField(
                     value = stock,
                     onValueChange = { newValue ->
@@ -377,30 +350,41 @@ private fun ProductDialog(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                LuisoTextField(
-                    value = price,
-                    onValueChange = { newValue ->
-                        if (newValue.isEmpty() || newValue.trim().replace(',', '.').matches(Regex("\\d*\\.?\\d*"))) {
-                            price = newValue
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = "Precio por unidad",
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+                currencies.forEach { c ->
+                    val price = priceStates[c.id] ?: return@forEach
+                    Text(
+                        text = "${c.symbol} ${c.code}",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LuisoTextField(
+                        value = price.first.value,
+                        onValueChange = { newValue ->
+                            if (newValue.isEmpty() || newValue.trim().replace(',', '.').matches(Regex("\\d*\\.?\\d*"))) {
+                                price.first.value = newValue
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = "Precio por unidad",
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LuisoTextField(
+                        value = price.second.value,
+                        onValueChange = { newValue ->
+                            if (newValue.isEmpty() || newValue.trim().replace(',', '.').matches(Regex("\\d*\\.?\\d*"))) {
+                                price.second.value = newValue
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = "Recargo fijo por unidad",
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
 
-                LuisoTextField(
-                    value = surcharge,
-                    onValueChange = { newValue ->
-                        if (newValue.isEmpty() || newValue.trim().replace(',', '.').matches(Regex("\\d*\\.?\\d*"))) {
-                            surcharge = newValue
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = "Recargo fijo por unidad",
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                )
                 if (errorMessage != null) {
                     Text(
                         text = errorMessage,
@@ -414,9 +398,17 @@ private fun ProductDialog(
         confirmButton = {
             TextButton(onClick = {
                 val parsedStock = parseDecimalInput(stock)
-                val parsedPrice = parseDecimalInput(price)
-                val parsedSurcharge = parseDecimalInput(surcharge)
-                onConfirm(name, unit, parsedStock, parsedPrice, parsedSurcharge, currencyId)
+                val prices = currencies.mapNotNull { c ->
+                    val price = priceStates[c.id] ?: return@mapNotNull null
+                    val parsedPrice = parseDecimalInput(price.first.value)
+                    val parsedSurcharge = parseDecimalInput(price.second.value)
+                    if (parsedPrice.signum() > 0 || parsedSurcharge.signum() > 0) {
+                        c.id to ProductPrice(parsedPrice, parsedSurcharge)
+                    } else {
+                        null
+                    }
+                }.toMap()
+                onConfirm(name, unit, parsedStock, prices)
             }) {
                 Text(confirmText)
             }
