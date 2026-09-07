@@ -7,8 +7,9 @@
 > in `plans/el-luiso-redesign/README.md`.
 >
 > **Drift check (run first)**:
-> `git diff --stat 999dec4..HEAD -- app/src/main/java/com/moneycounter/ui/screens/MoneyCounterScreen.kt app/src/main/java/com/moneycounter/ui/theme`
-> On a mismatch, treat it as a STOP condition.
+> `git diff --stat 999dec4..HEAD -- app/src/main/java/com/moneycounter/ui/screens/MoneyCounterScreen.kt`
+> On a mismatch, treat it as a STOP condition. (ui/theme drift is EXPECTED —
+> plan 001 added the design tokens; do not include it in the diff.)
 
 ## Status
 

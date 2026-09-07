@@ -6,8 +6,9 @@
 > report — do not improvise. When done, update the status row for this plan
 > in `plans/el-luiso-redesign/README.md`.
 >
-> **Drift check (run first)**: `git diff --stat 999dec4..HEAD -- app/src/main/java/com/moneycounter/ui/screens/DenominationManagementScreen.kt app/src/main/java/com/moneycounter/ui/theme`
-> On a mismatch, treat it as a STOP condition.
+> **Drift check (run first)**: `git diff --stat 999dec4..HEAD -- app/src/main/java/com/moneycounter/ui/screens/DenominationManagementScreen.kt`
+> On a mismatch, treat it as a STOP condition. (ui/theme drift is EXPECTED —
+> plan 001 added the design tokens; do not include it in the diff.)
 
 ## Status
 
