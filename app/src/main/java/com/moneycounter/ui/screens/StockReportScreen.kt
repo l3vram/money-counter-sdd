@@ -13,17 +13,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -34,12 +28,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.Product
+import com.moneycounter.ui.components.LuisoButton
+import com.moneycounter.ui.components.LuisoCard
+import com.moneycounter.ui.components.LuisoTopBar
 import com.moneycounter.ui.components.formatMoneyBigDecimal
 import com.moneycounter.util.ExcelExporter
 import com.moneycounter.util.PdfExporter
 import com.moneycounter.viewmodel.MoneyCounterViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StockReportScreen(viewModel: MoneyCounterViewModel, onNavigateBack: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
@@ -50,8 +46,8 @@ fun StockReportScreen(viewModel: MoneyCounterViewModel, onNavigateBack: () -> Un
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Existencias") },
+            LuisoTopBar(
+                title = "Existencias",
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -60,11 +56,7 @@ fun StockReportScreen(viewModel: MoneyCounterViewModel, onNavigateBack: () -> Un
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
+                }
             )
         }
     ) { padding ->
@@ -78,12 +70,7 @@ fun StockReportScreen(viewModel: MoneyCounterViewModel, onNavigateBack: () -> Un
             item { Spacer(modifier = Modifier.height(4.dp)) }
 
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
+                LuisoCard(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         DetailRow(
                             "TOTAL EN EXISTENCIA",
@@ -146,7 +133,8 @@ fun StockReportScreen(viewModel: MoneyCounterViewModel, onNavigateBack: () -> Un
 
             item {
                 Spacer(modifier = Modifier.height(8.dp))
-                FilledTonalButton(
+                LuisoButton(
+                    text = "EXPORTAR PDF",
                     onClick = {
                         PdfExporter(context).exportStockReport(
                             uiState.products,
@@ -154,19 +142,14 @@ fun StockReportScreen(viewModel: MoneyCounterViewModel, onNavigateBack: () -> Un
                             System.currentTimeMillis()
                         )
                     },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        Icons.Default.Share,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Text("EXPORTAR PDF")
-                }
+                    modifier = Modifier.fillMaxWidth(),
+                    leadingIcon = Icons.Default.Share
+                )
             }
 
             item {
-                FilledTonalButton(
+                LuisoButton(
+                    text = "EXPORTAR EXCEL (CSV)",
                     onClick = {
                         ExcelExporter(context).exportStockReport(
                             uiState.products,
@@ -174,15 +157,9 @@ fun StockReportScreen(viewModel: MoneyCounterViewModel, onNavigateBack: () -> Un
                             System.currentTimeMillis()
                         )
                     },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        Icons.Default.Share,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Text("EXPORTAR EXCEL (CSV)")
-                }
+                    modifier = Modifier.fillMaxWidth(),
+                    leadingIcon = Icons.Default.Share
+                )
             }
 
             item { Spacer(modifier = Modifier.height(16.dp)) }
@@ -215,12 +192,7 @@ private fun DetailRow(label: String, value: String, emphasize: Boolean = false) 
 
 @Composable
 private fun StockLine(product: Product, symbol: String = "$") {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
+    LuisoCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()

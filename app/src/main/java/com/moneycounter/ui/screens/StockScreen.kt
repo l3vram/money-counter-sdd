@@ -18,22 +18,15 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -49,10 +42,16 @@ import androidx.compose.ui.unit.dp
 import com.moneycounter.domain.Currency
 import com.moneycounter.domain.MeasurementUnit
 import com.moneycounter.domain.Product
+import com.moneycounter.ui.components.LuisoButton
+import com.moneycounter.ui.components.LuisoCard
+import com.moneycounter.ui.components.LuisoEmptyState
+import com.moneycounter.ui.components.LuisoSectionHeader
+import com.moneycounter.ui.components.LuisoTextField
+import com.moneycounter.ui.components.LuisoTopBar
+import com.moneycounter.ui.theme.LuisoYellow
 import com.moneycounter.viewmodel.MoneyCounterViewModel
 import java.math.BigDecimal
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StockScreen(
     viewModel: MoneyCounterViewModel,
@@ -67,13 +66,7 @@ fun StockScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Stock") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
+            LuisoTopBar(title = "Inventario")
         }
     ) { padding ->
         LazyColumn(
@@ -86,15 +79,14 @@ fun StockScreen(
             item { Spacer(modifier = Modifier.height(8.dp)) }
 
             item {
-                SectionTitle("PRODUCTOS")
+                LuisoSectionHeader(text = "PRODUCTOS")
             }
 
             if (uiState.products.isEmpty()) {
                 item {
-                    Text(
-                        text = "No hay productos en el stock. Agrega uno con cantidad, precio y recargo.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    LuisoEmptyState(
+                        message = "No hay productos en el stock. Agrega uno con cantidad, precio y recargo.",
+                        accentColor = LuisoYellow
                     )
                 }
             } else {
@@ -113,34 +105,24 @@ fun StockScreen(
             }
 
             item {
-                FilledTonalButton(
+                LuisoButton(
+                    text = "AGREGAR PRODUCTO",
                     onClick = {
                         showAddProductDialog = true
                         errorMessage = null
                     },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Text("AGREGAR PRODUCTO")
-                }
+                    modifier = Modifier.fillMaxWidth(),
+                    leadingIcon = Icons.Default.Add
+                )
             }
 
             item {
-                FilledTonalButton(
+                LuisoButton(
+                    text = "REPORTE DE EXISTENCIA",
                     onClick = onNavigateToReport,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        Icons.Default.Description,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Text("REPORTE DE EXISTENCIA")
-                }
+                    modifier = Modifier.fillMaxWidth(),
+                    leadingIcon = Icons.Default.Description
+                )
             }
 
             item { Spacer(modifier = Modifier.height(24.dp)) }
@@ -227,16 +209,6 @@ fun StockScreen(
 }
 
 @Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary
-    )
-}
-
-@Composable
 private fun ProductRow(
     product: Product,
     symbol: String,
@@ -244,12 +216,7 @@ private fun ProductRow(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
+    LuisoCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -336,12 +303,11 @@ private fun ProductDialog(
         title = { Text(title) },
         text = {
             Column {
-                OutlinedTextField(
+                LuisoTextField(
                     value = name,
                     onValueChange = { name = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Nombre") },
-                    singleLine = true
+                    label = "Nombre"
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -400,7 +366,7 @@ private fun ProductDialog(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
 
-                OutlinedTextField(
+                LuisoTextField(
                     value = stock,
                     onValueChange = { newValue ->
                         if (newValue.isEmpty() || newValue.trim().replace(',', '.').matches(Regex("\\d*\\.?\\d*"))) {
@@ -408,13 +374,12 @@ private fun ProductDialog(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Cantidad (stock)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true
+                    label = "Cantidad (stock)",
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                OutlinedTextField(
+                LuisoTextField(
                     value = price,
                     onValueChange = { newValue ->
                         if (newValue.isEmpty() || newValue.trim().replace(',', '.').matches(Regex("\\d*\\.?\\d*"))) {
@@ -422,13 +387,12 @@ private fun ProductDialog(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Precio por unidad") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true
+                    label = "Precio por unidad",
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                OutlinedTextField(
+                LuisoTextField(
                     value = surcharge,
                     onValueChange = { newValue ->
                         if (newValue.isEmpty() || newValue.trim().replace(',', '.').matches(Regex("\\d*\\.?\\d*"))) {
@@ -436,9 +400,8 @@ private fun ProductDialog(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Recargo fijo por unidad") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true
+                    label = "Recargo fijo por unidad",
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
                 if (errorMessage != null) {
                     Text(
