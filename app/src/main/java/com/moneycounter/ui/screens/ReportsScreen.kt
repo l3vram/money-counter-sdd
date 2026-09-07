@@ -19,22 +19,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -53,6 +48,11 @@ import com.moneycounter.domain.MonthGroup
 import com.moneycounter.domain.SavedCount
 import com.moneycounter.domain.groupByMonthDay
 import com.moneycounter.domain.keyString
+import com.moneycounter.ui.components.LuisoButton
+import com.moneycounter.ui.components.LuisoEmptyState
+import com.moneycounter.ui.components.LuisoOutlineButton
+import com.moneycounter.ui.components.LuisoSectionHeader
+import com.moneycounter.ui.components.LuisoTopBar
 import com.moneycounter.ui.components.formatMoneyBigDecimal
 import com.moneycounter.viewmodel.MoneyCounterViewModel
 import java.math.BigDecimal
@@ -79,6 +79,10 @@ fun ReportsScreen(
     val filterCurrency = uiState.currencies.firstOrNull { it.id == filterCurrencyId }
     val filtered = uiState.history.filter { it.currencyId == filterCurrencyId }
     val groups = remember(filtered, ascending) { groupByMonthDay(filtered, ascending) }
+
+    val now = remember { Calendar.getInstance() }
+    val currentYear = now.get(Calendar.YEAR)
+    val currentMonth = now.get(Calendar.MONTH) + 1
 
     fun toggleKey(key: String) {
         expandedKeys = if (key in expandedKeys) expandedKeys - key else expandedKeys + key
@@ -116,13 +120,7 @@ fun ReportsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Reportes") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
+            LuisoTopBar(title = "Reportes")
         }
     ) { padding ->
         LazyColumn(
@@ -147,12 +145,14 @@ fun ReportsScreen(
                             expandedKeys = emptySet()
                         }
                     )
-                    OutlinedButton(onClick = { ascending = !ascending }) {
-                        Text(if (ascending) "Antiguos ↑" else "Recientes ↓")
-                    }
-                    FilledTonalButton(onClick = { selectionMode = !selectionMode }) {
-                        Text(if (selectionMode) "Listo" else "Seleccionar")
-                    }
+                    LuisoOutlineButton(
+                        text = if (ascending) "Antiguos ↑" else "Recientes ↓",
+                        onClick = { ascending = !ascending }
+                    )
+                    LuisoButton(
+                        text = if (selectionMode) "Listo" else "Seleccionar",
+                        onClick = { selectionMode = !selectionMode }
+                    )
                 }
             }
 
@@ -165,58 +165,45 @@ fun ReportsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        OutlinedButton(
+                        LuisoOutlineButton(
+                            text = "ELIMINAR",
                             onClick = { confirmDelete = true },
-                            enabled = selectedIds.isNotEmpty(),
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error
-                            )
-                        ) {
-                            Text("ELIMINAR")
-                        }
-                        FilledTonalButton(
+                            enabled = selectedIds.isNotEmpty()
+                        )
+                        LuisoButton(
+                            text = if (selectedIds.isEmpty()) "GENERAR RESUMEN"
+                            else "GENERAR RESUMEN (${selectedIds.size})",
                             onClick = { onOpenSummary(selectedIds.toList()) },
-                            enabled = selectedIds.isNotEmpty(),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(
-                                if (selectedIds.isEmpty()) "GENERAR RESUMEN"
-                                else "GENERAR RESUMEN (${selectedIds.size})"
-                            )
-                        }
+                            modifier = Modifier.weight(1f),
+                            enabled = selectedIds.isNotEmpty()
+                        )
                     }
                 }
             }
 
             if (filtered.isEmpty()) {
                 item {
-                    Column(
+                    LuisoEmptyState(
+                        message = "No hay registros guardados para ${filterCurrency?.code ?: filterCurrencyId}",
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(24.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "No hay registros guardados para ${filterCurrency?.code ?: filterCurrencyId}",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                    }
+                            .padding(24.dp)
+                    )
                 }
             } else {
                 items(rows, key = { it.key }) { row ->
                     when (row) {
                         is MonthItem -> {
                             val monthIds = row.group.days.flatMap { it.counts }.map { it.id }
+                            val isCurrentMonth = row.group.key.year == currentYear && row.group.key.month == currentMonth
                             Surface(color = MaterialTheme.colorScheme.surface) {
                                 MonthRow(
                                     group = row.group,
                                     expanded = row.group.key.keyString() in expandedKeys,
                                     selectionMode = selectionMode,
                                     allSelected = monthIds.all { it in selectedIds },
+                                    accent = isCurrentMonth,
                                     onToggleExpand = { toggleKey(row.group.key.keyString()) },
                                     onToggleAll = { toggleAll(monthIds) }
                                 )
@@ -239,10 +226,6 @@ fun ReportsScreen(
                             Separator()
                         }
                         is CountItem -> {
-                            val code = uiState.currencies
-                                .firstOrNull { it.id == row.saved.currencyId }
-                                ?.code
-                                ?: row.saved.currencyId
                             Surface(color = MaterialTheme.colorScheme.surface) {
                                 ReportRow(
                                     saved = row.saved,
@@ -304,6 +287,7 @@ private fun MonthRow(
     expanded: Boolean,
     selectionMode: Boolean,
     allSelected: Boolean,
+    accent: Boolean = false,
     onToggleExpand: () -> Unit,
     onToggleAll: () -> Unit
 ) {
@@ -321,10 +305,9 @@ private fun MonthRow(
         if (selectionMode) {
             Checkbox(checked = allSelected, onCheckedChange = { onToggleAll() })
         }
-        Text(
+        LuisoSectionHeader(
             text = monthLabel,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
+            accent = accent,
             modifier = Modifier.weight(1f)
         )
         Text(
@@ -367,15 +350,15 @@ private fun DayRow(
         }
         Text(
             text = dayLabel,
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
             modifier = Modifier.weight(1f)
         )
         Text(
             text = "TOTAL " + formatMoneyBigDecimal(dayTotal, symbol),
-            style = MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.onSurface
         )
         Text(
             text = "· ${day.counts.size}",
@@ -420,9 +403,9 @@ private fun ReportRow(
         ) {
             Text(
                 text = formatMoneyBigDecimal(saved.targetAmount, saved.currency),
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f)
             )
             Text(
@@ -447,7 +430,7 @@ private fun Separator() {
         Modifier
             .fillMaxWidth()
             .height(0.5.dp)
-            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
     )
 }
 
@@ -477,15 +460,11 @@ private fun ReportsCurrencySelector(
     val selected = currencies.firstOrNull { it.id == selectedCurrencyId }
 
     Box {
-        OutlinedButton(
+        LuisoOutlineButton(
+            text = selected?.let { "${it.symbol} ${it.code}" } ?: "—",
             onClick = { expanded = true },
             modifier = Modifier.width(96.dp)
-        ) {
-            Text(
-                text = selected?.let { "${it.symbol} ${it.code}" } ?: "—",
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
+        )
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false }
