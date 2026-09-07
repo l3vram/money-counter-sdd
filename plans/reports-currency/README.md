@@ -31,7 +31,7 @@ Wave 6 = 011 (delete support, minimal list, compact nav, font-scale cap).
 | 008  | Reportes: 3rd tab, grouped/selectable reports screen, currency filter | P1 | L | 006, 007 | 3 | DONE |
 | 009  | Unified report: merge selected counts, PDF/CSV export with format chooser | P1 | M | 006, 008 | 4 | DONE |
 | 010  | Reports list redesign (selection mode, sort Asc/Desc, day totals, export on top) + fix USD filter bug | P1 | M | 008 | 5 | DONE |
-| 011  | Reports cleanup: delete (selection-mode ELIMINAR + confirm), minimal flat all-collapsed list, compact bottom nav, font-scale cap 1.2 | P1 | M | 010 | 6 | IN PROGRESS |
+| 011  | Reports cleanup: delete (selection-mode ELIMINAR + confirm), minimal flat all-collapsed list, compact bottom nav, font-scale cap 1.2 | P1 | M | 010 | 6 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).
 
