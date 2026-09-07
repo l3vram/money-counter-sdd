@@ -156,6 +156,19 @@ fun ReportsScreen(
                 }
             }
 
+            item {
+                val currencyLabel = filterCurrency?.let { "${it.symbol} (${it.code}) — ${it.name}" } ?: "—"
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    LuisoSectionHeader(
+                        text = "REPORTES EN $currencyLabel",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
             if (selectionMode) {
                 item {
                     Row(
@@ -464,7 +477,7 @@ private fun ReportsCurrencySelector(
         LuisoOutlineButton(
             text = selected?.let { "${it.symbol} ${it.code}" } ?: "—",
             onClick = { expanded = true },
-            modifier = Modifier.width(96.dp)
+            modifier = Modifier.width(110.dp)
         )
         DropdownMenu(
             expanded = expanded,

@@ -97,8 +97,7 @@ fun HistoryDetailScreen(
                         Spacer(modifier = Modifier.height(6.dp))
                         DetailRow(
                             "MONEDA",
-                            saved.currency,
-                            emphasize = true
+                            "${saved.currency} (${uiState.currencies.firstOrNull { it.id == saved.currencyId }?.code ?: saved.currencyId})"
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         DetailRow(
