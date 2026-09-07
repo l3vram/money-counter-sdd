@@ -40,6 +40,9 @@ import com.moneycounter.ui.components.formatMoneyBigDecimal
 import com.moneycounter.util.ExcelExporter
 import com.moneycounter.util.PdfExporter
 import com.moneycounter.viewmodel.MoneyCounterViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -245,6 +248,10 @@ fun HistoryDetailScreen(
             }
         }
     }
+}
+
+fun formatDate(millis: Long): String {
+    return SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(millis))
 }
 
 @Composable
