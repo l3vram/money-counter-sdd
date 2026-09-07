@@ -1,5 +1,6 @@
 package com.moneycounter.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,7 +26,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
@@ -33,13 +33,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -62,7 +58,15 @@ import com.moneycounter.domain.Money
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductSelection
 import com.moneycounter.ui.components.DenominationRow
+import com.moneycounter.ui.components.LuisoButton
+import com.moneycounter.ui.components.LuisoCard
+import com.moneycounter.ui.components.LuisoEmptyState
+import com.moneycounter.ui.components.LuisoOutlineButton
+import com.moneycounter.ui.components.LuisoStatCard
+import com.moneycounter.ui.components.LuisoTextField
+import com.moneycounter.ui.components.LuisoTopBar
 import com.moneycounter.ui.components.formatMoneyBigDecimal
+import com.moneycounter.ui.theme.LuisoYellow
 import com.moneycounter.viewmodel.MoneyCounterViewModel
 import java.math.BigDecimal
 
@@ -80,22 +84,38 @@ fun MoneyCounterScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Contador de dinero\nEl Luiso") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                ),
-                actions = {
-                    IconButton(onClick = onNavigateToSettings) {
-                        Icon(
-                            Icons.Default.Settings,
-                            contentDescription = "Configurar",
-                            tint = MaterialTheme.colorScheme.onPrimary
-                        )
+            Column {
+                LuisoTopBar(
+                    title = "El Luiso",
+                    actions = {
+                        IconButton(onClick = onNavigateToSettings) {
+                            Icon(
+                                Icons.Default.Settings,
+                                contentDescription = "Configurar",
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
                     }
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.primary)
+                        .padding(horizontal = 16.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "Contador de dinero",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
                 }
-            )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .background(LuisoYellow)
+                )
+            }
         }
     ) { padding ->
         LazyColumn(
@@ -252,10 +272,10 @@ private fun ProductsSection(
 
             if (productsForCurrency.isEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "No hay productos configurados para esta moneda. Ve a Ajustes para agregarlos o cambia la moneda.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                LuisoEmptyState(
+                    message = "No hay productos configurados para esta moneda. Ve a Ajustes para agregarlos o cambia la moneda.",
+                    icon = Icons.Default.Settings,
+                    modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 FilledTonalButton(
@@ -345,21 +365,19 @@ private fun ProductRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                OutlinedTextField(
+                LuisoTextField(
                     value = selection.quantityText,
                     onValueChange = { newValue ->
                         if (newValue.isEmpty() || newValue.trim().replace(',', '.').matches(Regex("\\d*\\.?\\d*"))) {
                             onQuantityChange(newValue)
                         }
                     },
-                    modifier = Modifier.weight(0.30f),
-                    label = { Text("Cantidad") },
+                    label = "Cantidad",
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Decimal,
                         imeAction = ImeAction.Done
                     ),
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyMedium
+                    modifier = Modifier.weight(0.30f)
                 )
 
                 Text(
@@ -430,18 +448,11 @@ private fun ProductSelector(
     var expanded by remember { mutableStateOf(false) }
 
     Box(modifier = modifier) {
-        OutlinedButton(
+        LuisoOutlineButton(
+            text = selectedProduct?.name ?: "Seleccionar…",
             onClick = { expanded = true },
             modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                text = selectedProduct?.name ?: "Seleccionar…",
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
-            )
-        }
+        )
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false }
@@ -475,15 +486,11 @@ private fun CurrencySelector(
     val selected = currencies.firstOrNull { it.id == selectedCurrencyId } ?: currencies.firstOrNull()
 
     Box {
-        OutlinedButton(
+        LuisoOutlineButton(
+            text = selected?.let { "${it.symbol} ${it.code}" } ?: "—",
             onClick = { expanded = true },
             modifier = Modifier.width(96.dp)
-        ) {
-            Text(
-                text = selected?.let { "${it.symbol} ${it.code}" } ?: "—",
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
+        )
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false }
@@ -532,7 +539,7 @@ private fun SummarySection(
                 label = "CONTADO",
                 value = formatMoneyBigDecimal(result.countedTotal, currencySymbol),
                 color = when (result.status) {
-                    CounterStatus.COMPLETED -> Color(0xFF1B6B3A)
+                    CounterStatus.COMPLETED -> MaterialTheme.colorScheme.primary
                     CounterStatus.OVER -> MaterialTheme.colorScheme.error
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 }
@@ -550,7 +557,7 @@ private fun SummarySection(
                         .fillMaxWidth()
                         .height(6.dp),
                     color = when (result.status) {
-                        CounterStatus.COMPLETED -> Color(0xFF1B6B3A)
+                        CounterStatus.COMPLETED -> MaterialTheme.colorScheme.primary
                         CounterStatus.OVER -> MaterialTheme.colorScheme.error
                         else -> MaterialTheme.colorScheme.primary
                     },
@@ -571,36 +578,26 @@ private fun SummarySection(
                             text = "✓ MONTO COMPLETADO",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1B6B3A),
+                            color = MaterialTheme.colorScheme.primary,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         if (savedCountId != null) {
-                            Button(
+                            LuisoButton(
+                                text = "GUARDADO",
                                 onClick = {},
                                 enabled = false,
+                                leadingIcon = Icons.Default.Check,
                                 modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(
-                                    Icons.Default.Check,
-                                    contentDescription = null,
-                                    modifier = Modifier.padding(end = 8.dp)
-                                )
-                                Text("GUARDADO")
-                            }
+                            )
                         } else {
-                            Button(
+                            LuisoButton(
+                                text = "GUARDAR EN HISTORIAL",
                                 onClick = onSave,
+                                leadingIcon = Icons.Default.Check,
                                 modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(
-                                    Icons.Default.Check,
-                                    contentDescription = null,
-                                    modifier = Modifier.padding(end = 8.dp)
-                                )
-                                Text("GUARDAR EN HISTORIAL")
-                            }
+                            )
                         }
                     }
                     CounterStatus.OVER -> {
