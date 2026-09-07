@@ -186,7 +186,7 @@ fun ReportsScreen(
             if (filtered.isEmpty()) {
                 item {
                     LuisoEmptyState(
-                        message = "No hay registros guardados para ${filterCurrency?.code ?: filterCurrencyId}",
+                        message = "Todavía no hay reportes.",
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(24.dp)

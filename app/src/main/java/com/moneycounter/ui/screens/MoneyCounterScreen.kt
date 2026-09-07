@@ -273,8 +273,7 @@ private fun ProductsSection(
             if (productsForCurrency.isEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 LuisoEmptyState(
-                    message = "No hay productos configurados para esta moneda. Ve a Ajustes para agregarlos o cambia la moneda.",
-                    icon = Icons.Default.Settings,
+                    message = "El Luiso está listo. Registra tu primer conteo.",
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -421,7 +420,7 @@ private fun ProductRow(
                 val outOfRange = selection.quantity() > selectedProduct.stock
                 Text(
                     text = "${symbol}${selectedProduct.effectiveUnitPrice.stripTrailingZeros().toPlainString()} por ${selectedProduct.unit}" +
-                            " · disp: ${selectedProduct.stock.stripTrailingZeros().toPlainString()} ${selectedProduct.unit}",
+                            " · disponible: ${selectedProduct.stock.stripTrailingZeros().toPlainString()} ${selectedProduct.unit}",
                     style = MaterialTheme.typography.labelSmall,
                     color = if (outOfRange) MaterialTheme.colorScheme.error
                             else MaterialTheme.colorScheme.onSurfaceVariant
@@ -585,7 +584,7 @@ private fun SummarySection(
                         Spacer(modifier = Modifier.height(8.dp))
                         if (savedCountId != null) {
                             LuisoButton(
-                                text = "GUARDADO",
+                                text = "¡Conteo registrado!",
                                 onClick = {},
                                 enabled = false,
                                 leadingIcon = Icons.Default.Check,

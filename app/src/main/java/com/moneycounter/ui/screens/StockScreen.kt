@@ -48,7 +48,6 @@ import com.moneycounter.ui.components.LuisoEmptyState
 import com.moneycounter.ui.components.LuisoSectionHeader
 import com.moneycounter.ui.components.LuisoTextField
 import com.moneycounter.ui.components.LuisoTopBar
-import com.moneycounter.ui.theme.LuisoYellow
 import com.moneycounter.viewmodel.MoneyCounterViewModel
 import java.math.BigDecimal
 
@@ -85,8 +84,7 @@ fun StockScreen(
             if (uiState.products.isEmpty()) {
                 item {
                     LuisoEmptyState(
-                        message = "No hay productos en el stock. Agrega uno con cantidad, precio y recargo.",
-                        accentColor = LuisoYellow
+                        message = "Todavía no hay productos. Agrega el primero."
                     )
                 }
             } else {
