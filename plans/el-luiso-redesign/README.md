@@ -13,9 +13,9 @@ reference is NOT machine-readable; the .md files are the source of truth.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001  | El Luiso design-system tokens + Theme.kt | P1 | M | — | TODO |
-| 002  | Luiso component kit | P1 | L | 001 | TODO |
-| 003  | Rename app to El Luiso + monogram icon | P1 | S | — | TODO |
+| 001  | El Luiso design-system tokens + Theme.kt | P1 | M | — | DONE |
+| 002  | Luiso component kit | P1 | L | 001 | IN PROGRESS |
+| 003  | Rename app to El Luiso + monogram icon | P1 | S | — | DONE |
 | 004  | Counter screen reskin | P1 | L | 001, 002 | TODO |
 | 005  | Stock screens reskin | P1 | M | 001, 002 | TODO |
 | 006  | Reports screens reskin | P1 | M | 001, 002 | TODO |
