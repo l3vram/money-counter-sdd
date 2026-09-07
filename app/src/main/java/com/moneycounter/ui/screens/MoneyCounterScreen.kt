@@ -352,7 +352,7 @@ private fun ProductRow(
                             onQuantityChange(newValue)
                         }
                     },
-                    modifier = Modifier.weight(0.32f),
+                    modifier = Modifier.weight(0.30f),
                     label = { Text("Cantidad") },
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Decimal,

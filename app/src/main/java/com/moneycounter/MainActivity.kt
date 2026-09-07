@@ -81,7 +81,7 @@ fun MoneyCounterApp() {
                                 Icon(
                                     Icons.Filled.Paid,
                                     contentDescription = null,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(26.dp)
                                 )
                             },
                             label = { Text("Contador", style = MaterialTheme.typography.labelSmall) }
@@ -93,7 +93,7 @@ fun MoneyCounterApp() {
                                 Icon(
                                     Icons.Filled.Inventory2,
                                     contentDescription = null,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(26.dp)
                                 )
                             },
                             label = { Text("Stock", style = MaterialTheme.typography.labelSmall) }
@@ -105,7 +105,7 @@ fun MoneyCounterApp() {
                                 Icon(
                                     Icons.Filled.Receipt,
                                     contentDescription = null,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(26.dp)
                                 )
                             },
                             label = { Text("Reportes", style = MaterialTheme.typography.labelSmall) }
