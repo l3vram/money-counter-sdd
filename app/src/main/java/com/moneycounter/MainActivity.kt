@@ -73,7 +73,7 @@ fun MoneyCounterApp() {
         Scaffold(
             bottomBar = {
                 if (showBottomBar) {
-                    NavigationBar(modifier = Modifier.height(64.dp)) {
+                    NavigationBar(modifier = Modifier.height(54.dp)) {
                         NavigationBarItem(
                             selected = currentScreen == "counter",
                             onClick = { currentScreen = "counter" },

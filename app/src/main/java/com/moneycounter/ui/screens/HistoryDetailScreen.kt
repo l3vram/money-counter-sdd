@@ -89,18 +89,18 @@ fun HistoryDetailScreen(
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                item { Spacer(modifier = Modifier.height(4.dp)) }
+                item { Spacer(modifier = Modifier.height(6.dp)) }
 
                 item {
                     LuisoCard(modifier = Modifier.fillMaxWidth()) {
                         DetailRow("Fecha", formatDate(saved.savedAt))
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         DetailRow(
                             "MONEDA",
                             saved.currency,
                             emphasize = true
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         DetailRow(
                             "Monto total",
                             formatMoneyBigDecimal(saved.targetAmount, saved.currency),

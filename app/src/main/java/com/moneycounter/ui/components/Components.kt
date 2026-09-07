@@ -43,7 +43,7 @@ fun LuisoButton(
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.height(48.dp),
+        modifier = modifier.height(40.dp),
         shape = RoundedCornerShape(12.dp)
     ) {
         if (leadingIcon != null) {
@@ -94,7 +94,7 @@ fun LuisoCard(
             color = MaterialTheme.colorScheme.surfaceVariant,
             onClick = onClick
         ) {
-            Box(modifier = Modifier.padding(Dimen16)) {
+            Column(modifier = Modifier.padding(Dimen16)) {
                 content()
             }
         }
@@ -102,9 +102,9 @@ fun LuisoCard(
         Surface(
             modifier = modifier,
             shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surface
+            color = MaterialTheme.colorScheme.surfaceVariant
         ) {
-            Box(modifier = Modifier.padding(Dimen16)) {
+            Column(modifier = Modifier.padding(Dimen16)) {
                 content()
             }
         }

@@ -150,7 +150,7 @@ fun ReportsScreen(
                         onClick = { ascending = !ascending }
                     )
                     LuisoButton(
-                        text = if (selectionMode) "Listo" else "Seleccionar",
+                        text = if (selectionMode) "Listo" else "Selección",
                         onClick = { selectionMode = !selectionMode }
                     )
                 }
@@ -173,8 +173,8 @@ fun ReportsScreen(
                             contentColor = MaterialTheme.colorScheme.error
                         )
                         LuisoButton(
-                            text = if (selectedIds.isEmpty()) "GENERAR RESUMEN"
-                            else "GENERAR RESUMEN (${selectedIds.size})",
+                            text = if (selectedIds.isEmpty()) "RESUMEN"
+                            else "RESUMEN (${selectedIds.size})",
                             onClick = { onOpenSummary(selectedIds.toList()) },
                             modifier = Modifier.weight(1f),
                             enabled = selectedIds.isNotEmpty()

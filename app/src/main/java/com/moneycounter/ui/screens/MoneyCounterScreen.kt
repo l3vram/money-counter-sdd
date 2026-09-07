@@ -105,7 +105,7 @@ fun MoneyCounterScreen(
                 ) {
                     Text(
                         text = "Contador de dinero",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimary
                     )
                 }
@@ -376,7 +376,8 @@ private fun ProductRow(
                         keyboardType = KeyboardType.Decimal,
                         imeAction = ImeAction.Done
                     ),
-                    modifier = Modifier.weight(0.30f)
+                    modifier = Modifier.weight(0.40f)
+
                 )
 
                 Text(
