@@ -21,7 +21,7 @@ Branch: `feature/stock-screen`. Planned at commit `8f77ad2` (2026-09-06). Not me
 ## Execution order & status
 
 Wave 1 = 006. Wave 2 = 007. Wave 3 = 008. Wave 4 = 009. Sequential: each builds on the
-previous (006 → 007 → 008 → 009).
+previous (006 → 007 → 008 → 009). Wave 5 = 010 (post-demo feedback redesign + USD fix).
 
 | Plan | Title | Priority | Effort | Depends on | Wave | Status |
 |------|-------|----------|--------|------------|------|--------|
@@ -29,6 +29,7 @@ previous (006 → 007 → 008 → 009).
 | 007  | Product currency in UI: Stock dialog + counter filter + remove History icon | P1 | M | 006 | 2 | DONE |
 | 008  | Reportes: 3rd tab, grouped/selectable reports screen, currency filter | P1 | L | 006, 007 | 3 | DONE |
 | 009  | Unified report: merge selected counts, PDF/CSV export with format chooser | P1 | M | 006, 008 | 4 | DONE |
+| 010  | Reports list redesign (selection mode, sort Asc/Desc, day totals, export on top) + fix USD filter bug | P1 | M | 008 | 5 | IN PROGRESS |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).
 
@@ -46,6 +47,11 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
   branch (008). Exporter additions are strictly additive (existing `export(SavedCount)`
   untouched). `SavedProductItem` does NOT get a currency field — the unified report is
   single-currency; product lines inherit the parent count's currency.
+- 010 (user feedback from the first demo): fix `saveCount()` so new saves persist the
+  selected `currencyId` (why USD filtering broke); reports list redesign — Asc by default
+  with Desc/Asc toggle, collapsed days show a day TOTAL, checkboxes only in selection
+  mode ("Seleccionar"/"Listo"), GENERAR RESUMEN moved to the top, and month/day/count
+  hierarchy with distinct visual weight. No persistence/navigation/exporter changes.
 
 ## Findings considered and rejected
 
