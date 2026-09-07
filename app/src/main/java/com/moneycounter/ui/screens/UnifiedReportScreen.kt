@@ -1,7 +1,6 @@
 package com.moneycounter.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,22 +10,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -42,6 +38,13 @@ import androidx.compose.ui.unit.dp
 import com.moneycounter.domain.UnitedDenomination
 import com.moneycounter.domain.UnitedProduct
 import com.moneycounter.domain.uniteCounts
+import com.moneycounter.ui.components.LuisoButton
+import com.moneycounter.ui.components.LuisoCard
+import com.moneycounter.ui.components.LuisoEmptyState
+import com.moneycounter.ui.components.LuisoOutlineButton
+import com.moneycounter.ui.components.LuisoSectionHeader
+import com.moneycounter.ui.components.LuisoStatCard
+import com.moneycounter.ui.components.LuisoTopBar
 import com.moneycounter.ui.components.formatMoney
 import com.moneycounter.ui.components.formatMoneyBigDecimal
 import com.moneycounter.util.ExcelExporter
@@ -66,8 +69,8 @@ fun UnifiedReportScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Resumen unificado") },
+            LuisoTopBar(
+                title = "Resumen unificado",
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -76,49 +79,29 @@ fun UnifiedReportScreen(
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
+                }
             )
         }
     ) { padding ->
         when {
             selected.isEmpty() -> {
-                Column(
+                LuisoEmptyState(
+                    message = "No hay registros seleccionados.",
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
-                        .padding(24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "No hay registros seleccionados.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                }
+                        .padding(24.dp)
+                )
             }
 
             united.isFailure -> {
-                Column(
+                LuisoEmptyState(
+                    message = "Los registros seleccionados son de monedas distintas. Selecciona ventas de una misma moneda.",
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
-                        .padding(24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Los registros seleccionados son de monedas distintas. Selecciona ventas de una misma moneda.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                }
+                        .padding(24.dp)
+                )
             }
 
             else -> {
@@ -134,40 +117,26 @@ fun UnifiedReportScreen(
                     item { Spacer(modifier = Modifier.height(4.dp)) }
 
                     item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        LuisoStatCard(
+                            label = "${u.currencyCode} (${u.currencySymbol})",
+                            value = formatMoneyBigDecimal(u.total(), u.currencySymbol),
+                            valueColor = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    item {
+                        LuisoCard(modifier = Modifier.fillMaxWidth()) {
+                            DetailRow(
+                                "VENTAS",
+                                "${u.count}"
                             )
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                DetailRow(
-                                    "MONEDA",
-                                    "${u.currencyCode} (${u.currencySymbol})",
-                                    emphasize = true
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                DetailRow(
-                                    "VENTAS",
-                                    "${u.count}"
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                DetailRow(
-                                    "TOTAL GENERAL",
-                                    formatMoneyBigDecimal(u.total(), u.currencySymbol),
-                                    emphasize = true
-                                )
-                            }
                         }
                     }
 
                     if (u.products.isNotEmpty()) {
                         item {
-                            Text(
-                                text = "PRODUCTOS",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
+                            LuisoSectionHeader(
+                                text = "PRODUCTOS"
                             )
                         }
 
@@ -202,11 +171,8 @@ fun UnifiedReportScreen(
                     }
 
                     item {
-                        Text(
-                            text = "DENOMINACIONES",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
+                        LuisoSectionHeader(
+                            text = "DENOMINACIONES"
                         )
                     }
 
@@ -251,12 +217,17 @@ fun UnifiedReportScreen(
                     }
 
                     item {
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            FilledTonalButton(onClick = { exportMenuOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                                Text("Exportar ▾")
-                            }
-                            DropdownMenu(expanded = exportMenuOpen, onDismissRequest = { exportMenuOpen = false }) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            LuisoButton(
+                                text = "Exportar ▾",
+                                leadingIcon = Icons.Default.Description,
+                                onClick = { exportMenuOpen = true },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            DropdownMenu(
+                                expanded = exportMenuOpen,
+                                onDismissRequest = { exportMenuOpen = false }
+                            ) {
                                 DropdownMenuItem(text = { Text("PDF") }, onClick = {
                                     exportMenuOpen = false
                                     PdfExporter(context).exportUnited(u, u.currencySymbol)
@@ -287,12 +258,12 @@ private fun DetailRow(label: String, value: String, emphasize: Boolean = false) 
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
             text = value,
-            style = if (emphasize) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium,
+            style = if (emphasize) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Bold,
             color = if (emphasize) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
         )
@@ -301,11 +272,10 @@ private fun DetailRow(label: String, value: String, emphasize: Boolean = false) 
 
 @Composable
 private fun UnitedItemLine(item: UnitedDenomination, symbol: String) {
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(12.dp)
     ) {
         Row(
             modifier = Modifier
@@ -336,11 +306,10 @@ private fun UnitedItemLine(item: UnitedDenomination, symbol: String) {
 
 @Composable
 private fun UnitedProductLine(item: UnitedProduct, symbol: String) {
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(12.dp)
     ) {
         Row(
             modifier = Modifier

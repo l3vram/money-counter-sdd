@@ -13,17 +13,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,6 +32,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.moneycounter.domain.SavedCountItem
 import com.moneycounter.domain.SavedProductItem
+import com.moneycounter.ui.components.LuisoButton
+import com.moneycounter.ui.components.LuisoCard
+import com.moneycounter.ui.components.LuisoEmptyState
+import com.moneycounter.ui.components.LuisoSectionHeader
+import com.moneycounter.ui.components.LuisoTopBar
 import com.moneycounter.ui.components.formatMoney
 import com.moneycounter.ui.components.formatMoneyBigDecimal
 import com.moneycounter.util.ExcelExporter
@@ -57,8 +59,8 @@ fun HistoryDetailScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Detalle") },
+            LuisoTopBar(
+                title = "Detalle",
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -67,30 +69,18 @@ fun HistoryDetailScreen(
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
+                }
             )
         }
     ) { padding ->
         if (saved == null) {
-            Column(
+            LuisoEmptyState(
+                message = "Registro no encontrado",
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Registro no encontrado",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-            }
+                    .padding(24.dp)
+            )
         } else {
             LazyColumn(
                 modifier = Modifier
@@ -102,37 +92,27 @@ fun HistoryDetailScreen(
                 item { Spacer(modifier = Modifier.height(4.dp)) }
 
                 item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    LuisoCard(modifier = Modifier.fillMaxWidth()) {
+                        DetailRow("Fecha", formatDate(saved.savedAt))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        DetailRow(
+                            "MONEDA",
+                            saved.currency,
+                            emphasize = true
                         )
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            DetailRow("Fecha", formatDate(saved.savedAt))
-                            Spacer(modifier = Modifier.height(4.dp))
-                            DetailRow(
-                                "MONEDA",
-                                saved.currency,
-                                emphasize = true
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            DetailRow(
-                                "Monto total",
-                                formatMoneyBigDecimal(saved.targetAmount, saved.currency),
-                                emphasize = true
-                            )
-                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        DetailRow(
+                            "Monto total",
+                            formatMoneyBigDecimal(saved.targetAmount, saved.currency),
+                            emphasize = true
+                        )
                     }
                 }
 
                 if (saved.products.isNotEmpty()) {
                     item {
-                        Text(
-                            text = "PRODUCTOS",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
+                        LuisoSectionHeader(
+                            text = "PRODUCTOS"
                         )
                     }
 
@@ -167,11 +147,8 @@ fun HistoryDetailScreen(
                 }
 
                 item {
-                    Text(
-                        text = "DENOMINACIONES",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                    LuisoSectionHeader(
+                        text = "DENOMINACIONES"
                     )
                 }
 
@@ -217,31 +194,21 @@ fun HistoryDetailScreen(
 
                 item {
                     Spacer(modifier = Modifier.height(8.dp))
-                    FilledTonalButton(
+                    LuisoButton(
+                        text = "EXPORTAR PDF",
                         onClick = { PdfExporter(context).export(saved) },
+                        leadingIcon = Icons.Default.Share,
                         modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            Icons.Default.Share,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        Text("EXPORTAR PDF")
-                    }
+                    )
                 }
 
                 item {
-                    FilledTonalButton(
+                    LuisoButton(
+                        text = "EXPORTAR EXCEL (CSV)",
                         onClick = { ExcelExporter(context).export(saved) },
+                        leadingIcon = Icons.Default.Share,
                         modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            Icons.Default.Share,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        Text("EXPORTAR EXCEL (CSV)")
-                    }
+                    )
                 }
 
                 item { Spacer(modifier = Modifier.height(16.dp)) }
@@ -265,12 +232,12 @@ private fun DetailRow(label: String, value: String, emphasize: Boolean = false) 
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
             text = value,
-            style = if (emphasize) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium,
+            style = if (emphasize) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Bold,
             color = if (emphasize) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
         )
@@ -279,11 +246,10 @@ private fun DetailRow(label: String, value: String, emphasize: Boolean = false) 
 
 @Composable
 private fun ItemLine(item: SavedCountItem, symbol: String = "$") {
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(12.dp)
     ) {
         Row(
             modifier = Modifier
@@ -314,11 +280,10 @@ private fun ItemLine(item: SavedCountItem, symbol: String = "$") {
 
 @Composable
 private fun ProductLine(item: SavedProductItem, symbol: String = "$") {
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(12.dp)
     ) {
         Row(
             modifier = Modifier

@@ -62,14 +62,20 @@ fun LuisoOutlineButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    contentColor: Color? = null
 ) {
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
-        border = ButtonDefaults.outlinedButtonBorder
+        border = ButtonDefaults.outlinedButtonBorder,
+        colors = if (contentColor != null) {
+            ButtonDefaults.outlinedButtonColors(contentColor = contentColor)
+        } else {
+            ButtonDefaults.outlinedButtonColors()
+        }
     ) {
         Text(text = text)
     }
