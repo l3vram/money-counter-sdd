@@ -169,7 +169,8 @@ fun ReportsScreen(
                             text = "ELIMINAR",
                             onClick = { confirmDelete = true },
                             modifier = Modifier.weight(1f),
-                            enabled = selectedIds.isNotEmpty()
+                            enabled = selectedIds.isNotEmpty(),
+                            contentColor = MaterialTheme.colorScheme.error
                         )
                         LuisoButton(
                             text = if (selectedIds.isEmpty()) "GENERAR RESUMEN"
