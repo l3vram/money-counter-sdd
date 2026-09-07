@@ -511,6 +511,13 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         persistHistory()
     }
 
+    fun deleteSavedCounts(ids: List<String>) {
+        if (ids.isEmpty()) return
+        val idSet = ids.toSet()
+        _uiState.update { st -> st.copy(history = st.history.filterNot { it.id in idSet }) }
+        persistHistory()
+    }
+
     private fun persistHistory() {
         val history = _uiState.value.history
         viewModelScope.launch { historyRepository.saveAll(history) }
