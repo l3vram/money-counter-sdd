@@ -4,7 +4,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- vertical stem -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,30 L74,58 L62,58 L62,78 L46,78 L46,58 L34,58 Z" />
+        android:fillColor="#F8FAE5"
+        android:pathData="M30,30 L46,30 L46,76 L76,76 L76,92 L30,92 Z" />
+    <!-- yellow accent square (neutral corner) -->
+    <path
+        android:fillColor="#FACC15"
+        android:pathData="M66,30 L82,30 L82,46 L66,46 Z" />
 </vector>
