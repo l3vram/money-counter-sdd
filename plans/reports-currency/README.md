@@ -22,6 +22,7 @@ Branch: `feature/stock-screen`. Planned at commit `8f77ad2` (2026-09-06). Not me
 
 Wave 1 = 006. Wave 2 = 007. Wave 3 = 008. Wave 4 = 009. Sequential: each builds on the
 previous (006 → 007 → 008 → 009). Wave 5 = 010 (post-demo feedback redesign + USD fix).
+Wave 6 = 011 (delete support, minimal list, compact nav, font-scale cap).
 
 | Plan | Title | Priority | Effort | Depends on | Wave | Status |
 |------|-------|----------|--------|------------|------|--------|
@@ -30,6 +31,7 @@ previous (006 → 007 → 008 → 009). Wave 5 = 010 (post-demo feedback redesig
 | 008  | Reportes: 3rd tab, grouped/selectable reports screen, currency filter | P1 | L | 006, 007 | 3 | DONE |
 | 009  | Unified report: merge selected counts, PDF/CSV export with format chooser | P1 | M | 006, 008 | 4 | DONE |
 | 010  | Reports list redesign (selection mode, sort Asc/Desc, day totals, export on top) + fix USD filter bug | P1 | M | 008 | 5 | DONE |
+| 011  | Reports cleanup: delete (selection-mode ELIMINAR + confirm), minimal flat all-collapsed list, compact bottom nav, font-scale cap 1.2 | P1 | M | 010 | 6 | IN PROGRESS |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).
 
@@ -52,6 +54,11 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
   with Desc/Asc toggle, collapsed days show a day TOTAL, checkboxes only in selection
   mode ("Seleccionar"/"Listo"), GENERAR RESUMEN moved to the top, and month/day/count
   hierarchy with distinct visual weight. No persistence/navigation/exporter changes.
+- 011 (second feedback round): reports deletable via selection mode (ELIMINAR + confirm,
+  bulk `deleteSavedCounts`); list simplified — no Cards/band backgrounds, slim month/day
+  headers, flat single-line count rows (no bullet dots, no redundant per-row currency
+  badge), EVERYTHING collapsed by default; compact bottom nav (64dp) + app-wide font-scale
+  cap at 1.2.
 
 ## Findings considered and rejected
 
