@@ -22,7 +22,8 @@ Branch: `feature/stock-screen`. Planned at commit `8f77ad2` (2026-09-06). Not me
 
 Wave 1 = 006. Wave 2 = 007. Wave 3 = 008. Wave 4 = 009. Sequential: each builds on the
 previous (006 → 007 → 008 → 009). Wave 5 = 010 (post-demo feedback redesign + USD fix).
-Wave 6 = 011 (delete support, minimal list, compact nav, font-scale cap).
+Wave 6 = 011 (delete support, minimal list, compact nav, font-scale cap). Wave 7 = 012
+(selection action-bar alignment fix).
 
 | Plan | Title | Priority | Effort | Depends on | Wave | Status |
 |------|-------|----------|--------|------------|------|--------|
@@ -32,6 +33,7 @@ Wave 6 = 011 (delete support, minimal list, compact nav, font-scale cap).
 | 009  | Unified report: merge selected counts, PDF/CSV export with format chooser | P1 | M | 006, 008 | 4 | DONE |
 | 010  | Reports list redesign (selection mode, sort Asc/Desc, day totals, export on top) + fix USD filter bug | P1 | M | 008 | 5 | DONE |
 | 011  | Reports cleanup: delete (selection-mode ELIMINAR + confirm), minimal flat all-collapsed list, compact bottom nav, font-scale cap 1.2 | P1 | M | 010 | 6 | DONE |
+| 012  | Fix reports selection action bar: mode toggle in row 1, ELIMINAR + GENERAR RESUMEN as weighted row-2 buttons (no overlap) | P1 | S | 011 | 7 | IN PROGRESS |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).
 
