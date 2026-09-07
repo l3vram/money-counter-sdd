@@ -244,7 +244,7 @@ private fun ProductsSection(
     onNavigateToSettings: () -> Unit
 ) {
     val currency = currencies.firstOrNull { it.id == selectedCurrencyId } ?: currencies.firstOrNull()
-    val productsForCurrency = products.filter { it.currencyId == selectedCurrencyId }
+    val productsForCurrency = products.filter { it.hasPriceIn(selectedCurrencyId) }
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -293,6 +293,7 @@ private fun ProductsSection(
                     ProductRow(
                         selection = selection,
                         products = productsForCurrency,
+                        selectedCurrencyId = selectedCurrencyId,
                         symbol = currency?.symbol ?: "$",
                         lineTotal = productLineTotal(selection),
                         onSelectProduct = { productId -> onSelectProduct(index, productId) },
@@ -322,6 +323,7 @@ private fun ProductsSection(
 private fun ProductRow(
     selection: ProductSelection,
     products: List<Product>,
+    selectedCurrencyId: String,
     symbol: String,
     lineTotal: BigDecimal,
     onSelectProduct: (String) -> Unit,
@@ -404,9 +406,10 @@ private fun ProductRow(
                         overflow = TextOverflow.Ellipsis,
                         maxLines = 1
                     )
-                    if (selectedProduct != null && selectedProduct.surcharge.signum() > 0 && lineTotal.signum() > 0) {
+                    val pp = selectedProduct?.priceFor(selectedCurrencyId)
+                    if (selectedProduct != null && pp != null && pp.surcharge.signum() > 0 && lineTotal.signum() > 0) {
                         Text(
-                            text = "incluye recargo ${selectedProduct.surcharge.stripTrailingZeros().toPlainString()}",
+                            text = "incluye recargo ${pp.surcharge.stripTrailingZeros().toPlainString()}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.End,
@@ -418,17 +421,26 @@ private fun ProductRow(
             }
 
             if (selectedProduct != null) {
-                val outOfRange = selection.quantity() > selectedProduct.stock
-                Text(
-                    text = "${symbol}${selectedProduct.effectiveUnitPrice.stripTrailingZeros().toPlainString()} por ${selectedProduct.unit}" +
-                            " · disponible: ${selectedProduct.stock.stripTrailingZeros().toPlainString()} ${selectedProduct.unit}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (outOfRange) MaterialTheme.colorScheme.error
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (outOfRange) {
+                val pp = selectedProduct.priceFor(selectedCurrencyId)
+                if (pp != null) {
+                    val outOfRange = selection.quantity() > selectedProduct.stock
                     Text(
-                        text = "⚠ Cantidad mayor que el stock disponible (${selectedProduct.stock.stripTrailingZeros().toPlainString()} ${selectedProduct.unit})",
+                        text = "${symbol}${pp.unitPrice.stripTrailingZeros().toPlainString()} por ${selectedProduct.unit}" +
+                                " · disponible: ${selectedProduct.stock.stripTrailingZeros().toPlainString()} ${selectedProduct.unit}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (outOfRange) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (outOfRange) {
+                        Text(
+                            text = "⚠ Cantidad mayor que el stock disponible (${selectedProduct.stock.stripTrailingZeros().toPlainString()} ${selectedProduct.unit})",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "Sin precio en esta moneda",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error
                     )

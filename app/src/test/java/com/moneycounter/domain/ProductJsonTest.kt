@@ -9,14 +9,13 @@ import java.math.BigDecimal
 class ProductJsonTest {
 
     @Test
-    fun `round trip v2 preserves all fields including stock`() {
+    fun `round trip v4 preserves all fields including stock`() {
         val product = Product(
             id = "p1",
             name = "Arroz",
             unit = "Lb",
-            unitPrice = BigDecimal("25.00"),
-            surcharge = BigDecimal("2.00"),
-            stock = BigDecimal("40.00")
+            stock = BigDecimal("40.00"),
+            prices = mapOf(DefaultCurrencies.CUP.id to ProductPrice(BigDecimal("25.00"), BigDecimal("2.00")))
         )
 
         val json = ProductJson.toJson(listOf(product))
@@ -26,9 +25,9 @@ class ProductJsonTest {
         assertEquals("p1", loaded[0].id)
         assertEquals("Arroz", loaded[0].name)
         assertEquals("Lb", loaded[0].unit)
-        assertEquals(BigDecimal("25.00"), loaded[0].unitPrice)
-        assertEquals(BigDecimal("2.00"), loaded[0].surcharge)
         assertEquals(BigDecimal("40.00"), loaded[0].stock)
+        assertEquals(BigDecimal("25.00"), loaded[0].priceFor(DefaultCurrencies.CUP.id)?.unitPrice)
+        assertEquals(BigDecimal("2.00"), loaded[0].priceFor(DefaultCurrencies.CUP.id)?.surcharge)
     }
 
     @Test
@@ -46,7 +45,7 @@ class ProductJsonTest {
 
         assertEquals(1, loaded.size)
         assertEquals(Money.ZERO, loaded[0].stock)
-        assertEquals(BigDecimal("25.00"), loaded[0].unitPrice)
+        assertEquals(BigDecimal("25.00"), loaded[0].priceFor(DefaultCurrencies.CUP.id)?.unitPrice)
         assertEquals("Arroz", loaded[0].name)
     }
 
@@ -54,7 +53,7 @@ class ProductJsonTest {
     fun `unsupported version returns empty list`() {
         val json = """
             {
-              "version": 4,
+              "version": 5,
               "products": [
                 {"id": "p1", "name": "Arroz", "unit": "Lb", "unitPrice": "25.00", "surcharge": "0.00", "stock": "10.00"}
               ]
@@ -70,9 +69,8 @@ class ProductJsonTest {
             id = "p1",
             name = "Mal",
             unit = "Lb",
-            unitPrice = BigDecimal("25.00"),
-            surcharge = BigDecimal("0.00"),
-            stock = BigDecimal("-3.00")
+            stock = BigDecimal("-3.00"),
+            prices = mapOf(DefaultCurrencies.CUP.id to ProductPrice(BigDecimal("25.00"), BigDecimal("0.00")))
         )
 
         val json = ProductJson.toJson(listOf(product))

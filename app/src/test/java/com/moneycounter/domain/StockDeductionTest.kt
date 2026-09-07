@@ -8,7 +8,13 @@ import java.math.BigDecimal
 class StockDeductionTest {
 
     private fun product(id: String, stock: String) =
-        Product(id, "Name $id", "Lb", BigDecimal("2.00"), surcharge = BigDecimal("0.50"), stock = BigDecimal(stock).setScale(Money.SCALE))
+        Product(
+            id,
+            "Name $id",
+            "Lb",
+            BigDecimal(stock).setScale(Money.SCALE),
+            prices = mapOf("cup" to ProductPrice(BigDecimal("2.00"), BigDecimal("0.50")))
+        )
 
     private fun sel(productId: String, qty: String) = ProductSelection(productId = productId, quantityText = qty)
 

@@ -56,8 +56,8 @@ class PdfExporter(private val context: Context) {
         share(file)
     }
 
-    fun exportStockReport(products: List<Product>, currency: String, generatedAt: Long) {
-        val file = buildStockPdf(products, currency, generatedAt)
+    fun exportStockReport(products: List<Product>, currencyId: String, currencySymbol: String, currencyCode: String, generatedAt: Long) {
+        val file = buildStockPdf(products, currencyId, currencySymbol, currencyCode, generatedAt)
         share(file)
     }
 
@@ -283,7 +283,7 @@ class PdfExporter(private val context: Context) {
         return file
     }
 
-    private fun buildStockPdf(products: List<Product>, currency: String, generatedAt: Long): File {
+    private fun buildStockPdf(products: List<Product>, currencyId: String, currencySymbol: String, currencyCode: String, generatedAt: Long): File {
         val document = PdfDocument()
         val pageWidth = 595
         val pageHeight = 842
@@ -315,7 +315,7 @@ class PdfExporter(private val context: Context) {
         canvas.drawText("Fecha: $dateStr", margin, y, headerPaint)
         y += 24f
 
-        canvas.drawText("Moneda: $currency", margin, y, headerPaint)
+        canvas.drawText("Moneda: $currencySymbol ($currencyCode)", margin, y, headerPaint)
         y += 36f
 
         // Column headers
@@ -336,15 +336,17 @@ class PdfExporter(private val context: Context) {
                 newPageIfNeeded(20f)
                 canvas.drawText(product.name, margin, y, bodyPaint)
                 canvas.drawText("${product.stock.stripTrailingZeros().toPlainString()} ${product.unit}", 240f, y, bodyPaint)
-                canvas.drawText(formatMoneyBigDecimal(product.effectiveUnitPrice, currency), 360f, y, bodyPaint)
-                canvas.drawText(formatMoneyBigDecimal(product.stockValue, currency), 450f, y, bodyPaint)
+                canvas.drawText(formatMoneyBigDecimal(product.effectiveUnitPriceFor(currencyId) ?: Money.ZERO, currencySymbol), 360f, y, bodyPaint)
+                canvas.drawText(formatMoneyBigDecimal(product.stockValueFor(currencyId) ?: Money.ZERO, currencySymbol), 450f, y, bodyPaint)
                 y += 22f
             }
             y += 16f
             newPageIfNeeded(20f)
-            val total = inStock.fold(Money.ZERO) { acc, product -> acc.add(product.stockValue) }
+            val total = inStock.fold(Money.ZERO) { acc, product ->
+                acc.add(product.stockValueFor(currencyId) ?: Money.ZERO)
+            }
             canvas.drawText("TOTAL EN EXISTENCIA", margin, y, headerPaint)
-            canvas.drawText(formatMoneyBigDecimal(total, currency), 450f, y, headerPaint)
+            canvas.drawText(formatMoneyBigDecimal(total, currencySymbol), 450f, y, headerPaint)
         }
 
         document.finishPage(page)

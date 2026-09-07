@@ -44,7 +44,9 @@ fun StockReportScreen(viewModel: MoneyCounterViewModel, onNavigateBack: () -> Un
     val context = LocalContext.current
     val currencySymbol = uiState.currencies.firstOrNull { it.id == uiState.selectedCurrencyId }?.symbol ?: "$"
     val inStock = uiState.products.filter { it.stock.signum() != 0 }
-    val totalValue = inStock.fold(Money.ZERO) { acc, product -> acc.add(product.stockValue) }
+    val totalValue = inStock.fold(Money.ZERO) { acc, product ->
+        acc.add(product.stockValueFor(uiState.selectedCurrencyId) ?: Money.ZERO)
+    }
 
     Scaffold(
         topBar = {
@@ -127,7 +129,11 @@ fun StockReportScreen(viewModel: MoneyCounterViewModel, onNavigateBack: () -> Un
                 }
             } else {
                 items(inStock, key = { it.id }) { product ->
-                    StockLine(product = product, symbol = currencySymbol)
+                    StockLine(
+                        product = product,
+                        selectedCurrencyId = uiState.selectedCurrencyId,
+                        symbol = currencySymbol
+                    )
                 }
             }
 
@@ -136,9 +142,14 @@ fun StockReportScreen(viewModel: MoneyCounterViewModel, onNavigateBack: () -> Un
                 LuisoButton(
                     text = "EXPORTAR PDF",
                     onClick = {
+                        val cur = uiState.currencies.firstOrNull { it.id == uiState.selectedCurrencyId }
+                        val curSymbol = cur?.symbol ?: "$"
+                        val curCode = cur?.code ?: ""
                         PdfExporter(context).exportStockReport(
                             uiState.products,
-                            currencySymbol,
+                            uiState.selectedCurrencyId,
+                            curSymbol,
+                            curCode,
                             System.currentTimeMillis()
                         )
                     },
@@ -151,9 +162,14 @@ fun StockReportScreen(viewModel: MoneyCounterViewModel, onNavigateBack: () -> Un
                 LuisoButton(
                     text = "EXPORTAR EXCEL (CSV)",
                     onClick = {
+                        val cur = uiState.currencies.firstOrNull { it.id == uiState.selectedCurrencyId }
+                        val curSymbol = cur?.symbol ?: "$"
+                        val curCode = cur?.code ?: ""
                         ExcelExporter(context).exportStockReport(
                             uiState.products,
-                            currencySymbol,
+                            uiState.selectedCurrencyId,
+                            curSymbol,
+                            curCode,
                             System.currentTimeMillis()
                         )
                     },
@@ -191,7 +207,7 @@ private fun DetailRow(label: String, value: String, emphasize: Boolean = false) 
 }
 
 @Composable
-private fun StockLine(product: Product, symbol: String = "$") {
+private fun StockLine(product: Product, selectedCurrencyId: String, symbol: String = "$") {
     LuisoCard(modifier = Modifier.fillMaxWidth()) {
         Column {
             Row(
@@ -214,7 +230,7 @@ private fun StockLine(product: Product, symbol: String = "$") {
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    text = formatMoneyBigDecimal(product.effectiveUnitPrice, symbol),
+                    text = formatMoneyBigDecimal(product.effectiveUnitPriceFor(selectedCurrencyId) ?: Money.ZERO, symbol),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -224,7 +240,7 @@ private fun StockLine(product: Product, symbol: String = "$") {
                 horizontalArrangement = Arrangement.End
             ) {
                 Text(
-                    text = formatMoneyBigDecimal(product.stockValue, symbol),
+                    text = formatMoneyBigDecimal(product.stockValueFor(selectedCurrencyId) ?: Money.ZERO, symbol),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary

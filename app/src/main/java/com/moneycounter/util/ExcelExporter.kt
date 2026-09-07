@@ -22,8 +22,8 @@ class ExcelExporter(private val context: Context) {
         share(file)
     }
 
-    fun exportStockReport(products: List<Product>, currency: String, generatedAt: Long) {
-        val file = buildStockCsv(products, currency, generatedAt)
+    fun exportStockReport(products: List<Product>, currencyId: String, currencySymbol: String, currencyCode: String, generatedAt: Long) {
+        val file = buildStockCsv(products, currencyId, currencySymbol, currencyCode, generatedAt)
         share(file)
     }
 
@@ -147,7 +147,7 @@ class ExcelExporter(private val context: Context) {
         return file
     }
 
-    private fun buildStockCsv(products: List<Product>, currency: String, generatedAt: Long): File {
+    private fun buildStockCsv(products: List<Product>, currencyId: String, currencySymbol: String, currencyCode: String, generatedAt: Long): File {
         val lines = mutableListOf<String>()
 
         lines += csvRow("Reporte de existencias")
@@ -156,25 +156,26 @@ class ExcelExporter(private val context: Context) {
             "Fecha",
             SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(dateMs))
         )
-        lines += csvRow("Moneda", currency)
+        lines += csvRow("Moneda", "$currencySymbol ($currencyCode)")
         lines += ""
 
         lines += csvRow("Producto", "Unidad", "Cantidad", "Precio unitario", "Recargo", "Valor total")
         for (p in products.filter { it.stock.signum() != 0 }) {
+            val pp = p.priceFor(currencyId)
             lines += csvRow(
                 p.name,
                 p.unit,
                 p.stock.stripTrailingZeros().toPlainString(),
-                formatMoneyBigDecimal(p.effectiveUnitPrice, currency),
-                if (p.surcharge.signum() > 0) formatMoneyBigDecimal(p.surcharge, currency) else "",
-                formatMoneyBigDecimal(p.stockValue, currency)
+                formatMoneyBigDecimal(p.effectiveUnitPriceFor(currencyId) ?: Money.ZERO, currencySymbol),
+                if (pp != null && pp.surcharge.signum() > 0) formatMoneyBigDecimal(pp.surcharge, currencySymbol) else "",
+                formatMoneyBigDecimal(p.stockValueFor(currencyId) ?: Money.ZERO, currencySymbol)
             )
         }
         lines += ""
 
         val total = products.filter { it.stock.signum() != 0 }
-            .fold(Money.ZERO) { acc, product -> acc.add(product.stockValue) }
-        lines += csvRow("Total en existencia", formatMoneyBigDecimal(total, currency))
+            .fold(Money.ZERO) { acc, product -> acc.add(product.stockValueFor(currencyId) ?: Money.ZERO) }
+        lines += csvRow("Total en existencia", formatMoneyBigDecimal(total, currencySymbol))
 
         val content = lines.joinToString("\r\n")
 
