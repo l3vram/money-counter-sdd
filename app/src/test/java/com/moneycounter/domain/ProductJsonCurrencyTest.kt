@@ -4,6 +4,7 @@ import com.moneycounter.repository.ProductJson
 import com.moneycounter.repository.SavedCountJson
 import com.moneycounter.viewmodel.MoneyCounterViewModel
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.math.BigDecimal
 
@@ -13,14 +14,12 @@ class ProductJsonCurrencyTest {
         id = id,
         name = name,
         unit = "Lb",
-        unitPrice = BigDecimal("25.00"),
-        surcharge = BigDecimal("2.00"),
         stock = BigDecimal("40.00"),
-        currencyId = currencyId
+        prices = mapOf(currencyId to ProductPrice(BigDecimal("25.00"), BigDecimal("2.00")))
     )
 
     @Test
-    fun `ProductJson v3 round trip preserves currencyId`() {
+    fun `ProductJson v4 round trip preserves prices per currency`() {
         val products = listOf(
             product("p1", "Arroz", DefaultCurrencies.CUP.id),
             product("p2", "Arroz importado", DefaultCurrencies.USD.id)
@@ -29,8 +28,13 @@ class ProductJsonCurrencyTest {
         val loaded = ProductJson.fromJson(ProductJson.toJson(products))
 
         assertEquals(2, loaded.size)
-        assertEquals(DefaultCurrencies.CUP.id, loaded[0].currencyId)
-        assertEquals(DefaultCurrencies.USD.id, loaded[1].currencyId)
+        assertEquals(DefaultCurrencies.CUP.id, loaded[0].prices.keys.first())
+        assertTrue(loaded[0].hasPriceIn(DefaultCurrencies.CUP.id))
+        assertEquals(BigDecimal("25.00"), loaded[0].priceFor(DefaultCurrencies.CUP.id)?.unitPrice)
+        assertEquals(BigDecimal("2.00"), loaded[0].priceFor(DefaultCurrencies.CUP.id)?.surcharge)
+        assertEquals(BigDecimal("40.00"), loaded[0].stock)
+        assertTrue(loaded[1].hasPriceIn(DefaultCurrencies.USD.id))
+        assertEquals(BigDecimal("25.00"), loaded[1].priceFor(DefaultCurrencies.USD.id)?.unitPrice)
     }
 
     @Test
@@ -47,13 +51,75 @@ class ProductJsonCurrencyTest {
         val loaded = ProductJson.fromJson(json)
 
         assertEquals(1, loaded.size)
-        assertEquals(DefaultCurrencies.CUP.id, loaded[0].currencyId)
         assertEquals("p1", loaded[0].id)
         assertEquals("Arroz", loaded[0].name)
         assertEquals("Lb", loaded[0].unit)
-        assertEquals(BigDecimal("25.00"), loaded[0].unitPrice)
-        assertEquals(BigDecimal("2.00"), loaded[0].surcharge)
         assertEquals(BigDecimal("40.00"), loaded[0].stock)
+        assertTrue(loaded[0].hasPriceIn(DefaultCurrencies.CUP.id))
+        assertEquals(BigDecimal("25.00"), loaded[0].priceFor(DefaultCurrencies.CUP.id)?.unitPrice)
+        assertEquals(BigDecimal("2.00"), loaded[0].priceFor(DefaultCurrencies.CUP.id)?.surcharge)
+    }
+
+    @Test
+    fun `fromJson auto-merges products with same name and unit`() {
+        val json = """
+            {
+              "version": 3,
+              "products": [
+                {"id": "p1", "name": "Petroleo", "unit": "L", "unitPrice": "120.00", "surcharge": "0.00", "stock": "500.00", "currencyId": "cup"},
+                {"id": "p2", "name": "Petroleo", "unit": "L", "unitPrice": "0.30", "surcharge": "0.00", "stock": "500.00", "currencyId": "usd"}
+              ]
+            }
+        """.trimIndent()
+
+        val loaded = ProductJson.fromJson(json)
+
+        assertEquals(1, loaded.size)
+        assertEquals("p1", loaded[0].id)
+        assertEquals(BigDecimal("500.00"), loaded[0].stock)
+        assertEquals(BigDecimal("120.00"), loaded[0].priceFor("cup")?.unitPrice)
+        assertEquals(BigDecimal("0.30"), loaded[0].priceFor("usd")?.unitPrice)
+    }
+
+    @Test
+    fun `fromJson auto-merge stock takes max`() {
+        val json = """
+            {
+              "version": 3,
+              "products": [
+                {"id": "p1", "name": "Petroleo", "unit": "L", "unitPrice": "120.00", "surcharge": "0.00", "stock": "300.00", "currencyId": "cup"},
+                {"id": "p2", "name": "Petroleo", "unit": "L", "unitPrice": "0.30", "surcharge": "0.00", "stock": "500.00", "currencyId": "usd"}
+              ]
+            }
+        """.trimIndent()
+
+        val loaded = ProductJson.fromJson(json)
+
+        assertEquals(1, loaded.size)
+        assertEquals(BigDecimal("500.00"), loaded[0].stock)
+    }
+
+    @Test
+    fun `ProductJson v4 round trip preserves prices map`() {
+        val product = Product(
+            id = "p1",
+            name = "Petroleo",
+            unit = "L",
+            stock = BigDecimal("500.00"),
+            prices = mapOf(
+                "cup" to ProductPrice(BigDecimal("120.00")),
+                "usd" to ProductPrice(BigDecimal("0.30"), BigDecimal("0.05"))
+            )
+        )
+
+        val loaded = ProductJson.fromJson(ProductJson.toJson(listOf(product)))
+
+        assertEquals(1, loaded.size)
+        assertEquals(2, loaded[0].prices.size)
+        assertEquals(BigDecimal("120.00"), loaded[0].priceFor("cup")?.unitPrice)
+        assertEquals(Money.ZERO, loaded[0].priceFor("cup")?.surcharge)
+        assertEquals(BigDecimal("0.30"), loaded[0].priceFor("usd")?.unitPrice)
+        assertEquals(BigDecimal("0.05"), loaded[0].priceFor("usd")?.surcharge)
     }
 
     @Test

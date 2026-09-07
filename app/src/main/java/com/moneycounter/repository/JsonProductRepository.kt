@@ -4,6 +4,7 @@ import android.content.Context
 import com.moneycounter.domain.DefaultCurrencies
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.Product
+import com.moneycounter.domain.ProductPrice
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -11,7 +12,7 @@ import java.math.BigDecimal
 
 object ProductJson {
 
-    private const val VERSION = 3
+    private const val VERSION = 4
 
     fun toJson(products: List<Product>): String {
         val root = JSONObject()
@@ -23,10 +24,15 @@ object ProductJson {
             item.put("id", product.id)
             item.put("name", product.name)
             item.put("unit", product.unit)
-            item.put("unitPrice", product.unitPrice.toPlainString())
-            item.put("surcharge", product.surcharge.toPlainString())
             item.put("stock", product.stock.toPlainString())
-            item.put("currencyId", product.currencyId)
+            val prices = JSONObject()
+            for ((currencyId, price) in product.prices) {
+                val priceObj = JSONObject()
+                priceObj.put("unitPrice", price.unitPrice.toPlainString())
+                priceObj.put("surcharge", price.surcharge.toPlainString())
+                prices.put(currencyId, priceObj)
+            }
+            item.put("prices", prices)
             array.put(item)
         }
         root.put("products", array)
@@ -37,7 +43,7 @@ object ProductJson {
         if (json.isBlank()) return emptyList()
         val root = runCatching { JSONObject(json) }.getOrElse { return emptyList() }
         val version = root.optInt("version", 1)
-        if (version != VERSION && version != 1 && version != 2) return emptyList()
+        if (version != VERSION && version != 1 && version != 2 && version != 3) return emptyList()
 
         val array = root.optJSONArray("products") ?: return emptyList()
         val products = mutableListOf<Product>()
@@ -48,26 +54,57 @@ object ProductJson {
             val id = item.optString("id", "")
             val name = item.optString("name", "")
             val unit = item.optString("unit", "")
-            val unitPriceStr = item.optString("unitPrice", "")
-            val surchargeStr = item.optString("surcharge", "0")
-            val stockStr = item.optString("stock", "0")
+            val stock = runCatching { BigDecimal(item.optString("stock", "0")).setScale(Money.SCALE) }
+                .getOrDefault(Money.ZERO)
 
             if (id.isBlank() || name.isBlank() || unit.isBlank()) continue
             if (!seenIds.add(id)) continue
 
-            val unitPrice = runCatching { BigDecimal(unitPriceStr).setScale(Money.SCALE) }
-                .getOrNull() ?: continue
-            val surcharge = runCatching { BigDecimal(surchargeStr).setScale(Money.SCALE) }
-                .getOrDefault(Money.ZERO)
-            val stock = runCatching { BigDecimal(stockStr).setScale(Money.SCALE) }
-                .getOrDefault(Money.ZERO)
-            val currencyId = item.optString("currencyId", DefaultCurrencies.CUP.id)
-            if (unitPrice.signum() < 0 || surcharge.signum() < 0) continue
-
-            products.add(Product(id, name, unit, unitPrice, surcharge, stock, currencyId))
+            if (version >= 4) {
+                val pricesObject = item.optJSONObject("prices") ?: JSONObject()
+                val prices = mutableMapOf<String, ProductPrice>()
+                val keys = pricesObject.keys()
+                while (keys.hasNext()) {
+                    val currencyId = keys.next()
+                    val priceObj = pricesObject.optJSONObject(currencyId) ?: continue
+                    val unitPrice = runCatching { BigDecimal(priceObj.optString("unitPrice", "")).setScale(Money.SCALE) }
+                        .getOrNull() ?: continue
+                    val surcharge = runCatching { BigDecimal(priceObj.optString("surcharge", "0")).setScale(Money.SCALE) }
+                        .getOrDefault(Money.ZERO)
+                    if (unitPrice.signum() < 0 || surcharge.signum() < 0) continue
+                    prices[currencyId] = ProductPrice(unitPrice, surcharge)
+                }
+                products.add(Product(id, name, unit, stock, prices))
+            } else {
+                val unitPriceStr = item.optString("unitPrice", "")
+                val surchargeStr = item.optString("surcharge", "0")
+                val unitPrice = runCatching { BigDecimal(unitPriceStr).setScale(Money.SCALE) }
+                    .getOrNull() ?: continue
+                val surcharge = runCatching { BigDecimal(surchargeStr).setScale(Money.SCALE) }
+                    .getOrDefault(Money.ZERO)
+                if (unitPrice.signum() < 0 || surcharge.signum() < 0) continue
+                val currencyId = item.optString("currencyId", DefaultCurrencies.CUP.id)
+                products.add(
+                    Product(id, name, unit, stock, mapOf(currencyId to ProductPrice(unitPrice, surcharge)))
+                )
+            }
         }
 
+        return mergeDuplicates(products)
+    }
+
+    private fun mergeDuplicates(products: List<Product>): List<Product> {
         return products
+            .groupBy { it.name.trim().lowercase() to it.unit.trim().lowercase() }
+            .map { (_, group) ->
+                val first = group.first()
+                val mergedStock = group.maxOfOrNull { it.stock } ?: Money.ZERO
+                val mergedPrices = mutableMapOf<String, ProductPrice>()
+                for (p in group) {
+                    mergedPrices.putAll(p.prices)
+                }
+                first.copy(stock = mergedStock, prices = mergedPrices)
+            }
     }
 }
 

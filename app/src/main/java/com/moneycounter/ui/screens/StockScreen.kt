@@ -57,7 +57,6 @@ fun StockScreen(
     onNavigateToReport: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val currencySymbol = uiState.currencies.firstOrNull { it.id == uiState.selectedCurrencyId }?.symbol ?: "$"
     var showAddProductDialog by remember { mutableStateOf(false) }
     var showEditProductDialog by remember { mutableStateOf<Product?>(null) }
     var showDeleteProductDialog by remember { mutableStateOf<Product?>(null) }
@@ -91,8 +90,7 @@ fun StockScreen(
                 items(uiState.products, key = { it.id }) { product ->
                     ProductRow(
                         product = product,
-                        symbol = currencySymbol,
-                        currencyCodeOf = { id -> uiState.currencies.firstOrNull { it.id == id }?.code ?: id },
+                        symbolOf = { id -> uiState.currencies.firstOrNull { it.id == id }?.symbol ?: id },
                         onEdit = {
                             showEditProductDialog = product
                             errorMessage = null
@@ -156,17 +154,19 @@ fun StockScreen(
     }
 
     showEditProductDialog?.let { product ->
+        val editCurrencyId = if (product.hasPriceIn(uiState.selectedCurrencyId)) uiState.selectedCurrencyId
+            else product.prices.keys.firstOrNull() ?: uiState.selectedCurrencyId
+        val editPrice = product.priceFor(editCurrencyId)
         ProductDialog(
             title = "Editar producto",
             units = uiState.units,
             currencies = uiState.currencies,
             initialName = product.name,
             initialUnit = product.unit,
-            initialCurrencyId = uiState.currencies.firstOrNull { it.id == product.currencyId }?.id
-                ?: uiState.selectedCurrencyId,
+            initialCurrencyId = editCurrencyId,
             initialStock = product.stock.stripTrailingZeros().toPlainString(),
-            initialPrice = product.unitPrice.stripTrailingZeros().toPlainString(),
-            initialSurcharge = product.surcharge.stripTrailingZeros().toPlainString(),
+            initialPrice = editPrice?.unitPrice?.stripTrailingZeros()?.toPlainString() ?: "",
+            initialSurcharge = editPrice?.surcharge?.stripTrailingZeros()?.toPlainString() ?: "0",
             confirmText = "GUARDAR",
             onConfirm = { name, unit, stock, price, surcharge, currencyId ->
                 if (viewModel.editProduct(product.id, name, unit, stock, currencyId, price, surcharge)) {
@@ -209,8 +209,7 @@ fun StockScreen(
 @Composable
 private fun ProductRow(
     product: Product,
-    symbol: String,
-    currencyCodeOf: (String) -> String,
+    symbolOf: (String) -> String = { it },
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -231,12 +230,13 @@ private fun ProductRow(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${product.stock.stripTrailingZeros().toPlainString()} ${product.unit} · " +
-                            "${symbol}${product.unitPrice.stripTrailingZeros().toPlainString()} por ${product.unit}" +
-                            " · ${currencyCodeOf(product.currencyId)}" +
-                            if (product.surcharge.signum() > 0)
-                                " · + recargo ${symbol}${product.surcharge.stripTrailingZeros().toPlainString()}"
-                            else "",
+                    text = "${product.stock.stripTrailingZeros().toPlainString()} ${product.unit}" +
+                            product.prices.entries.joinToString(" · ") { (currencyId, pp) ->
+                                "${symbolOf(currencyId)}${pp.unitPrice.stripTrailingZeros().toPlainString()}" +
+                                        if (pp.surcharge.signum() > 0)
+                                            " +${symbolOf(currencyId)}${pp.surcharge.stripTrailingZeros().toPlainString()}"
+                                        else ""
+                            },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

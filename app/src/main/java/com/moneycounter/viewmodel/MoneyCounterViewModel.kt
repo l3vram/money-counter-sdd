@@ -12,6 +12,7 @@ import com.moneycounter.domain.MeasurementUnit
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.MoneyCounterCalculator
 import com.moneycounter.domain.Product
+import com.moneycounter.domain.ProductPrice
 import com.moneycounter.domain.ProductSelection
 import com.moneycounter.domain.SavedCount
 import com.moneycounter.domain.SavedCountItem
@@ -350,7 +351,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         val state = _uiState.value
         if (unitPrice.signum() == 0 && surcharge.signum() == 0) return false
 
-        val new = Product(generateProductId(state.products), cleanName, cleanUnit, unitPrice, surcharge, stock, currencyId)
+        val prices = mapOf(currencyId to ProductPrice(unitPrice, surcharge))
+        val new = Product(generateProductId(state.products), cleanName, cleanUnit, stock, prices)
         val newProducts = state.products + new
         _uiState.update { it.copy(products = newProducts) }
         persistProducts(newProducts)
@@ -365,8 +367,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         val state = _uiState.value
         if (state.products.none { it.id == id }) return false
 
+        val prices = mapOf(currencyId to ProductPrice(unitPrice, surcharge))
         val newProducts = state.products.map {
-            if (it.id == id) it.copy(name = cleanName, unit = cleanUnit, unitPrice = unitPrice, surcharge = surcharge, stock = stock, currencyId = currencyId) else it
+            if (it.id == id) it.copy(name = cleanName, unit = cleanUnit, stock = stock, prices = prices) else it
         }
         _uiState.update { it.copy(products = newProducts) }
         persistProducts(newProducts)
@@ -434,7 +437,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             val product = state.products.firstOrNull { it.id == selection.productId } ?: continue
             val quantity = selection.quantity()
             if (quantity.signum() < 0) continue
-            total = total.add(product.effectiveUnitPrice.multiply(quantity))
+            val price = product.effectiveUnitPriceFor(state.selectedCurrencyId) ?: continue
+            total = total.add(price.multiply(quantity))
         }
         return total.setScale(Money.SCALE)
     }
@@ -443,7 +447,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         val product = _uiState.value.products.firstOrNull { it.id == selection.productId } ?: return Money.ZERO
         val quantity = selection.quantity()
         if (quantity.signum() < 0) return Money.ZERO
-        return product.effectiveUnitPrice.multiply(quantity).setScale(Money.SCALE)
+        return product.effectiveUnitPriceFor(_uiState.value.selectedCurrencyId)
+            ?.multiply(quantity)?.setScale(Money.SCALE) ?: Money.ZERO
     }
 
     private fun loadHistory() {
@@ -470,13 +475,14 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             val product = state.products.firstOrNull { it.id == selection.productId } ?: return@mapNotNull null
             val quantity = selection.quantity()
             if (quantity.signum() <= 0) return@mapNotNull null
+            val pp = product.priceFor(state.selectedCurrencyId) ?: return@mapNotNull null
             SavedProductItem(
                 name = product.name,
                 unit = product.unit,
                 quantity = quantity,
-                unitPrice = product.unitPrice,
-                surcharge = product.surcharge,
-                subtotal = product.effectiveUnitPrice.multiply(quantity).setScale(Money.SCALE)
+                unitPrice = pp.unitPrice,
+                surcharge = pp.surcharge,
+                subtotal = pp.effectiveUnitPrice.multiply(quantity).setScale(Money.SCALE)
             )
         }
 
@@ -582,9 +588,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     }
 
     companion object {
-        /** Returns products whose currency matches the given currencyId. */
+        /** Returns products that have a price in the given currency. */
         fun productsForCurrency(products: List<Product>, currencyId: String): List<Product> =
-            products.filter { it.currencyId == currencyId }
+            products.filter { it.hasPriceIn(currencyId) }
 
         /** Returns products with stock reduced by the sold quantity per selection.
          *  Quantities never restore; over-selling may push stock negative (warn-and-allow). */
