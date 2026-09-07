@@ -20,7 +20,7 @@ reference is NOT machine-readable; the .md files are the source of truth.
 | 005  | Stock screens reskin | P1 | M | 001, 002 | DONE |
 | 006  | Reports screens reskin | P1 | M | 001, 002 | DONE |
 | 007  | Settings screen reskin | P1 | M | 001, 002 | DONE |
-| 008  | Copy + empty/error states + final verification | P1 | M | all | IN PROGRESS |
+| 008  | Copy + empty/error states + final verification | P1 | M | all | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (reason) | REJECTED (reason)
 
