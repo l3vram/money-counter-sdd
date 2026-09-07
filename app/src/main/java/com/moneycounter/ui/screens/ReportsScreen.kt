@@ -150,44 +150,40 @@ fun ReportsScreen(
                     OutlinedButton(onClick = { ascending = !ascending }) {
                         Text(if (ascending) "Antiguos ↑" else "Recientes ↓")
                     }
+                    FilledTonalButton(onClick = { selectionMode = !selectionMode }) {
+                        Text(if (selectionMode) "Listo" else "Seleccionar")
+                    }
                 }
             }
 
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    if (selectionMode) {
-                        FilledTonalButton(onClick = { selectionMode = false }) {
-                            Text("Listo")
+            if (selectionMode) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { confirmDelete = true },
+                            enabled = selectedIds.isNotEmpty(),
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Text("ELIMINAR")
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(
-                                onClick = { confirmDelete = true },
-                                enabled = selectedIds.isNotEmpty(),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.error
-                                )
-                            ) {
-                                Text("ELIMINAR")
-                            }
-                            FilledTonalButton(
-                                onClick = { onOpenSummary(selectedIds.toList()) },
-                                enabled = selectionMode && selectedIds.isNotEmpty()
-                            ) {
-                                Text(
-                                    if (selectedIds.isEmpty()) "GENERAR RESUMEN"
-                                    else "GENERAR RESUMEN (${selectedIds.size})"
-                                )
-                            }
-                        }
-                    } else {
-                        FilledTonalButton(onClick = { selectionMode = true }) {
-                            Text("Seleccionar")
+                        FilledTonalButton(
+                            onClick = { onOpenSummary(selectedIds.toList()) },
+                            enabled = selectedIds.isNotEmpty(),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                if (selectedIds.isEmpty()) "GENERAR RESUMEN"
+                                else "GENERAR RESUMEN (${selectedIds.size})"
+                            )
                         }
                     }
                 }
