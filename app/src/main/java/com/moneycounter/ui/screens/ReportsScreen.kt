@@ -130,7 +130,11 @@ fun ReportsScreen(
                 ReportsCurrencySelector(
                     currencies = uiState.currencies,
                     selectedCurrencyId = filterCurrencyId,
-                    onSelectCurrency = { filterCurrencyId = it }
+                    onSelectCurrency = {
+                        filterCurrencyId = it
+                        selectedIds = emptySet()
+                        expandedKeys = emptySet()
+                    }
                 )
             }
 
