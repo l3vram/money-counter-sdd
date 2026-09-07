@@ -343,15 +343,15 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         return true
     }
 
-    fun addProduct(name: String, unit: String, stock: BigDecimal, currencyId: String, unitPrice: BigDecimal, surcharge: BigDecimal): Boolean {
+    fun addProduct(name: String, unit: String, stock: BigDecimal, prices: Map<String, ProductPrice>): Boolean {
         val cleanName = name.trim()
         val cleanUnit = unit.trim()
         if (cleanName.isEmpty() || cleanUnit.isEmpty()) return false
-        if (unitPrice.signum() < 0 || surcharge.signum() < 0 || stock.signum() < 0) return false
+        if (stock.signum() < 0) return false
+        if (prices.isEmpty()) return false
+        if (prices.values.all { it.unitPrice.signum() == 0 && it.surcharge.signum() == 0 }) return false
         val state = _uiState.value
-        if (unitPrice.signum() == 0 && surcharge.signum() == 0) return false
 
-        val prices = mapOf(currencyId to ProductPrice(unitPrice, surcharge))
         val new = Product(generateProductId(state.products), cleanName, cleanUnit, stock, prices)
         val newProducts = state.products + new
         _uiState.update { it.copy(products = newProducts) }
@@ -359,15 +359,14 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         return true
     }
 
-    fun editProduct(id: String, name: String, unit: String, stock: BigDecimal, currencyId: String, unitPrice: BigDecimal, surcharge: BigDecimal): Boolean {
+    fun editProduct(id: String, name: String, unit: String, stock: BigDecimal, prices: Map<String, ProductPrice>): Boolean {
         val cleanName = name.trim()
         val cleanUnit = unit.trim()
         if (cleanName.isEmpty() || cleanUnit.isEmpty()) return false
-        if (unitPrice.signum() < 0 || surcharge.signum() < 0 || stock.signum() < 0) return false
+        if (stock.signum() < 0) return false
         val state = _uiState.value
         if (state.products.none { it.id == id }) return false
 
-        val prices = mapOf(currencyId to ProductPrice(unitPrice, surcharge))
         val newProducts = state.products.map {
             if (it.id == id) it.copy(name = cleanName, unit = cleanUnit, stock = stock, prices = prices) else it
         }
