@@ -244,7 +244,7 @@ private fun ProductsSection(
     onNavigateToSettings: () -> Unit
 ) {
     val currency = currencies.firstOrNull { it.id == selectedCurrencyId } ?: currencies.firstOrNull()
-    val productsForCurrency = products.filter { it.hasPriceIn(selectedCurrencyId) }
+    val productsWithPrice = products.filter { it.hasPriceIn(selectedCurrencyId) }
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -270,7 +270,7 @@ private fun ProductsSection(
                 )
             }
 
-            if (productsForCurrency.isEmpty()) {
+            if (productsWithPrice.isEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 LuisoEmptyState(
                     message = "El Luiso está listo. Registra tu primer conteo.",
@@ -292,7 +292,8 @@ private fun ProductsSection(
                 selections.forEachIndexed { index, selection ->
                     ProductRow(
                         selection = selection,
-                        products = productsForCurrency,
+                        products = productsWithPrice,
+                        currencies = currencies,
                         selectedCurrencyId = selectedCurrencyId,
                         symbol = currency?.symbol ?: "$",
                         lineTotal = productLineTotal(selection),
@@ -323,6 +324,7 @@ private fun ProductsSection(
 private fun ProductRow(
     selection: ProductSelection,
     products: List<Product>,
+    currencies: List<Currency>,
     selectedCurrencyId: String,
     symbol: String,
     lineTotal: BigDecimal,
@@ -416,6 +418,24 @@ private fun ProductRow(
                             overflow = TextOverflow.Ellipsis,
                             maxLines = 1
                         )
+                    }
+                if (selectedProduct != null && selectedProduct.prices.size > 1) {
+                        val otherPrices = selectedProduct.prices.entries
+                            .filter { it.key != selectedCurrencyId }
+                            .joinToString(" · ") { (curId, pp) ->
+                                val otherSymbol = currencies.firstOrNull { it.id == curId }?.symbol ?: curId
+                                "$otherSymbol ${pp.effectiveUnitPrice.stripTrailingZeros().toPlainString()}"
+                            }
+                        if (otherPrices.isNotBlank()) {
+                            Text(
+                                text = "También: $otherPrices",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.End,
+                                overflow = TextOverflow.Ellipsis,
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }

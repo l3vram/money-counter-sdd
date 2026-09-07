@@ -404,8 +404,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         recalculate()
     }
 
-    fun productsForCurrency(currencyId: String): List<Product> =
-        productsForCurrency(_uiState.value.products, currencyId)
+    fun productsWithPrice(currencyId: String): List<Product> =
+        productsWithPrice(_uiState.value.products, currencyId)
 
     fun updateProductSelection(index: Int, productId: String) {
         val state = _uiState.value
@@ -589,7 +589,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
 
     companion object {
         /** Returns products that have a price in the given currency. */
-        fun productsForCurrency(products: List<Product>, currencyId: String): List<Product> =
+        fun productsWithPrice(products: List<Product>, currencyId: String): List<Product> =
             products.filter { it.hasPriceIn(currencyId) }
 
         /** Returns products with stock reduced by the sold quantity per selection.
