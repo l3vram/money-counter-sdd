@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -71,8 +70,7 @@ import java.math.BigDecimal
 @Composable
 fun MoneyCounterScreen(
     viewModel: MoneyCounterViewModel,
-    onNavigateToSettings: () -> Unit,
-    onNavigateToHistory: () -> Unit
+    onNavigateToSettings: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showClearDialog by remember { mutableStateOf(false) }
@@ -89,13 +87,6 @@ fun MoneyCounterScreen(
                     titleContentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 actions = {
-                    IconButton(onClick = onNavigateToHistory) {
-                        Icon(
-                            Icons.Default.History,
-                            contentDescription = "Ver historial",
-                            tint = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(
                             Icons.Default.Settings,
@@ -233,6 +224,7 @@ private fun ProductsSection(
     onNavigateToSettings: () -> Unit
 ) {
     val currency = currencies.firstOrNull { it.id == selectedCurrencyId } ?: currencies.firstOrNull()
+    val productsForCurrency = products.filter { it.currencyId == selectedCurrencyId }
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -258,10 +250,10 @@ private fun ProductsSection(
                 )
             }
 
-            if (products.isEmpty()) {
+            if (productsForCurrency.isEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "No hay productos configurados. Ve a Ajustes para agregarlos.",
+                    text = "No hay productos configurados para esta moneda. Ve a Ajustes para agregarlos o cambia la moneda.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -281,7 +273,7 @@ private fun ProductsSection(
                 selections.forEachIndexed { index, selection ->
                     ProductRow(
                         selection = selection,
-                        products = products,
+                        products = productsForCurrency,
                         symbol = currency?.symbol ?: "$",
                         lineTotal = productLineTotal(selection),
                         onSelectProduct = { productId -> onSelectProduct(index, productId) },

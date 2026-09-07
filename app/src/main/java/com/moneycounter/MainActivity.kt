@@ -79,8 +79,7 @@ fun MoneyCounterApp() {
             when (currentScreen) {
                 "counter" -> MoneyCounterScreen(
                     viewModel = viewModel,
-                    onNavigateToSettings = { currentScreen = "settings" },
-                    onNavigateToHistory = { currentScreen = "history" }
+                    onNavigateToSettings = { currentScreen = "settings" }
                 )
                 "stock" -> StockScreen(
                     viewModel = viewModel,

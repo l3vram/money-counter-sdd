@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.moneycounter.domain.Currency
 import com.moneycounter.domain.MeasurementUnit
 import com.moneycounter.domain.Product
 import com.moneycounter.viewmodel.MoneyCounterViewModel
@@ -101,6 +102,7 @@ fun StockScreen(
                     ProductRow(
                         product = product,
                         symbol = currencySymbol,
+                        currencyCodeOf = { id -> uiState.currencies.firstOrNull { it.id == id }?.code ?: id },
                         onEdit = {
                             showEditProductDialog = product
                             errorMessage = null
@@ -149,14 +151,16 @@ fun StockScreen(
         ProductDialog(
             title = "Nuevo producto",
             units = uiState.units,
+            currencies = uiState.currencies,
             initialName = "",
             initialUnit = uiState.units.firstOrNull()?.name ?: "",
+            initialCurrencyId = uiState.selectedCurrencyId,
             initialStock = "0",
             initialPrice = "",
             initialSurcharge = "0",
             confirmText = "GUARDAR",
-            onConfirm = { name, unit, stock, price, surcharge ->
-                if (viewModel.addProduct(name, unit, stock, uiState.selectedCurrencyId, price, surcharge)) {
+            onConfirm = { name, unit, stock, price, surcharge, currencyId ->
+                if (viewModel.addProduct(name, unit, stock, currencyId, price, surcharge)) {
                     showAddProductDialog = false
                     errorMessage = null
                 } else {
@@ -175,14 +179,17 @@ fun StockScreen(
         ProductDialog(
             title = "Editar producto",
             units = uiState.units,
+            currencies = uiState.currencies,
             initialName = product.name,
             initialUnit = product.unit,
+            initialCurrencyId = uiState.currencies.firstOrNull { it.id == product.currencyId }?.id
+                ?: uiState.selectedCurrencyId,
             initialStock = product.stock.stripTrailingZeros().toPlainString(),
             initialPrice = product.unitPrice.stripTrailingZeros().toPlainString(),
             initialSurcharge = product.surcharge.stripTrailingZeros().toPlainString(),
             confirmText = "GUARDAR",
-            onConfirm = { name, unit, stock, price, surcharge ->
-                if (viewModel.editProduct(product.id, name, unit, stock, uiState.selectedCurrencyId, price, surcharge)) {
+            onConfirm = { name, unit, stock, price, surcharge, currencyId ->
+                if (viewModel.editProduct(product.id, name, unit, stock, currencyId, price, surcharge)) {
                     showEditProductDialog = null
                     errorMessage = null
                 } else {
@@ -233,6 +240,7 @@ private fun SectionTitle(text: String) {
 private fun ProductRow(
     product: Product,
     symbol: String,
+    currencyCodeOf: (String) -> String,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -260,6 +268,7 @@ private fun ProductRow(
                 Text(
                     text = "${product.stock.stripTrailingZeros().toPlainString()} ${product.unit} · " +
                             "${symbol}${product.unitPrice.stripTrailingZeros().toPlainString()} por ${product.unit}" +
+                            " · ${currencyCodeOf(product.currencyId)}" +
                             if (product.surcharge.signum() > 0)
                                 " · + recargo ${symbol}${product.surcharge.stripTrailingZeros().toPlainString()}"
                             else "",
@@ -292,13 +301,15 @@ private fun ProductRow(
 private fun ProductDialog(
     title: String,
     units: List<MeasurementUnit>,
+    currencies: List<Currency>,
     initialName: String,
     initialUnit: String,
+    initialCurrencyId: String,
     initialStock: String,
     initialPrice: String,
     initialSurcharge: String,
     confirmText: String,
-    onConfirm: (name: String, unit: String, stock: BigDecimal, unitPrice: BigDecimal, surcharge: BigDecimal) -> Unit,
+    onConfirm: (name: String, unit: String, stock: BigDecimal, unitPrice: BigDecimal, surcharge: BigDecimal, currencyId: String) -> Unit,
     onDismiss: () -> Unit,
     errorMessage: String? = null
 ) {
@@ -308,10 +319,17 @@ private fun ProductDialog(
             if (units.any { it.name == initialUnit }) initialUnit else units.firstOrNull()?.name ?: ""
         )
     }
+    var currencyId by remember {
+        mutableStateOf(
+            if (currencies.any { it.id == initialCurrencyId }) initialCurrencyId
+            else currencies.firstOrNull()?.id.orEmpty()
+        )
+    }
     var stock by remember { mutableStateOf(initialStock) }
     var price by remember { mutableStateOf(initialPrice) }
     var surcharge by remember { mutableStateOf(initialSurcharge) }
     var unitMenuOpen by remember { mutableStateOf(false) }
+    var currencyMenuOpen by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -347,6 +365,34 @@ private fun ProductDialog(
                                 onClick = {
                                     unit = u.name
                                     unitMenuOpen = false
+                                }
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+
+                val selectedCurrency = currencies.firstOrNull { it.id == currencyId }
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { currencyMenuOpen = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Moneda: ${selectedCurrency?.let { "${it.symbol} ${it.code}" } ?: ""}",
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = currencyMenuOpen,
+                        onDismissRequest = { currencyMenuOpen = false }
+                    ) {
+                        currencies.forEach { c ->
+                            DropdownMenuItem(
+                                text = { Text("${c.symbol} ${c.code} — ${c.name}") },
+                                onClick = {
+                                    currencyId = c.id
+                                    currencyMenuOpen = false
                                 }
                             )
                         }
@@ -409,7 +455,7 @@ private fun ProductDialog(
                 val parsedStock = parseDecimalInput(stock)
                 val parsedPrice = parseDecimalInput(price)
                 val parsedSurcharge = parseDecimalInput(surcharge)
-                onConfirm(name, unit, parsedStock, parsedPrice, parsedSurcharge)
+                onConfirm(name, unit, parsedStock, parsedPrice, parsedSurcharge, currencyId)
             }) {
                 Text(confirmText)
             }
