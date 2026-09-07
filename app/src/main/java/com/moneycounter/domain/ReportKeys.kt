@@ -27,15 +27,18 @@ fun MonthKey.keyString(): String = "%04d-%02d".format(year, month)
 /** "2026-09-07" — day expansion key. */
 fun DayKey.keyString(): String = "%04d-%02d-%02d".format(year, month, day)
 
-/** Groups history into months (newest month first), each with days (newest day first),
- *  each day's counts sorted by savedAt descending. Deterministic and de-duplicated. */
-fun groupByMonthDay(history: List<SavedCount>): List<MonthGroup> {
+/** Groups history into months, each with days, each day's counts sorted by savedAt.
+ *  ascending=false → newest first (months, days, counts). ascending=true → oldest first. */
+fun groupByMonthDay(history: List<SavedCount>, ascending: Boolean = false): List<MonthGroup> {
+    val dir = if (ascending) 1 else -1
     val dayGroups = history
         .groupBy { dayKeyOf(it.savedAt) }
-        .map { (key, counts) -> DayGroup(key, counts.sortedByDescending { it.savedAt }) }
-        .sortedByDescending { d -> d.key.year * 10_000 + d.key.month * 100 + d.key.day }
+        .map { (key, counts) ->
+            DayGroup(key, if (ascending) counts.sortedBy { it.savedAt } else counts.sortedByDescending { it.savedAt })
+        }
+        .sortedWith(compareBy { dir * (it.key.year * 10_000 + it.key.month * 100 + it.key.day) })
     return dayGroups
         .groupBy { MonthKey(it.key.year, it.key.month) }
         .map { (key, days) -> MonthGroup(key, days) }
-        .sortedByDescending { m -> m.key.year * 100 + m.key.month }
+        .sortedWith(compareBy { dir * (it.key.year * 100 + it.key.month) })
 }
