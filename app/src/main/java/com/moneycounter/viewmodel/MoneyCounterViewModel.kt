@@ -486,7 +486,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             targetAmount = target,
             items = items,
             currency = currencySymbol(),
-            products = savedProducts
+            products = savedProducts,
+            currencyId = state.selectedCurrencyId
         )
 
         _uiState.update { st ->
