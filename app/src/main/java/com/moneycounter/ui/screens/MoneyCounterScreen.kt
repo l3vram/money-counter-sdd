@@ -25,9 +25,9 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,10 +59,8 @@ import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductSelection
 import com.moneycounter.ui.components.DenominationRow
 import com.moneycounter.ui.components.LuisoButton
-import com.moneycounter.ui.components.LuisoCard
 import com.moneycounter.ui.components.LuisoEmptyState
 import com.moneycounter.ui.components.LuisoOutlineButton
-import com.moneycounter.ui.components.LuisoStatCard
 import com.moneycounter.ui.components.LuisoTextField
 import com.moneycounter.ui.components.LuisoTopBar
 import com.moneycounter.ui.components.formatMoneyBigDecimal

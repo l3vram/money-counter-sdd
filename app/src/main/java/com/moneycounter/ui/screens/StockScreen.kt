@@ -8,10 +8,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -299,9 +302,15 @@ private fun ProductDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        title = {
+            Text(title)
+        },
         text = {
-            Column {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 400.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
                 LuisoTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -340,13 +349,20 @@ private fun ProductDialog(
                 LuisoTextField(
                     value = stock,
                     onValueChange = { newValue ->
-                        if (newValue.isEmpty() || newValue.trim().replace(',', '.').matches(Regex("\\d*\\.?\\d*"))) {
+                        if (
+                            newValue.isEmpty() ||
+                            newValue.trim()
+                                .replace(',', '.')
+                                .matches(Regex("\\d*\\.?\\d*"))
+                        ) {
                             stock = newValue
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
                     label = "Cantidad (stock)",
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal
+                    )
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -362,26 +378,43 @@ private fun ProductDialog(
                     LuisoTextField(
                         value = price.first.value,
                         onValueChange = { newValue ->
-                            if (newValue.isEmpty() || newValue.trim().replace(',', '.').matches(Regex("\\d*\\.?\\d*"))) {
+                            if (
+                                newValue.isEmpty() ||
+                                newValue.trim()
+                                    .replace(',', '.')
+                                    .matches(Regex("\\d*\\.?\\d*"))
+                            ) {
                                 price.first.value = newValue
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
                         label = "Precio por unidad",
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal
+                        )
                     )
+
                     Spacer(modifier = Modifier.height(4.dp))
+
                     LuisoTextField(
                         value = price.second.value,
                         onValueChange = { newValue ->
-                            if (newValue.isEmpty() || newValue.trim().replace(',', '.').matches(Regex("\\d*\\.?\\d*"))) {
+                            if (
+                                newValue.isEmpty() ||
+                                newValue.trim()
+                                    .replace(',', '.')
+                                    .matches(Regex("\\d*\\.?\\d*"))
+                            ) {
                                 price.second.value = newValue
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
                         label = "Recargo fijo por unidad",
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal
+                        )
                     )
+
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
@@ -396,20 +429,41 @@ private fun ProductDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                val parsedStock = parseDecimalInput(stock)
-                val prices = currencies.mapNotNull { c ->
-                    val price = priceStates[c.id] ?: return@mapNotNull null
-                    val parsedPrice = parseDecimalInput(price.first.value)
-                    val parsedSurcharge = parseDecimalInput(price.second.value)
-                    if (parsedPrice.signum() > 0 || parsedSurcharge.signum() > 0) {
-                        c.id to ProductPrice(parsedPrice, parsedSurcharge)
-                    } else {
-                        null
-                    }
-                }.toMap()
-                onConfirm(name, unit, parsedStock, prices)
-            }) {
+            TextButton(
+                onClick = {
+                    val parsedStock = parseDecimalInput(stock)
+
+                    val prices = currencies.mapNotNull { c ->
+                        val price = priceStates[c.id]
+                            ?: return@mapNotNull null
+
+                        val parsedPrice =
+                            parseDecimalInput(price.first.value)
+
+                        val parsedSurcharge =
+                            parseDecimalInput(price.second.value)
+
+                        if (
+                            parsedPrice.signum() > 0 ||
+                            parsedSurcharge.signum() > 0
+                        ) {
+                            c.id to ProductPrice(
+                                parsedPrice,
+                                parsedSurcharge
+                            )
+                        } else {
+                            null
+                        }
+                    }.toMap()
+
+                    onConfirm(
+                        name,
+                        unit,
+                        parsedStock,
+                        prices
+                    )
+                }
+            ) {
                 Text(confirmText)
             }
         },

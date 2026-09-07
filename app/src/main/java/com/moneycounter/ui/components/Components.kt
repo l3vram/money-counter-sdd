@@ -3,6 +3,7 @@ package com.moneycounter.ui.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,7 +16,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -71,6 +71,10 @@ fun LuisoOutlineButton(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
         border = ButtonDefaults.outlinedButtonBorder,
+        contentPadding = PaddingValues(
+            horizontal = 12.dp,
+            vertical = 0.dp
+        ),
         colors = if (contentColor != null) {
             ButtonDefaults.outlinedButtonColors(contentColor = contentColor)
         } else {
@@ -124,7 +128,7 @@ fun LuisoTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(text = label) },
-        modifier = modifier,
+        modifier = modifier.height(58.dp),
         placeholder = hint?.let { { Text(text = it) } },
         singleLine = true,
         shape = RoundedCornerShape(12.dp),

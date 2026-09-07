@@ -1,10 +1,16 @@
 package com.moneycounter.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -15,7 +21,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -59,7 +64,7 @@ fun DenominationRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = 8.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -90,7 +95,7 @@ fun DenominationRow(
                     )
                 }
 
-                OutlinedTextField(
+                BasicTextField(
                     value = when {
                         isEditing -> editText
                         quantity == 0L -> ""
@@ -100,18 +105,26 @@ fun DenominationRow(
                         if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
                             editText = newValue
                             isEditing = true
-                            onQuantityChanged((QuantityParser.parse(newValue) ?: 0L).coerceAtLeast(0))
+                            onQuantityChanged(
+                                (QuantityParser.parse(newValue) ?: 0L).coerceAtLeast(0L)
+                            )
                         }
                     },
                     modifier = Modifier
                         .weight(1f)
+                        .padding(horizontal = 4.dp)
                         .onFocusChanged { focusState ->
                             if (!focusState.isFocused && isEditing) {
                                 val parsed = QuantityParser.parse(editText) ?: 0L
-                                onQuantityChanged(parsed.coerceAtLeast(0))
+                                onQuantityChanged(parsed.coerceAtLeast(0L))
                                 isEditing = false
                             }
                         },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    ),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Number,
                         imeAction = ImeAction.Done
@@ -119,16 +132,34 @@ fun DenominationRow(
                     keyboardActions = KeyboardActions(
                         onDone = {
                             val parsed = QuantityParser.parse(editText) ?: 0L
-                            onQuantityChanged(parsed.coerceAtLeast(0))
+                            onQuantityChanged(parsed.coerceAtLeast(0L))
                             isEditing = false
                             focusManager.clearFocus()
                         }
                     ),
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center
-                    )
+                    decorationBox = { innerTextField ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .border(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .background(
+                                    color = MaterialTheme.colorScheme.surface,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .padding(
+                                    horizontal = 8.dp,
+                                    vertical = 2.dp
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            innerTextField()
+                        }
+                    }
                 )
 
                 IconButton(
