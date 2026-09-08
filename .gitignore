@@ -8,6 +8,10 @@
 .externalNativeBuild
 .cxx
 app/build
+app/release
+
+# Gradle toolchain / daemon generated files
+gradle/gradle-daemon-jvm.properties
 
 # Secrets & signing material — never commit
 *.jks
