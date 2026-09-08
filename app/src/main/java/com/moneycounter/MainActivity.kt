@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlin.math.min
+import com.moneycounter.ui.AuthenticationGate
 import com.moneycounter.ui.screens.DenominationManagementScreen
 import com.moneycounter.ui.screens.HistoryDetailScreen
 import com.moneycounter.ui.screens.MoneyCounterScreen
@@ -47,14 +48,16 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MoneyCounterTheme {
-                MoneyCounterApp()
+                AuthenticationGate { onLogout ->
+                    MoneyCounterApp(onLogout = onLogout)
+                }
             }
         }
     }
 }
 
 @Composable
-fun MoneyCounterApp() {
+fun MoneyCounterApp(onLogout: () -> Unit) {
     val viewModel: MoneyCounterViewModel = viewModel()
     var currentScreen by remember { mutableStateOf("counter") }
     var selectedHistoryId by remember { mutableStateOf<String?>(null) }
@@ -134,7 +137,8 @@ fun MoneyCounterApp() {
                     )
                     "settings" -> DenominationManagementScreen(
                         viewModel = viewModel,
-                        onNavigateBack = { currentScreen = "counter" }
+                        onNavigateBack = { currentScreen = "counter" },
+                        onLogout = onLogout
                     )
                     "reports" -> ReportsScreen(
                         viewModel = viewModel,
