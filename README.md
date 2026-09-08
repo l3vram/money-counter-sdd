@@ -6,8 +6,10 @@ cuenta, backend ni base de datos.
 
 ## Qué hace
 
-- Define **productos** (nombre, unidad de medida, precio por unidad y recargo fijo) y agrega
-  filas con cantidades decimales (ej. 1,5 Lb) — el **objetivo = total de productos**.
+- Define **productos** (nombre, unidad de medida y **precio por moneda** con recargo fijo) y
+  agrega filas con cantidades decimales (ej. 1,5 Lb) — el **objetivo = total de productos**.
+  Un mismo producto tiene un **mapa de precios por moneda** y un solo stock; al migrar desde
+  versiones anteriores los productos duplicados con el mismo `(nombre, unidad)` se **fusionan**.
 - Compara el monto contado en denominaciones contra ese objetivo y muestra en tiempo real:
   - objetivo / contado / progreso en porcentaje
   - cuánto falta (`FALTAN`) cuando el conteo está por debajo
@@ -37,6 +39,7 @@ cuenta, backend ni base de datos.
 - Selector de **moneda activa** de la operación en la cabecera de productos.
 - **RESUMEN** debajo de los productos (objetivo = total de productos, contado, progreso,
   estado, botón `GUARDAR EN HISTORIAL` visible al completar), y debajo las **DENOMINACIONES**.
+- En el selector de productos solo aparecen los que tienen **precio en la moneda activa**.
 - Conteo por denominación configurable: botones `+`/`−`, edición directa y subtotal automático.
   - Campo vacío = nada (no contribuye al cálculo).
   - Ceros al frente se ignoran (`007` → `7`), ceros al final se respetan (`10` → `10`).
@@ -46,15 +49,16 @@ cuenta, backend ni base de datos.
 - **MONEDA**: seleccionar la activa, agregar/editar/eliminar (código de 3 letras, nombre,
   símbolo). No se elimina la moneda en uso o la única restante.
 - **PRODUCTOS**: agregar/editar/eliminar con nombre, unidad (dropdown desde unidades
-  configuradas), precio por unidad y recargo fijo por unidad.
+  configuradas) y **precio por unidad en cada moneda** más recargo fijo por unidad.
 - **UNIDADES DE MEDIDA**: agregar/editar/eliminar. Al renombrar una unidad se actualizan los
   productos que la usaban; no se elimina si es la única o está en uso por un producto.
 - **DENOMINACIONES**: agregar, editar, eliminar y reordenar (confirmación al eliminar, bloqueo
   de edición mientras haya un conteo activo).
 
 ### Historial y exportación
-- Lista de conteos guardados con total, fecha y moneda.
-- Detalle con moneda, total, líneas de producto y denominaciones.
+- Lista de conteos guardados con total, fecha y **moneda visible** (código + símbolo).
+- Detalle con moneda, total, líneas de producto y denominaciones — la **moneda es visible**
+  de forma prominente en todas las pantallas de reportes.
 - **EXPORTAR PDF**: reporte con fecha, moneda, total, productos y denominaciones.
 - **EXPORTAR EXCEL (CSV)**: mismo contenido en CSV con BOM UTF-8 (abre en Excel conservando
   acentos), compartido por el menú de Android.
@@ -62,6 +66,8 @@ cuenta, backend ni base de datos.
 ### Persistencia
 - Denominaciones, monedas, unidades y productos en JSON en almacenamiento privado
   (sobrevive reinicios, tolera JSON corrupto devolviéndose a los valores por defecto).
+- Productos en `products.json` (versión 4, compatible con versiones 1–3: **auto-fusión** de
+  entradas duplicadas por `(nombre, unidad)` al migrar, stock = máximo, precios = unión).
 - Historial en `count_history.json` (versión 2, compatible con la 1).
 - Escritura atómica (archivo temporal + rename).
 
@@ -96,7 +102,7 @@ Requisitos: JDK 17+, Android SDK (ver `local.properties`).
 ```
 
 El APK de release firmado queda en
-`app/build/outputs/apk/release/MoneyCounter-v1.1.apk`.
+`app/build/outputs/apk/release/MoneyCounter-v1.3.apk`.
 
 ## Firma del release
 
