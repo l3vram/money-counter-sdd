@@ -237,7 +237,8 @@ fun MoneyCounterApp(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(
-                        top = innerPadding.calculateTopPadding()
+                        top = innerPadding.calculateTopPadding(),
+                        bottom = innerPadding.calculateBottomPadding()
                     )
             ) {
                 when (currentScreen) {
