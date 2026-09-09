@@ -94,18 +94,20 @@ fun MoneyCounterScreen(
                         Row(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(onClick = onNavigateToProfile) {
-                                LuisoAvatar(
-                                    photoUrl = profile?.photoUrl,
-                                    fallbackText = profile?.displayName,
-                                    size = 30
-                                )
-                            }
+
                             IconButton(onClick = onNavigateToSettings) {
                                 Icon(
                                     Icons.Default.Settings,
                                     contentDescription = "Configurar",
                                     tint = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+                            IconButton(onClick = onNavigateToProfile) {
+                                LuisoAvatar(
+                                    photoUrl = profile?.photoUrl,
+                                    fallbackText = profile?.displayName,
+                                    size = 26,
+                                    borderColor = LuisoYellow
                                 )
                             }
                         }

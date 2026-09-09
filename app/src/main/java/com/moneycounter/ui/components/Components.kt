@@ -1,6 +1,7 @@
 package com.moneycounter.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -329,14 +330,16 @@ fun LuisoAvatar(
     photoUrl: String?,
     fallbackText: String?,
     modifier: Modifier = Modifier,
-    size: Int = 32
+    size: Int = 32,
+    borderColor: Color = LuisoGreen
 ) {
     val initial = fallbackText?.firstOrNull()?.uppercase().orEmpty()
     Box(
         modifier = modifier
             .size(size.dp)
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primaryContainer),
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .border(1.dp, color = borderColor, shape = CircleShape),
         contentAlignment = Alignment.Center
     ) {
         if (photoUrl != null) {
