@@ -19,6 +19,15 @@ android {
     namespace = "com.moneycounter"
     compileSdk = 34
 
+    signingConfigs {
+        create("debugCanonical") {
+            storeFile = file(System.getProperty("user.home") + "/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.moneycounter"
         minSdk = 26
@@ -33,6 +42,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debugCanonical")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
