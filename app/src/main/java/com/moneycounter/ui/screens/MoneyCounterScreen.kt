@@ -1,6 +1,7 @@
 package com.moneycounter.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -57,6 +59,8 @@ import com.moneycounter.domain.Currency
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductSelection
+import com.moneycounter.domain.Receivable
+import com.moneycounter.domain.ReceivableStatus
 import com.moneycounter.access.UserProfileData
 import com.moneycounter.ui.components.DenominationRow
 import com.moneycounter.ui.components.LuisoAvatar
@@ -70,6 +74,9 @@ import com.moneycounter.ui.components.formatMoneyBigDecimal
 import com.moneycounter.ui.theme.LuisoYellow
 import com.moneycounter.viewmodel.MoneyCounterViewModel
 import java.math.BigDecimal
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,6 +90,8 @@ fun MoneyCounterScreen(
     val uiState by viewModel.uiState.collectAsState()
     var showClearDialog by remember { mutableStateOf(false) }
     var showFiadoDialog by remember { mutableStateOf(false) }
+    var showCobrarDialog by remember { mutableStateOf(false) }
+    var cobrarSuccessMessage by remember { mutableStateOf<String?>(null) }
     val currency = uiState.currencies.firstOrNull { it.id == uiState.selectedCurrencyId }
         ?: com.moneycounter.domain.DefaultCurrencies.CUP
     val currencySymbol = currency.symbol
@@ -175,6 +184,25 @@ fun MoneyCounterScreen(
 
             item {
                 Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    LuisoOutlineButton(
+                        text = "COBRAR / SALDAR CUENTA",
+                        onClick = { showCobrarDialog = true },
+                        modifier = Modifier.weight(1f)
+                    )
+                    TermInfo(
+                        correctTerm = "Cobro / Recibo de cobro",
+                        oldName = "Liquidar deuda",
+                        explanation = "Efectivo que entra y cancela una cuenta por cobrar."
+                    )
+                }
+            }
+
+            item {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 2.dp),
@@ -257,6 +285,40 @@ fun MoneyCounterScreen(
             onDismiss = { showFiadoDialog = false }
         )
     }
+
+    if (showCobrarDialog) {
+        val openReceivables = uiState.receivables.filter { it.status == ReceivableStatus.OPEN }
+        CobrarDialog(
+            openReceivables = openReceivables,
+            currencies = uiState.currencies,
+            onConfirm = { receivable ->
+                if (viewModel.settleReceivable(receivable.id)) {
+                    showCobrarDialog = false
+                    cobrarSuccessMessage =
+                        "Cobro registrado: ${receivable.debtorName} — " +
+                            formatMoneyBigDecimal(
+                                receivable.amount,
+                                uiState.currencies.firstOrNull { it.id == receivable.currencyId }?.symbol.orEmpty()
+                            )
+                }
+            },
+            onDismiss = { showCobrarDialog = false }
+        )
+    }
+
+    val successMessage = cobrarSuccessMessage
+    if (successMessage != null) {
+        AlertDialog(
+            onDismissRequest = { cobrarSuccessMessage = null },
+            title = { Text("Cobro registrado") },
+            text = { Text(successMessage) },
+            confirmButton = {
+                TextButton(onClick = { cobrarSuccessMessage = null }) {
+                    Text("Aceptar")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -307,6 +369,87 @@ private fun FiadoDialog(
                 }
             ) {
                 Text("Confirmar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+@Composable
+private fun CobrarDialog(
+    openReceivables: List<Receivable>,
+    currencies: List<Currency>,
+    onConfirm: (Receivable) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedId by remember { mutableStateOf<String?>(null) }
+    val dateFormatter = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Cobrar / Saldar cuenta") },
+        text = {
+            if (openReceivables.isEmpty()) {
+                Text(
+                    text = "No hay cuentas por cobrar pendientes.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            } else {
+                Column {
+                    Text(
+                        text = "Selecciona la cuenta que el deudor está pagando:",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    openReceivables.forEach { receivable ->
+                        val symbol = currencies.firstOrNull { it.id == receivable.currencyId }?.symbol.orEmpty()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedId = receivable.id }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedId == receivable.id,
+                                onClick = { selectedId = receivable.id }
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = receivable.debtorName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = dateFormatter.format(Date(receivable.at)),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Text(
+                                text = formatMoneyBigDecimal(receivable.amount, symbol),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = selectedId != null,
+                onClick = {
+                    val receivable = openReceivables.firstOrNull { it.id == selectedId }
+                    if (receivable != null) onConfirm(receivable)
+                }
+            ) {
+                Text("Confirmar cobro")
             }
         },
         dismissButton = {

@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.moneycounter.domain.InventoryWriteoff
 import com.moneycounter.domain.Money
+import com.moneycounter.domain.Payment
 import com.moneycounter.domain.ReceivableStatus
 import com.moneycounter.domain.Receivable
 import com.moneycounter.domain.UnitedDenomination
@@ -137,6 +138,13 @@ fun UnifiedReportScreen(
                     }
                 }
                 val totalOutstanding = periodReceivables.fold(Money.ZERO) { acc, r -> acc.add(r.amount) }
+                    .setScale(Money.SCALE)
+                val periodPayments = remember(uiState.payments, periodStart, periodEnd, u.currencyId) {
+                    uiState.payments.filter {
+                        it.currencyId == u.currencyId && it.at in periodStart..periodEnd
+                    }
+                }
+                val totalCollected = periodPayments.fold(Money.ZERO) { acc, p -> acc.add(p.amount) }
                     .setScale(Money.SCALE)
                 var exportMenuOpen by remember { mutableStateOf(false) }
                 LazyColumn(
@@ -306,6 +314,32 @@ fun UnifiedReportScreen(
                         }
                     }
 
+                    if (periodPayments.isNotEmpty()) {
+                        item {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                LuisoSectionHeader(text = "COBROS DEL PERÍODO")
+                                TermInfo(
+                                    correctTerm = "Cobro / Recibo de cobro",
+                                    oldName = "Liquidar deuda",
+                                    explanation = "Efectivo que entra y cancela una cuenta por cobrar."
+                                )
+                            }
+                        }
+
+                        items(periodPayments, key = { it.id }) { payment ->
+                            PaymentLine(item = payment, symbol = u.currencySymbol)
+                        }
+
+                        item {
+                            LuisoCard(modifier = Modifier.fillMaxWidth()) {
+                                DetailRow(
+                                    "TOTAL COBRADO",
+                                    formatMoneyBigDecimal(totalCollected, u.currencySymbol)
+                                )
+                            }
+                        }
+                    }
+
                     item {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             LuisoButton(
@@ -452,6 +486,35 @@ private fun ReceivableLine(item: Receivable, symbol: String) {
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+}
+
+@Composable
+private fun PaymentLine(item: Payment, symbol: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = item.debtorName,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = formatMoneyBigDecimal(item.amount, symbol),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
             )
         }
     }

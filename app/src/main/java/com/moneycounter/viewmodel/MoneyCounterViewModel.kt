@@ -12,6 +12,7 @@ import com.moneycounter.domain.InventoryWriteoff
 import com.moneycounter.domain.MeasurementUnit
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.MoneyCounterCalculator
+import com.moneycounter.domain.Payment
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductPrice
 import com.moneycounter.domain.ProductSelection
@@ -25,11 +26,13 @@ import com.moneycounter.repository.CurrencySettings
 import com.moneycounter.repository.DenominationRepository
 import com.moneycounter.repository.JsonCurrencyRepository
 import com.moneycounter.repository.JsonDenominationRepository
+import com.moneycounter.repository.JsonPaymentRepository
 import com.moneycounter.repository.JsonProductRepository
 import com.moneycounter.repository.JsonSavedCountRepository
 import com.moneycounter.repository.JsonReceivableRepository
 import com.moneycounter.repository.JsonUnitRepository
 import com.moneycounter.repository.JsonWriteoffRepository
+import com.moneycounter.repository.PaymentRepository
 import com.moneycounter.repository.ProductRepository
 import com.moneycounter.repository.ReceivableRepository
 import com.moneycounter.repository.SavedCountRepository
@@ -60,7 +63,8 @@ data class MoneyCounterUiState(
     val productSelections: List<ProductSelection> = listOf(ProductSelection()),
     val units: List<MeasurementUnit> = emptyList(),
     val writeoffs: List<InventoryWriteoff> = emptyList(),
-    val receivables: List<Receivable> = emptyList()
+    val receivables: List<Receivable> = emptyList(),
+    val payments: List<Payment> = emptyList()
 )
 
 class MoneyCounterViewModel(application: Application) : AndroidViewModel(application) {
@@ -72,6 +76,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     private val unitRepository: UnitRepository = JsonUnitRepository(application)
     private val writeoffRepository: WriteoffRepository = JsonWriteoffRepository(application)
     private val receivableRepository: ReceivableRepository = JsonReceivableRepository(application)
+    private val paymentRepository: PaymentRepository = JsonPaymentRepository(application)
 
     private val _uiState = MutableStateFlow(MoneyCounterUiState())
     val uiState: StateFlow<MoneyCounterUiState> = _uiState.asStateFlow()
@@ -84,6 +89,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         loadUnits()
         loadWriteoffs()
         loadReceivables()
+        loadPayments()
     }
 
     val selectedCurrency: Currency
@@ -650,6 +656,43 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch { receivableRepository.saveAll(receivables) }
     }
 
+    private fun loadPayments() {
+        viewModelScope.launch {
+            val payments = paymentRepository.load()
+            _uiState.update { it.copy(payments = payments) }
+        }
+    }
+
+    private fun persistPayments() {
+        val payments = _uiState.value.payments
+        viewModelScope.launch { paymentRepository.saveAll(payments) }
+    }
+
+    /** Settles ("cobra") an OPEN receivable: records a Payment (cash in) for its full
+     *  amount and flips the receivable to SETTLED. Does NOT touch stock (already deducted
+     *  at the credit sale) and does NOT create a SavedCount or re-create the debt.
+     *  Returns false with no changes if the receivable is unknown or not OPEN. */
+    fun settleReceivable(receivableId: String): Boolean {
+        val state = _uiState.value
+        val (updatedReceivables, payment) = settleReceivablePure(
+            receivables = state.receivables,
+            receivableId = receivableId,
+            paymentId = UUID.randomUUID().toString(),
+            now = System.currentTimeMillis()
+        )
+        if (payment == null) return false
+
+        _uiState.update { st ->
+            st.copy(
+                receivables = updatedReceivables,
+                payments = listOf(payment) + st.payments
+            )
+        }
+        persistReceivables()
+        persistPayments()
+        return true
+    }
+
     private fun persistCurrencySettings() {
         val state = _uiState.value
         viewModelScope.launch {
@@ -743,6 +786,35 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                 if (product.id != productId) product
                 else product.copy(stock = product.stock.subtract(quantity).setScale(Money.SCALE))
             }
+        }
+
+        /** Pure settlement logic for a "cobro": if [receivableId] names an OPEN receivable,
+         *  returns the receivables list with that one flipped to SETTLED (settledAt = [now])
+         *  plus the Payment recording the cash collected (amount = receivable.amount).
+         *  Does not touch products/stock. If the id is unknown or the receivable is not
+         *  OPEN, returns the original list unchanged and a null Payment (no-op). */
+        fun settleReceivablePure(
+            receivables: List<Receivable>,
+            receivableId: String,
+            paymentId: String,
+            now: Long
+        ): Pair<List<Receivable>, Payment?> {
+            val receivable = receivables.firstOrNull { it.id == receivableId && it.status == ReceivableStatus.OPEN }
+                ?: return receivables to null
+
+            val payment = Payment(
+                id = paymentId,
+                at = now,
+                receivableId = receivable.id,
+                debtorName = receivable.debtorName,
+                amount = receivable.amount,
+                currencyId = receivable.currencyId
+            )
+
+            val updated = receivables.map {
+                if (it.id == receivableId) it.copy(status = ReceivableStatus.SETTLED, settledAt = now) else it
+            }
+            return updated to payment
         }
     }
 }
