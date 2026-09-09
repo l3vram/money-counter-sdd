@@ -146,6 +146,13 @@ cantidad (`QuantityParser`), el parseo de cantidades de producto y el precio efe
 ./gradlew test
 ```
 
+## Terminología
+
+La app usa algunos nombres viejos en pantalla (Objetivo, Contado, Faltante/Excedente, Stock,
+Reporte unificado) que no corresponden a los términos contables correctos. Cada uno tiene un
+ícono ℹ️ junto al label que explica el término correcto y su equivalencia. Ver el detalle
+completo en [GLOSSARY.md](./GLOSSARY.md).
+
 ## Licencia
 
 Proyecto personal. Sin licencia específica — uso libre con atribución.

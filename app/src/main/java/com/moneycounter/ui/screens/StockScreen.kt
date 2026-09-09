@@ -53,6 +53,7 @@ import com.moneycounter.ui.components.LuisoNotice
 import com.moneycounter.ui.components.LuisoSectionHeader
 import com.moneycounter.ui.components.LuisoTextField
 import com.moneycounter.ui.components.LuisoTopBar
+import com.moneycounter.ui.components.TermInfo
 import com.moneycounter.viewmodel.MoneyCounterViewModel
 import java.math.BigDecimal
 
@@ -82,7 +83,14 @@ fun StockScreen(
             item { Spacer(modifier = Modifier.height(8.dp)) }
 
             item {
-                LuisoSectionHeader(text = "PRODUCTOS")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    LuisoSectionHeader(text = "PRODUCTOS")
+                    TermInfo(
+                        correctTerm = "Inventario / Existencias",
+                        oldName = "Stock",
+                        explanation = "Cantidad disponible de cada producto."
+                    )
+                }
             }
 
             if (uiState.products.isEmpty()) {

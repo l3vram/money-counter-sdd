@@ -53,6 +53,7 @@ import com.moneycounter.ui.components.LuisoNotice
 import com.moneycounter.ui.components.LuisoOutlineButton
 import com.moneycounter.ui.components.LuisoSectionHeader
 import com.moneycounter.ui.components.LuisoTopBar
+import com.moneycounter.ui.components.TermInfo
 import com.moneycounter.ui.components.formatMoneyBigDecimal
 import com.moneycounter.viewmodel.MoneyCounterViewModel
 import java.math.BigDecimal
@@ -165,6 +166,11 @@ fun ReportsScreen(
                     LuisoSectionHeader(
                         text = "REPORTES EN $currencyLabel",
                         modifier = Modifier.weight(1f)
+                    )
+                    TermInfo(
+                        correctTerm = "Cierre / Resumen consolidado",
+                        oldName = "Reporte unificado",
+                        explanation = "Consolidación de las ventas del período."
                     )
                 }
             }

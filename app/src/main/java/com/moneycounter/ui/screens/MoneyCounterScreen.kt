@@ -65,6 +65,7 @@ import com.moneycounter.ui.components.LuisoNotice
 import com.moneycounter.ui.components.LuisoOutlineButton
 import com.moneycounter.ui.components.LuisoTextField
 import com.moneycounter.ui.components.LuisoTopBar
+import com.moneycounter.ui.components.TermInfo
 import com.moneycounter.ui.components.formatMoneyBigDecimal
 import com.moneycounter.ui.theme.LuisoYellow
 import com.moneycounter.viewmodel.MoneyCounterViewModel
@@ -579,7 +580,10 @@ private fun SummarySection(
                 SummaryRow(
                     label = "OBJETIVO",
                     value = formatMoneyBigDecimal(targetAmount, currencySymbol),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    termInfoCorrectTerm = "Importe a cobrar",
+                    termInfoOldName = "Objetivo",
+                    termInfoExplanation = "Suma de los productos = lo que se debe cobrar."
                 )
             }
 
@@ -590,7 +594,10 @@ private fun SummarySection(
                     CounterStatus.COMPLETED -> MaterialTheme.colorScheme.primary
                     CounterStatus.OVER -> MaterialTheme.colorScheme.error
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
-                }
+                },
+                termInfoCorrectTerm = "Arqueo de caja",
+                termInfoOldName = "Contado",
+                termInfoExplanation = "Conteo físico del efectivo recibido por denominación."
             )
 
             if (targetAmount != null && targetAmount > zero) {
@@ -649,14 +656,24 @@ private fun SummarySection(
                         }
                     }
                     CounterStatus.OVER -> {
-                        Text(
-                            text = "EXCEDENTE",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.error,
-                            textAlign = TextAlign.Center,
+                        Row(
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
-                        )
+                        ) {
+                            Text(
+                                text = "EXCEDENTE",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error,
+                                textAlign = TextAlign.Center
+                            )
+                            TermInfo(
+                                correctTerm = "Diferencia de caja",
+                                oldName = "Faltante / Excedente",
+                                explanation = "Diferencia entre lo cobrado y el arqueo de caja."
+                            )
+                        }
                         Text(
                             text = "+${formatMoneyBigDecimal(result.excess, currencySymbol)}",
                             style = MaterialTheme.typography.headlineSmall,
@@ -667,14 +684,24 @@ private fun SummarySection(
                         )
                     }
                     CounterStatus.COUNTING -> {
-                        Text(
-                            text = "FALTAN",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
+                        Row(
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
-                        )
+                        ) {
+                            Text(
+                                text = "FALTAN",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                            TermInfo(
+                                correctTerm = "Diferencia de caja",
+                                oldName = "Faltante / Excedente",
+                                explanation = "Diferencia entre lo cobrado y el arqueo de caja."
+                            )
+                        }
                         Text(
                             text = formatMoneyBigDecimal(result.remaining, currencySymbol),
                             style = MaterialTheme.typography.headlineSmall,
@@ -712,7 +739,10 @@ private fun SummarySection(
 private fun SummaryRow(
     label: String,
     value: String,
-    color: Color
+    color: Color,
+    termInfoCorrectTerm: String? = null,
+    termInfoOldName: String? = null,
+    termInfoExplanation: String? = null
 ) {
     Row(
         modifier = Modifier
@@ -721,12 +751,21 @@ private fun SummaryRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = color
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
+            if (termInfoCorrectTerm != null && termInfoOldName != null && termInfoExplanation != null) {
+                TermInfo(
+                    correctTerm = termInfoCorrectTerm,
+                    oldName = termInfoOldName,
+                    explanation = termInfoExplanation
+                )
+            }
+        }
         Text(
             text = value,
             style = MaterialTheme.typography.headlineSmall,

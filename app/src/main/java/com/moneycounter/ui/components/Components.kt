@@ -26,12 +26,19 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -255,6 +262,68 @@ fun LuisoNotice(
                 )
             }
         }
+    }
+}
+
+/**
+ * Small info affordance placed next to an on-screen label. Tapping it opens a dialog
+ * showing the correct accounting term, the old label still shown in the UI, and a
+ * short explanation. Purely presentational — no data/logic side effects.
+ */
+@Composable
+fun TermInfo(
+    correctTerm: String,
+    oldName: String,
+    explanation: String,
+    modifier: Modifier = Modifier
+) {
+    var showDialog by remember { mutableStateOf(false) }
+
+    IconButton(
+        onClick = { showDialog = true },
+        modifier = modifier.size(20.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Info,
+            contentDescription = "Información: $correctTerm",
+            tint = LuisoGreen,
+            modifier = Modifier.size(16.dp)
+        )
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = {
+                Text(
+                    text = correctTerm,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = LuisoGreen
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Nombre anterior: $oldName",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(Dimen12))
+                    Text(
+                        text = explanation,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("Entendido")
+                }
+            },
+            containerColor = LuisoInfoContainer
+        )
     }
 }
 

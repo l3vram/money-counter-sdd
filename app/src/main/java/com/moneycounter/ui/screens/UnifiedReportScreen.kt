@@ -46,6 +46,7 @@ import com.moneycounter.ui.components.LuisoOutlineButton
 import com.moneycounter.ui.components.LuisoSectionHeader
 import com.moneycounter.ui.components.LuisoStatCard
 import com.moneycounter.ui.components.LuisoTopBar
+import com.moneycounter.ui.components.TermInfo
 import com.moneycounter.ui.components.formatMoney
 import com.moneycounter.ui.components.formatMoneyBigDecimal
 import com.moneycounter.util.ExcelExporter
@@ -80,6 +81,13 @@ fun UnifiedReportScreen(
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
+                },
+                actions = {
+                    TermInfo(
+                        correctTerm = "Cierre / Resumen consolidado",
+                        oldName = "Reporte unificado",
+                        explanation = "Consolidación de las ventas del período."
+                    )
                 }
             )
         }
