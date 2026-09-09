@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "305096312538-h0nichck2tocruhr0dfo0b3156dadq5a.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.moneycounter",
+            "certificate_hash": "080b552d8f1409815db771384b7e1457ad066e93"
+          }
+        },
+        {
           "client_id": "305096312538-0ocn8eqlqsen2e9hfhmrv3p74qg7tubk.apps.googleusercontent.com",
           "client_type": 3
         }
