@@ -3,6 +3,9 @@ package com.moneycounter.access
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.moneycounter.auth.AuthUser
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
 class FirestoreAccessRepository(
@@ -38,5 +41,39 @@ class FirestoreAccessRepository(
             val accessStr = snapshot.getString("access")
             return AccessStatus.fromStorage(accessStr) ?: AccessStatus.PENDING
         }
+    }
+
+    override suspend fun getUserProfile(uid: String): UserProfileData? {
+        val doc = usersCollection.document(uid).get().await()
+        if (!doc.exists()) return null
+        return toProfile(uid, doc)
+    }
+
+    override fun observeUserProfile(uid: String): Flow<UserProfileData?> = callbackFlow {
+        val docRef = usersCollection.document(uid)
+        val registration = docRef.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                close(error)
+                return@addSnapshotListener
+            }
+            if (snapshot == null || !snapshot.exists()) {
+                trySend(null)
+            } else {
+                trySend(toProfile(uid, snapshot))
+            }
+        }
+        awaitClose { registration.remove() }
+    }
+
+    private fun toProfile(uid: String, doc: com.google.firebase.firestore.DocumentSnapshot): UserProfileData {
+        val data = hashMapOf<String, Any?>(
+            "email" to doc.getString("email"),
+            "displayName" to doc.getString("displayName"),
+            "photoUrl" to doc.getString("photoUrl"),
+            "access" to doc.getString("access"),
+            "createdAt" to doc.getTimestamp("createdAt")?.toDate()?.time,
+            "updatedAt" to doc.getTimestamp("updatedAt")?.toDate()?.time
+        )
+        return UserProfileData.fromMap(uid, data)
     }
 }
