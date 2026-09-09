@@ -40,7 +40,8 @@ import com.moneycounter.domain.UnitedProduct
 import com.moneycounter.domain.uniteCounts
 import com.moneycounter.ui.components.LuisoButton
 import com.moneycounter.ui.components.LuisoCard
-import com.moneycounter.ui.components.LuisoEmptyState
+import com.moneycounter.ui.components.LuisoNotice
+import com.moneycounter.ui.components.LuisoNoticeType
 import com.moneycounter.ui.components.LuisoOutlineButton
 import com.moneycounter.ui.components.LuisoSectionHeader
 import com.moneycounter.ui.components.LuisoStatCard
@@ -85,7 +86,7 @@ fun UnifiedReportScreen(
     ) { padding ->
         when {
             selected.isEmpty() -> {
-                LuisoEmptyState(
+                LuisoNotice(
                     message = "No hay registros seleccionados.",
                     modifier = Modifier
                         .fillMaxSize()
@@ -95,8 +96,9 @@ fun UnifiedReportScreen(
             }
 
             united.isFailure -> {
-                LuisoEmptyState(
+                LuisoNotice(
                     message = "Los registros seleccionados son de monedas distintas. Selecciona ventas de una misma moneda.",
+                    type = LuisoNoticeType.ERROR,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)

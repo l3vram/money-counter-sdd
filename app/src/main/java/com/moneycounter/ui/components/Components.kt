@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,7 +17,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -33,11 +37,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.moneycounter.ui.theme.Dimen12
 import com.moneycounter.ui.theme.Dimen16
 import com.moneycounter.ui.theme.Dimen56
-import com.moneycounter.ui.theme.LuisoGreenBright
+import com.moneycounter.ui.theme.LuisoError
+import com.moneycounter.ui.theme.LuisoErrorContainer
+import com.moneycounter.ui.theme.LuisoGreen
+import com.moneycounter.ui.theme.LuisoInfoContainer
+import com.moneycounter.ui.theme.LuisoOnWarning
+import com.moneycounter.ui.theme.LuisoWarningContainer
 import com.moneycounter.ui.theme.LuisoYellow
 
 @Composable
@@ -179,41 +190,70 @@ fun LuisoTopBar(
     }
 }
 
+enum class LuisoNoticeType { INFO, WARNING, ERROR }
+
+private data class LuisoNoticeColors(
+    val container: Color,
+    val content: Color,
+    val label: String,
+    val icon: ImageVector
+)
+
 @Composable
-fun LuisoEmptyState(
+fun LuisoNotice(
     message: String,
-    modifier: Modifier = Modifier,
-    icon: ImageVector? = null,
-    accentColor: Color? = null
+    type: LuisoNoticeType = LuisoNoticeType.INFO,
+    modifier: Modifier = Modifier
 ) {
-    Column(
+    val colors = when (type) {
+        LuisoNoticeType.INFO ->
+            LuisoNoticeColors(LuisoInfoContainer, LuisoGreen, "INFORMACIÓN", Icons.Filled.Info)
+        LuisoNoticeType.WARNING ->
+            LuisoNoticeColors(LuisoWarningContainer, LuisoOnWarning, "AVISO", Icons.Filled.Warning)
+        LuisoNoticeType.ERROR ->
+            LuisoNoticeColors(LuisoErrorContainer, LuisoError, "ERROR", Icons.Filled.ErrorOutline)
+    }
+
+    Surface(
         modifier = modifier,
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        shape = RoundedCornerShape(12.dp),
+        color = colors.container
     ) {
-        LuisoCircle(
-            content = {
-                if (icon != null) {
+        Row(
+            modifier = Modifier.padding(Dimen12),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = colors.content.copy(alpha = 0.14f)
+            ) {
+                Box(
+                    modifier = Modifier.size(36.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(
-                        imageVector = icon,
+                        imageVector = colors.icon,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                } else {
-                    Text(
-                        text = "L",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary
+                        tint = colors.content,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
-        )
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyLarge,
-            color = accentColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = Dimen16)
-        )
+            Spacer(modifier = Modifier.width(Dimen12))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = colors.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.content
+                )
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
     }
 }
 
@@ -328,24 +368,6 @@ fun LuisoAvatar(
                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.size((size / 2).dp)
             )
-        }
-    }
-}
-
-@Composable
-private fun LuisoCircle(
-    content: @Composable () -> Unit,
-    modifier: Modifier = Modifier,
-    size: Int = 48,
-    background: Color = MaterialTheme.colorScheme.primaryContainer
-) {
-    Surface(
-        modifier = modifier.size(size.dp),
-        shape = RoundedCornerShape(size / 2),
-        color = background
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            content()
         }
     }
 }

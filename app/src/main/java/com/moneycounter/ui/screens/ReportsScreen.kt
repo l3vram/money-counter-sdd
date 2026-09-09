@@ -49,7 +49,7 @@ import com.moneycounter.domain.SavedCount
 import com.moneycounter.domain.groupByMonthDay
 import com.moneycounter.domain.keyString
 import com.moneycounter.ui.components.LuisoButton
-import com.moneycounter.ui.components.LuisoEmptyState
+import com.moneycounter.ui.components.LuisoNotice
 import com.moneycounter.ui.components.LuisoOutlineButton
 import com.moneycounter.ui.components.LuisoSectionHeader
 import com.moneycounter.ui.components.LuisoTopBar
@@ -198,7 +198,7 @@ fun ReportsScreen(
 
             if (filtered.isEmpty()) {
                 item {
-                    LuisoEmptyState(
+                    LuisoNotice(
                         message = "Todavía no hay reportes.",
                         modifier = Modifier
                             .fillMaxWidth()

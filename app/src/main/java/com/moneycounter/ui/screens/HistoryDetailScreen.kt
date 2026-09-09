@@ -34,7 +34,8 @@ import com.moneycounter.domain.SavedCountItem
 import com.moneycounter.domain.SavedProductItem
 import com.moneycounter.ui.components.LuisoButton
 import com.moneycounter.ui.components.LuisoCard
-import com.moneycounter.ui.components.LuisoEmptyState
+import com.moneycounter.ui.components.LuisoNotice
+import com.moneycounter.ui.components.LuisoNoticeType
 import com.moneycounter.ui.components.LuisoSectionHeader
 import com.moneycounter.ui.components.LuisoTopBar
 import com.moneycounter.ui.components.formatMoney
@@ -74,8 +75,9 @@ fun HistoryDetailScreen(
         }
     ) { padding ->
         if (saved == null) {
-            LuisoEmptyState(
+            LuisoNotice(
                 message = "Registro no encontrado",
+                type = LuisoNoticeType.ERROR,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)

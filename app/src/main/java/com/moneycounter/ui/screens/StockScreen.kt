@@ -49,7 +49,7 @@ import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductPrice
 import com.moneycounter.ui.components.LuisoButton
 import com.moneycounter.ui.components.LuisoCard
-import com.moneycounter.ui.components.LuisoEmptyState
+import com.moneycounter.ui.components.LuisoNotice
 import com.moneycounter.ui.components.LuisoSectionHeader
 import com.moneycounter.ui.components.LuisoTextField
 import com.moneycounter.ui.components.LuisoTopBar
@@ -87,7 +87,7 @@ fun StockScreen(
 
             if (uiState.products.isEmpty()) {
                 item {
-                    LuisoEmptyState(
+                    LuisoNotice(
                         message = "Todavía no hay productos. Agrega el primero."
                     )
                 }

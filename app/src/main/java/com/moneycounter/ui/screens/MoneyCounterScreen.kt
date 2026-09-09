@@ -61,7 +61,7 @@ import com.moneycounter.access.UserProfileData
 import com.moneycounter.ui.components.DenominationRow
 import com.moneycounter.ui.components.LuisoAvatar
 import com.moneycounter.ui.components.LuisoButton
-import com.moneycounter.ui.components.LuisoEmptyState
+import com.moneycounter.ui.components.LuisoNotice
 import com.moneycounter.ui.components.LuisoOutlineButton
 import com.moneycounter.ui.components.LuisoTextField
 import com.moneycounter.ui.components.LuisoTopBar
@@ -286,7 +286,7 @@ private fun ProductsSection(
 
             if (productsWithPrice.isEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
-                LuisoEmptyState(
+                LuisoNotice(
                     message = "El Luiso está listo. Registra tu primer conteo.",
                     modifier = Modifier.fillMaxWidth()
                 )
