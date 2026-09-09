@@ -54,8 +54,7 @@ import com.moneycounter.viewmodel.MoneyCounterViewModel
 @Composable
 fun DenominationManagementScreen(
     viewModel: MoneyCounterViewModel,
-    onNavigateBack: () -> Unit,
-    onLogout: () -> Unit
+    onNavigateBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val currencySymbol = uiState.currencies.firstOrNull { it.id == uiState.selectedCurrencyId }?.symbol ?: "$"
@@ -198,16 +197,6 @@ fun DenominationManagementScreen(
                         errorMessage = null
                     },
                     leadingIcon = Icons.Default.Add,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            item { Spacer(modifier = Modifier.height(24.dp)) }
-
-            item {
-                LuisoOutlineButton(
-                    text = "CERRAR SESIÓN",
-                    onClick = onLogout,
                     modifier = Modifier.fillMaxWidth()
                 )
             }

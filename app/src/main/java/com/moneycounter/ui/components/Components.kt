@@ -1,5 +1,6 @@
 package com.moneycounter.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,8 +12,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -25,11 +29,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.moneycounter.ui.theme.Dimen16
 import com.moneycounter.ui.theme.Dimen56
+import com.moneycounter.ui.theme.LuisoGreenBright
 import com.moneycounter.ui.theme.LuisoYellow
 
 @Composable
@@ -273,6 +281,54 @@ fun LuisoSectionHeader(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(start = Dimen16)
         )
+    }
+}
+
+@Composable
+fun LuisoAvatar(
+    photoUrl: String?,
+    fallbackText: String?,
+    modifier: Modifier = Modifier,
+    size: Int = 32
+) {
+    val initial = fallbackText?.firstOrNull()?.uppercase().orEmpty()
+    Box(
+        modifier = modifier
+            .size(size.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primaryContainer),
+        contentAlignment = Alignment.Center
+    ) {
+        if (photoUrl != null) {
+            AsyncImage(
+                model = photoUrl,
+                contentDescription = "Foto de perfil",
+                modifier = Modifier
+                    .size(size.dp)
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop
+            )
+            if (initial.isNotEmpty()) {
+                Text(
+                    text = initial,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        } else if (initial.isNotEmpty()) {
+            Text(
+                text = initial,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Default.Person,
+                contentDescription = "Foto de perfil",
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size((size / 2).dp)
+            )
+        }
     }
 }
 

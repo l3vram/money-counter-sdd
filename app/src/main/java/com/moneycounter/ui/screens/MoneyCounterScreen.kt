@@ -57,7 +57,9 @@ import com.moneycounter.domain.Currency
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductSelection
+import com.moneycounter.access.UserProfileData
 import com.moneycounter.ui.components.DenominationRow
+import com.moneycounter.ui.components.LuisoAvatar
 import com.moneycounter.ui.components.LuisoButton
 import com.moneycounter.ui.components.LuisoEmptyState
 import com.moneycounter.ui.components.LuisoOutlineButton
@@ -72,7 +74,10 @@ import java.math.BigDecimal
 @Composable
 fun MoneyCounterScreen(
     viewModel: MoneyCounterViewModel,
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    onNavigateToProfile: () -> Unit,
+    onNavigateToStock: () -> Unit,
+    profile: UserProfileData?
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showClearDialog by remember { mutableStateOf(false) }
@@ -86,12 +91,23 @@ fun MoneyCounterScreen(
                 LuisoTopBar(
                     title = "El Luiso",
                     actions = {
-                        IconButton(onClick = onNavigateToSettings) {
-                            Icon(
-                                Icons.Default.Settings,
-                                contentDescription = "Configurar",
-                                tint = MaterialTheme.colorScheme.onPrimary
-                            )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = onNavigateToProfile) {
+                                LuisoAvatar(
+                                    photoUrl = profile?.photoUrl,
+                                    fallbackText = profile?.displayName,
+                                    size = 30
+                                )
+                            }
+                            IconButton(onClick = onNavigateToSettings) {
+                                Icon(
+                                    Icons.Default.Settings,
+                                    contentDescription = "Configurar",
+                                    tint = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
                         }
                     }
                 )
@@ -138,8 +154,8 @@ fun MoneyCounterScreen(
                     onSelectProduct = { index, productId -> viewModel.updateProductSelection(index, productId) },
                     onQuantityChange = { index, text -> viewModel.updateProductQuantity(index, text) },
                     onSelectCurrency = { viewModel.selectCurrency(it) },
-                    onNavigateToSettings = onNavigateToSettings
-                )
+                onNavigateToStock = onNavigateToStock
+            )
             }
 
             item {
@@ -239,7 +255,7 @@ private fun ProductsSection(
     onSelectProduct: (Int, String) -> Unit,
     onQuantityChange: (Int, String) -> Unit,
     onSelectCurrency: (String) -> Unit,
-    onNavigateToSettings: () -> Unit
+    onNavigateToStock: () -> Unit
 ) {
     val currency = currencies.firstOrNull { it.id == selectedCurrencyId } ?: currencies.firstOrNull()
     val productsWithPrice = products.filter { it.hasPriceIn(selectedCurrencyId) }
@@ -276,7 +292,7 @@ private fun ProductsSection(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 FilledTonalButton(
-                    onClick = onNavigateToSettings,
+                    onClick = onNavigateToStock,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(

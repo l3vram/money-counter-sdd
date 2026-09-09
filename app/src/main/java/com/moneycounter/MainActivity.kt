@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlin.math.min
 import com.moneycounter.ui.AuthenticationGate
+import com.moneycounter.access.UserProfileData
 import com.moneycounter.ui.screens.DenominationManagementScreen
 import com.moneycounter.ui.screens.HistoryDetailScreen
 import com.moneycounter.ui.screens.MoneyCounterScreen
@@ -39,6 +40,7 @@ import com.moneycounter.ui.screens.ReportsScreen
 import com.moneycounter.ui.screens.StockReportScreen
 import com.moneycounter.ui.screens.StockScreen
 import com.moneycounter.ui.screens.UnifiedReportScreen
+import com.moneycounter.ui.screens.UserProfileScreen
 import com.moneycounter.ui.theme.MoneyCounterTheme
 import com.moneycounter.viewmodel.MoneyCounterViewModel
 
@@ -48,8 +50,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MoneyCounterTheme {
-                AuthenticationGate { onLogout ->
-                    MoneyCounterApp(onLogout = onLogout)
+                AuthenticationGate { onLogout, profile, onLoadProfile ->
+                    MoneyCounterApp(
+                        onLogout = onLogout,
+                        profile = profile,
+                        onLoadProfile = onLoadProfile
+                    )
                 }
             }
         }
@@ -57,7 +63,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MoneyCounterApp(onLogout: () -> Unit) {
+fun MoneyCounterApp(
+    onLogout: () -> Unit,
+    profile: UserProfileData?,
+    onLoadProfile: () -> Unit
+) {
     val viewModel: MoneyCounterViewModel = viewModel()
     var currentScreen by remember { mutableStateOf("counter") }
     var selectedHistoryId by remember { mutableStateOf<String?>(null) }
@@ -125,7 +135,16 @@ fun MoneyCounterApp(onLogout: () -> Unit) {
                 when (currentScreen) {
                     "counter" -> MoneyCounterScreen(
                         viewModel = viewModel,
-                        onNavigateToSettings = { currentScreen = "settings" }
+                        onNavigateToSettings = { currentScreen = "settings" },
+                        onNavigateToProfile = { currentScreen = "profile" },
+                        onNavigateToStock = { currentScreen = "stock" },
+                        profile = profile
+                    )
+                    "profile" -> UserProfileScreen(
+                        profile = profile,
+                        onBack = { currentScreen = "counter" },
+                        onLogout = onLogout,
+                        onRetry = onLoadProfile
                     )
                     "stock" -> StockScreen(
                         viewModel = viewModel,
@@ -137,8 +156,7 @@ fun MoneyCounterApp(onLogout: () -> Unit) {
                     )
                     "settings" -> DenominationManagementScreen(
                         viewModel = viewModel,
-                        onNavigateBack = { currentScreen = "counter" },
-                        onLogout = onLogout
+                        onNavigateBack = { currentScreen = "counter" }
                     )
                     "reports" -> ReportsScreen(
                         viewModel = viewModel,
