@@ -44,6 +44,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.moneycounter.domain.Currency
+import com.moneycounter.domain.InventoryWriteoff
 import com.moneycounter.domain.MeasurementUnit
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductPrice
@@ -56,6 +57,9 @@ import com.moneycounter.ui.components.LuisoTopBar
 import com.moneycounter.ui.components.TermInfo
 import com.moneycounter.viewmodel.MoneyCounterViewModel
 import java.math.BigDecimal
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun StockScreen(
@@ -66,7 +70,9 @@ fun StockScreen(
     var showAddProductDialog by remember { mutableStateOf(false) }
     var showEditProductDialog by remember { mutableStateOf<Product?>(null) }
     var showDeleteProductDialog by remember { mutableStateOf<Product?>(null) }
+    var showWriteoffDialog by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var writeoffError by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
@@ -133,6 +139,47 @@ fun StockScreen(
                     modifier = Modifier.fillMaxWidth(),
                     leadingIcon = Icons.Default.Description
                 )
+            }
+
+            item { Spacer(modifier = Modifier.height(16.dp)) }
+
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    LuisoSectionHeader(text = "BAJAS POR MERMA")
+                    TermInfo(
+                        correctTerm = "Ajuste de inventario por merma",
+                        oldName = "—",
+                        explanation = "Salida de inventario sin venta, por pérdida."
+                    )
+                }
+            }
+
+            item {
+                LuisoButton(
+                    text = "BAJA POR MERMA",
+                    onClick = {
+                        showWriteoffDialog = true
+                        writeoffError = null
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    leadingIcon = Icons.Default.Delete,
+                    enabled = uiState.products.any { it.hasPriceIn(uiState.selectedCurrencyId) }
+                )
+            }
+
+            if (uiState.writeoffs.isEmpty()) {
+                item {
+                    LuisoNotice(
+                        message = "Todavía no hay bajas por merma registradas."
+                    )
+                }
+            } else {
+                items(uiState.writeoffs, key = { it.id }) { writeoff ->
+                    WriteoffRow(
+                        writeoff = writeoff,
+                        symbolOf = { id -> uiState.currencies.firstOrNull { it.id == id }?.symbol ?: id }
+                    )
+                }
             }
 
             item { Spacer(modifier = Modifier.height(24.dp)) }
@@ -216,6 +263,179 @@ fun StockScreen(
             }
         )
     }
+
+    if (showWriteoffDialog) {
+        val eligibleProducts = uiState.products.filter { it.hasPriceIn(uiState.selectedCurrencyId) }
+        WriteoffDialog(
+            products = eligibleProducts,
+            onConfirm = { productId, quantityText, reason ->
+                if (viewModel.registerWriteoff(productId, quantityText, reason)) {
+                    showWriteoffDialog = false
+                    writeoffError = null
+                } else {
+                    writeoffError = "Revisa los datos: selecciona un producto y una cantidad mayor que cero."
+                }
+            },
+            onDismiss = {
+                showWriteoffDialog = false
+                writeoffError = null
+            },
+            errorMessage = writeoffError
+        )
+    }
+}
+
+@Composable
+private fun WriteoffRow(
+    writeoff: InventoryWriteoff,
+    symbolOf: (String) -> String
+) {
+    LuisoCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = writeoff.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${writeoffDateFormatter.format(Date(writeoff.at))} · " +
+                            "${writeoff.quantity.stripTrailingZeros().toPlainString()} ${writeoff.unit}" +
+                            (writeoff.reason?.let { " · $it" } ?: ""),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text(
+                text = "-${symbolOf(writeoff.currencyId)}${writeoff.lossValue.toPlainString()}",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+}
+
+private val writeoffDateFormatter = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+
+@Composable
+private fun WriteoffDialog(
+    products: List<Product>,
+    onConfirm: (productId: String, quantityText: String, reason: String?) -> Unit,
+    onDismiss: () -> Unit,
+    errorMessage: String? = null
+) {
+    var selectedProductId by remember { mutableStateOf(products.firstOrNull()?.id ?: "") }
+    var quantityText by remember { mutableStateOf("") }
+    var reason by remember { mutableStateOf("") }
+    var productMenuOpen by remember { mutableStateOf(false) }
+
+    val selectedProduct = products.firstOrNull { it.id == selectedProductId }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Baja por merma") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 400.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                if (products.isEmpty()) {
+                    Text(
+                        text = "No hay productos con precio en la moneda activa.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                } else {
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = { productMenuOpen = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "Producto: ${selectedProduct?.name ?: "Selecciona"}",
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = productMenuOpen,
+                            onDismissRequest = { productMenuOpen = false }
+                        ) {
+                            products.forEach { p ->
+                                DropdownMenuItem(
+                                    text = { Text(p.name) },
+                                    onClick = {
+                                        selectedProductId = p.id
+                                        productMenuOpen = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    LuisoTextField(
+                        value = quantityText,
+                        onValueChange = { newValue ->
+                            if (
+                                newValue.isEmpty() ||
+                                newValue.trim()
+                                    .replace(',', '.')
+                                    .matches(Regex("\\d*\\.?\\d*"))
+                            ) {
+                                quantityText = newValue
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = "Cantidad (${selectedProduct?.unit ?: ""})",
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    LuisoTextField(
+                        value = reason,
+                        onValueChange = { reason = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = "Motivo (opcional)"
+                    )
+                }
+
+                if (errorMessage != null) {
+                    Text(
+                        text = errorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onConfirm(selectedProductId, quantityText, reason.takeIf { it.isNotBlank() })
+                },
+                enabled = products.isNotEmpty()
+            ) {
+                Text("CONFIRMAR")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("CANCELAR")
+            }
+        }
+    )
 }
 
 @Composable

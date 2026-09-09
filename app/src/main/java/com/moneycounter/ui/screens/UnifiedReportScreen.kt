@@ -35,6 +35,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.moneycounter.domain.InventoryWriteoff
+import com.moneycounter.domain.Money
 import com.moneycounter.domain.UnitedDenomination
 import com.moneycounter.domain.UnitedProduct
 import com.moneycounter.domain.uniteCounts
@@ -116,6 +118,15 @@ fun UnifiedReportScreen(
 
             else -> {
                 val u = united.getOrThrow()
+                val periodStart = selected.minOf { it.savedAt }
+                val periodEnd = selected.maxOf { it.savedAt }
+                val periodWriteoffs = remember(uiState.writeoffs, periodStart, periodEnd, u.currencyId) {
+                    uiState.writeoffs.filter {
+                        it.currencyId == u.currencyId && it.at in periodStart..periodEnd
+                    }
+                }
+                val totalLoss = periodWriteoffs.fold(Money.ZERO) { acc, w -> acc.add(w.lossValue) }
+                    .setScale(Money.SCALE)
                 var exportMenuOpen by remember { mutableStateOf(false) }
                 LazyColumn(
                     modifier = Modifier
@@ -232,6 +243,32 @@ fun UnifiedReportScreen(
                         }
                     }
 
+                    if (periodWriteoffs.isNotEmpty()) {
+                        item {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                LuisoSectionHeader(text = "MERMAS (PÉRDIDAS)")
+                                TermInfo(
+                                    correctTerm = "Ajuste de inventario por merma",
+                                    oldName = "—",
+                                    explanation = "Pérdida valorada de inventario sin venta, del período. No es efectivo."
+                                )
+                            }
+                        }
+
+                        items(periodWriteoffs, key = { it.id }) { writeoff ->
+                            WriteoffLine(item = writeoff, symbol = u.currencySymbol)
+                        }
+
+                        item {
+                            LuisoCard(modifier = Modifier.fillMaxWidth()) {
+                                DetailRow(
+                                    "TOTAL PÉRDIDA POR MERMAS",
+                                    formatMoneyBigDecimal(totalLoss, u.currencySymbol)
+                                )
+                            }
+                        }
+                    }
+
                     item {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             LuisoButton(
@@ -315,6 +352,40 @@ private fun UnitedItemLine(item: UnitedDenomination, symbol: String) {
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
+private fun WriteoffLine(item: InventoryWriteoff, symbol: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = item.name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = "${item.quantity.stripTrailingZeros().toPlainString()} ${item.unit}",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "-${formatMoneyBigDecimal(item.lossValue, symbol)}",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.error
             )
         }
     }

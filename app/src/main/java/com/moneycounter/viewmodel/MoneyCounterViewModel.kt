@@ -8,6 +8,7 @@ import com.moneycounter.domain.CounterStatus
 import com.moneycounter.domain.Currency
 import com.moneycounter.domain.DefaultCurrencies
 import com.moneycounter.domain.Denomination
+import com.moneycounter.domain.InventoryWriteoff
 import com.moneycounter.domain.MeasurementUnit
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.MoneyCounterCalculator
@@ -25,9 +26,11 @@ import com.moneycounter.repository.JsonDenominationRepository
 import com.moneycounter.repository.JsonProductRepository
 import com.moneycounter.repository.JsonSavedCountRepository
 import com.moneycounter.repository.JsonUnitRepository
+import com.moneycounter.repository.JsonWriteoffRepository
 import com.moneycounter.repository.ProductRepository
 import com.moneycounter.repository.SavedCountRepository
 import com.moneycounter.repository.UnitRepository
+import com.moneycounter.repository.WriteoffRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,7 +54,8 @@ data class MoneyCounterUiState(
     val selectedCurrencyId: String = DefaultCurrencies.CUP.id,
     val products: List<Product> = emptyList(),
     val productSelections: List<ProductSelection> = listOf(ProductSelection()),
-    val units: List<MeasurementUnit> = emptyList()
+    val units: List<MeasurementUnit> = emptyList(),
+    val writeoffs: List<InventoryWriteoff> = emptyList()
 )
 
 class MoneyCounterViewModel(application: Application) : AndroidViewModel(application) {
@@ -61,6 +65,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     private val currencyRepository: CurrencyRepository = JsonCurrencyRepository(application)
     private val productRepository: ProductRepository = JsonProductRepository(application)
     private val unitRepository: UnitRepository = JsonUnitRepository(application)
+    private val writeoffRepository: WriteoffRepository = JsonWriteoffRepository(application)
 
     private val _uiState = MutableStateFlow(MoneyCounterUiState())
     val uiState: StateFlow<MoneyCounterUiState> = _uiState.asStateFlow()
@@ -71,6 +76,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         loadCurrencySettings()
         loadProducts()
         loadUnits()
+        loadWriteoffs()
     }
 
     val selectedCurrency: Currency
@@ -457,6 +463,53 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
+    private fun loadWriteoffs() {
+        viewModelScope.launch {
+            val writeoffs = writeoffRepository.load()
+            _uiState.update { it.copy(writeoffs = writeoffs) }
+        }
+    }
+
+    /** Registers a "baja por merma": reduces stock and records a valued loss.
+     *  Moves NO cash. Returns false on invalid product/quantity/missing price. */
+    fun registerWriteoff(productId: String, quantityText: String, reason: String?): Boolean {
+        val state = _uiState.value
+        val product = state.products.firstOrNull { it.id == productId } ?: return false
+        val quantity = ProductSelection.parseQuantity(quantityText)
+        if (quantity.signum() <= 0) return false
+        val unitPrice = product.effectiveUnitPriceFor(state.selectedCurrencyId) ?: return false
+        val lossValue = unitPrice.multiply(quantity).setScale(Money.SCALE)
+
+        val writeoff = InventoryWriteoff(
+            id = UUID.randomUUID().toString(),
+            at = System.currentTimeMillis(),
+            productId = product.id,
+            name = product.name,
+            unit = product.unit,
+            quantity = quantity,
+            unitPrice = unitPrice,
+            lossValue = lossValue,
+            currencyId = state.selectedCurrencyId,
+            reason = reason?.trim()?.takeIf { it.isNotEmpty() }
+        )
+
+        val newProducts = applyWriteoff(state.products, product.id, quantity)
+        _uiState.update {
+            it.copy(
+                writeoffs = listOf(writeoff) + it.writeoffs,
+                products = newProducts
+            )
+        }
+        persistProducts(newProducts)
+        persistWriteoffs()
+        return true
+    }
+
+    private fun persistWriteoffs() {
+        val writeoffs = _uiState.value.writeoffs
+        viewModelScope.launch { writeoffRepository.saveAll(writeoffs) }
+    }
+
     fun saveCount(): String? {
         val state = _uiState.value
         if (state.result.status != CounterStatus.COMPLETED) return null
@@ -606,6 +659,20 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                 val sold = soldByProduct[product.id] ?: BigDecimal.ZERO
                 if (sold.signum() <= 0) product
                 else product.copy(stock = product.stock.subtract(sold).setScale(Money.SCALE))
+            }
+        }
+
+        /** Returns products with stock reduced by a merma (write-off) quantity for one product.
+         *  Other products untouched. Over-write-off may push stock negative (consistent with
+         *  applyStockDeduction's warn-and-allow behavior). Unknown id is a no-op. */
+        fun applyWriteoff(
+            products: List<Product>,
+            productId: String,
+            quantity: BigDecimal
+        ): List<Product> {
+            return products.map { product ->
+                if (product.id != productId) product
+                else product.copy(stock = product.stock.subtract(quantity).setScale(Money.SCALE))
             }
         }
     }
