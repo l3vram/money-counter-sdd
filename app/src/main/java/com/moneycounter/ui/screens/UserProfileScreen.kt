@@ -31,6 +31,7 @@ import com.moneycounter.ui.components.LuisoTopBar
 import com.moneycounter.ui.theme.LuisoGreenBright
 import com.moneycounter.ui.theme.LuisoYellow
 import com.moneycounter.ui.theme.LuisoError
+import com.moneycounter.ui.theme.LuisoGreen
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -75,7 +76,8 @@ fun UserProfileScreen(
                     LuisoAvatar(
                         photoUrl = profile?.photoUrl,
                         fallbackText = profile?.displayName,
-                        size = 96
+                        size = 96,
+                        borderColor = LuisoGreen
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
