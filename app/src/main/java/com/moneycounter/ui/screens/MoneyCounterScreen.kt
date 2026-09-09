@@ -82,6 +82,7 @@ fun MoneyCounterScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showClearDialog by remember { mutableStateOf(false) }
+    var showFiadoDialog by remember { mutableStateOf(false) }
     val currency = uiState.currencies.firstOrNull { it.id == uiState.selectedCurrencyId }
         ?: com.moneycounter.domain.DefaultCurrencies.CUP
     val currencySymbol = currency.symbol
@@ -167,7 +168,8 @@ fun MoneyCounterScreen(
                     targetAmount = viewModel.productsTotal().takeIf { it.signum() > 0 },
                     currencySymbol = currencySymbol,
                     savedCountId = uiState.savedCountId,
-                    onSave = { viewModel.saveCount() }
+                    onSave = { viewModel.saveCount() },
+                    onFiado = { showFiadoDialog = true }
                 )
             }
 
@@ -244,6 +246,75 @@ fun MoneyCounterScreen(
             }
         )
     }
+
+    if (showFiadoDialog) {
+        FiadoDialog(
+            onConfirm = { debtorName ->
+                if (viewModel.registerCreditSale(debtorName) != null) {
+                    showFiadoDialog = false
+                }
+            },
+            onDismiss = { showFiadoDialog = false }
+        )
+    }
+}
+
+@Composable
+private fun FiadoDialog(
+    onConfirm: (debtorName: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var debtorName by remember { mutableStateOf("") }
+    var showError by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Venta a crédito (fiado)") },
+        text = {
+            Column {
+                Text(
+                    text = "Los productos seleccionados se descuentan del inventario. No se registra efectivo; se crea una cuenta por cobrar.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                LuisoTextField(
+                    value = debtorName,
+                    onValueChange = {
+                        debtorName = it
+                        showError = false
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = "Nombre del deudor"
+                )
+                if (showError) {
+                    Text(
+                        text = "Ingresa el nombre del deudor",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (debtorName.isBlank()) {
+                        showError = true
+                    } else {
+                        onConfirm(debtorName)
+                    }
+                }
+            ) {
+                Text("Confirmar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
 }
 
 @Composable
@@ -563,7 +634,8 @@ private fun SummarySection(
     targetAmount: BigDecimal?,
     currencySymbol: String,
     savedCountId: String?,
-    onSave: () -> Unit
+    onSave: () -> Unit,
+    onFiado: () -> Unit
 ) {
     val zero = Money.ZERO
     Card(
@@ -653,6 +725,23 @@ private fun SummarySection(
                                 leadingIcon = Icons.Default.Check,
                                 modifier = Modifier.fillMaxWidth()
                             )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                LuisoOutlineButton(
+                                    text = "VENTA A CRÉDITO (FIADO)",
+                                    onClick = onFiado,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                TermInfo(
+                                    correctTerm = "Venta a crédito → Cuenta por cobrar",
+                                    oldName = "Fiado / salida con deuda",
+                                    explanation = "Venta sin efectivo; crea un derecho de cobro."
+                                )
+                            }
                         }
                     }
                     CounterStatus.OVER -> {

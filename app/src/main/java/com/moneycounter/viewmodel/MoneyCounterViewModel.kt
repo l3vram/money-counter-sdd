@@ -15,6 +15,8 @@ import com.moneycounter.domain.MoneyCounterCalculator
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductPrice
 import com.moneycounter.domain.ProductSelection
+import com.moneycounter.domain.Receivable
+import com.moneycounter.domain.ReceivableStatus
 import com.moneycounter.domain.SavedCount
 import com.moneycounter.domain.SavedCountItem
 import com.moneycounter.domain.SavedProductItem
@@ -25,9 +27,11 @@ import com.moneycounter.repository.JsonCurrencyRepository
 import com.moneycounter.repository.JsonDenominationRepository
 import com.moneycounter.repository.JsonProductRepository
 import com.moneycounter.repository.JsonSavedCountRepository
+import com.moneycounter.repository.JsonReceivableRepository
 import com.moneycounter.repository.JsonUnitRepository
 import com.moneycounter.repository.JsonWriteoffRepository
 import com.moneycounter.repository.ProductRepository
+import com.moneycounter.repository.ReceivableRepository
 import com.moneycounter.repository.SavedCountRepository
 import com.moneycounter.repository.UnitRepository
 import com.moneycounter.repository.WriteoffRepository
@@ -55,7 +59,8 @@ data class MoneyCounterUiState(
     val products: List<Product> = emptyList(),
     val productSelections: List<ProductSelection> = listOf(ProductSelection()),
     val units: List<MeasurementUnit> = emptyList(),
-    val writeoffs: List<InventoryWriteoff> = emptyList()
+    val writeoffs: List<InventoryWriteoff> = emptyList(),
+    val receivables: List<Receivable> = emptyList()
 )
 
 class MoneyCounterViewModel(application: Application) : AndroidViewModel(application) {
@@ -66,6 +71,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     private val productRepository: ProductRepository = JsonProductRepository(application)
     private val unitRepository: UnitRepository = JsonUnitRepository(application)
     private val writeoffRepository: WriteoffRepository = JsonWriteoffRepository(application)
+    private val receivableRepository: ReceivableRepository = JsonReceivableRepository(application)
 
     private val _uiState = MutableStateFlow(MoneyCounterUiState())
     val uiState: StateFlow<MoneyCounterUiState> = _uiState.asStateFlow()
@@ -77,6 +83,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         loadProducts()
         loadUnits()
         loadWriteoffs()
+        loadReceivables()
     }
 
     val selectedCurrency: Currency
@@ -579,6 +586,68 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     private fun persistHistory() {
         val history = _uiState.value.history
         viewModelScope.launch { historyRepository.saveAll(history) }
+    }
+
+    private fun loadReceivables() {
+        viewModelScope.launch {
+            val receivables = receivableRepository.load()
+            _uiState.update { it.copy(receivables = receivables) }
+        }
+    }
+
+    /** Registers a credit sale ("venta a crédito" / fiado): goods leave (stock deducted)
+     *  but NO cash comes in. Records an OPEN receivable for later collection. Does NOT
+     *  create a SavedCount and does NOT add to any cash total. Returns the new
+     *  receivable id, or null on invalid input (not completed, zero total, blank debtor). */
+    fun registerCreditSale(debtorName: String): String? {
+        val state = _uiState.value
+        if (state.result.status != CounterStatus.COMPLETED) return null
+        val target = productsTotal()
+        if (target.signum() <= 0) return null
+        val trimmedName = debtorName.trim()
+        if (trimmedName.isBlank()) return null
+
+        val savedProducts = state.productSelections.mapNotNull { selection ->
+            val product = state.products.firstOrNull { it.id == selection.productId } ?: return@mapNotNull null
+            val quantity = selection.quantity()
+            if (quantity.signum() <= 0) return@mapNotNull null
+            val pp = product.priceFor(state.selectedCurrencyId) ?: return@mapNotNull null
+            SavedProductItem(
+                name = product.name,
+                unit = product.unit,
+                quantity = quantity,
+                unitPrice = pp.unitPrice,
+                surcharge = pp.surcharge,
+                subtotal = pp.effectiveUnitPrice.multiply(quantity).setScale(Money.SCALE)
+            )
+        }
+
+        val receivable = Receivable(
+            id = UUID.randomUUID().toString(),
+            at = System.currentTimeMillis(),
+            debtorName = trimmedName,
+            amount = target,
+            currencyId = state.selectedCurrencyId,
+            products = savedProducts,
+            status = ReceivableStatus.OPEN
+        )
+
+        _uiState.update { st ->
+            st.copy(
+                receivables = listOf(receivable) + st.receivables,
+                savedCountId = receivable.id
+            )
+        }
+        val newProducts = applyStockDeduction(state.products, state.productSelections)
+        _uiState.update { it.copy(products = newProducts) }
+        persistProducts(newProducts)
+        persistReceivables()
+        return receivable.id
+    }
+
+    private fun persistReceivables() {
+        val receivables = _uiState.value.receivables
+        viewModelScope.launch { receivableRepository.saveAll(receivables) }
     }
 
     private fun persistCurrencySettings() {

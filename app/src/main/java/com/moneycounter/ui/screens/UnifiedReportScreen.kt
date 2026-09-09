@@ -37,6 +37,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.moneycounter.domain.InventoryWriteoff
 import com.moneycounter.domain.Money
+import com.moneycounter.domain.ReceivableStatus
+import com.moneycounter.domain.Receivable
 import com.moneycounter.domain.UnitedDenomination
 import com.moneycounter.domain.UnitedProduct
 import com.moneycounter.domain.uniteCounts
@@ -126,6 +128,15 @@ fun UnifiedReportScreen(
                     }
                 }
                 val totalLoss = periodWriteoffs.fold(Money.ZERO) { acc, w -> acc.add(w.lossValue) }
+                    .setScale(Money.SCALE)
+                val periodReceivables = remember(uiState.receivables, periodStart, periodEnd, u.currencyId) {
+                    uiState.receivables.filter {
+                        it.currencyId == u.currencyId &&
+                            it.at in periodStart..periodEnd &&
+                            it.status == ReceivableStatus.OPEN
+                    }
+                }
+                val totalOutstanding = periodReceivables.fold(Money.ZERO) { acc, r -> acc.add(r.amount) }
                     .setScale(Money.SCALE)
                 var exportMenuOpen by remember { mutableStateOf(false) }
                 LazyColumn(
@@ -269,6 +280,32 @@ fun UnifiedReportScreen(
                         }
                     }
 
+                    if (periodReceivables.isNotEmpty()) {
+                        item {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                LuisoSectionHeader(text = "CUENTAS POR COBRAR (FIADO)")
+                                TermInfo(
+                                    correctTerm = "Venta a crédito → Cuenta por cobrar",
+                                    oldName = "Fiado / salida con deuda",
+                                    explanation = "Venta sin efectivo del período, aún no cobrada. No es efectivo."
+                                )
+                            }
+                        }
+
+                        items(periodReceivables, key = { it.id }) { receivable ->
+                            ReceivableLine(item = receivable, symbol = u.currencySymbol)
+                        }
+
+                        item {
+                            LuisoCard(modifier = Modifier.fillMaxWidth()) {
+                                DetailRow(
+                                    "TOTAL PENDIENTE POR COBRAR",
+                                    formatMoneyBigDecimal(totalOutstanding, u.currencySymbol)
+                                )
+                            }
+                        }
+                    }
+
                     item {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             LuisoButton(
@@ -383,6 +420,35 @@ private fun WriteoffLine(item: InventoryWriteoff, symbol: String) {
             )
             Text(
                 text = "-${formatMoneyBigDecimal(item.lossValue, symbol)}",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReceivableLine(item: Receivable, symbol: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = item.debtorName,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = formatMoneyBigDecimal(item.amount, symbol),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.error
