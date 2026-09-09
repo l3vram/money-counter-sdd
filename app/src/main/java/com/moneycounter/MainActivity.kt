@@ -76,7 +76,7 @@ fun MoneyCounterApp(onLogout: () -> Unit) {
         Scaffold(
             bottomBar = {
                 if (showBottomBar) {
-                    NavigationBar(modifier = Modifier.height(54.dp)) {
+                    NavigationBar(Modifier.height(70.dp)) {
                         NavigationBarItem(
                             selected = currentScreen == "counter",
                             onClick = { currentScreen = "counter" },
@@ -84,7 +84,7 @@ fun MoneyCounterApp(onLogout: () -> Unit) {
                                 Icon(
                                     Icons.Filled.Paid,
                                     contentDescription = null,
-                                    modifier = Modifier.size(26.dp)
+                                    modifier = Modifier.size(23.dp)
                                 )
                             },
                             label = { Text("Contador", style = MaterialTheme.typography.labelSmall) }
@@ -96,7 +96,7 @@ fun MoneyCounterApp(onLogout: () -> Unit) {
                                 Icon(
                                     Icons.Filled.Inventory2,
                                     contentDescription = null,
-                                    modifier = Modifier.size(26.dp)
+                                    modifier = Modifier.size(23.dp)
                                 )
                             },
                             label = { Text("Stock", style = MaterialTheme.typography.labelSmall) }
@@ -108,7 +108,7 @@ fun MoneyCounterApp(onLogout: () -> Unit) {
                                 Icon(
                                     Icons.Filled.Receipt,
                                     contentDescription = null,
-                                    modifier = Modifier.size(26.dp)
+                                    modifier = Modifier.size(23.dp)
                                 )
                             },
                             label = { Text("Reportes", style = MaterialTheme.typography.labelSmall) }
