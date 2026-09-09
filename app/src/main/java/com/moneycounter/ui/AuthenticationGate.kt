@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -27,6 +28,7 @@ import com.moneycounter.access.AccessRepository
 import com.moneycounter.access.AccessStatus
 import com.moneycounter.access.AppAccessState
 import com.moneycounter.access.FirestoreAccessRepository
+import com.moneycounter.access.UserProfileData
 import com.moneycounter.auth.AuthRepository
 import com.moneycounter.auth.FirebaseAuthRepository
 import com.moneycounter.ui.screens.AccessRequiredScreen
@@ -45,11 +47,12 @@ private class AuthViewModelFactory : ViewModelProvider.Factory {
 @Composable
 fun AuthenticationGate(
     viewModel: AuthViewModel = viewModel(factory = AuthViewModelFactory()),
-    content: @Composable (onLogout: () -> Unit) -> Unit
+    content: @Composable (onLogout: () -> Unit, profile: UserProfileData?, onLoadProfile: () -> Unit) -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
     val isLoggingIn by viewModel.isLoggingIn.collectAsState()
     val loginError by viewModel.loginError.collectAsState()
+    val profile by viewModel.profile.collectAsState()
 
     DisposableEffect(Unit) {
         val auth = FirebaseAuth.getInstance()
@@ -75,6 +78,10 @@ fun AuthenticationGate(
         onLogout = {
             viewModel.signOut()
         },
+        profile = profile,
+        onLoadProfile = {
+            viewModel.loadProfile()
+        },
         content = content
     )
 }
@@ -87,7 +94,9 @@ fun AuthenticationGateContent(
     onGoogleSignIn: (Activity) -> Unit,
     onRetry: () -> Unit,
     onLogout: () -> Unit,
-    content: @Composable (onLogout: () -> Unit) -> Unit
+    profile: UserProfileData?,
+    onLoadProfile: () -> Unit,
+    content: @Composable (onLogout: () -> Unit, profile: UserProfileData?, onLoadProfile: () -> Unit) -> Unit
 ) {
     when (state) {
         is AppAccessState.Loading -> {
@@ -144,7 +153,10 @@ fun AuthenticationGateContent(
             }
         }
         is AppAccessState.Approved -> {
-            content(onLogout)
+            LaunchedEffect(Unit) {
+                onLoadProfile()
+            }
+            content(onLogout, profile, onLoadProfile)
         }
     }
 }

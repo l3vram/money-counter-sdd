@@ -5,8 +5,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.moneycounter.access.AccessRepository
 import com.moneycounter.access.AppAccessState
+import com.moneycounter.access.UserProfileData
 import com.moneycounter.access.toAppAccessState
 import com.moneycounter.auth.AuthRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,8 +28,29 @@ class AuthViewModel(
     private val _loginError = MutableStateFlow<String?>(null)
     val loginError: StateFlow<String?> = _loginError.asStateFlow()
 
+    private val _profile = MutableStateFlow<UserProfileData?>(null)
+    val profile: StateFlow<UserProfileData?> = _profile.asStateFlow()
+
+    private var profileJob: Job? = null
+
     init {
         checkAccess()
+    }
+
+    fun loadProfile() {
+        val user = authRepository.currentUser()
+        if (user == null) {
+            profileJob?.cancel()
+            profileJob = null
+            _profile.value = null
+            return
+        }
+        if (profileJob?.isActive == true) return
+        profileJob = viewModelScope.launch {
+            accessRepository.observeUserProfile(user.uid).collect { profile ->
+                _profile.value = profile
+            }
+        }
     }
 
     fun checkAccess() {
@@ -65,6 +88,9 @@ class AuthViewModel(
     }
 
     fun signOut() {
+        profileJob?.cancel()
+        profileJob = null
+        _profile.value = null
         viewModelScope.launch {
             authRepository.signOut()
             _uiState.value = AppAccessState.SignedOut
