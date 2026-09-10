@@ -59,7 +59,7 @@ fun branchFromMap(id: String, map: Map<String, Any?>): Branch? {
 /** ---------- Member ---------- */
 fun Member.toMap(): Map<String, Any?> = mapOf(
     FirestoreFields.FIELD_ORG_ID to orgId,
-    FirestoreFields.FIELD_ROLE to role.toStorage(),
+    FirestoreFields.FIELD_ROLE to Role.toStorage(role),
     FirestoreFields.FIELD_BRANCH_IDS to branchIds
 )
 

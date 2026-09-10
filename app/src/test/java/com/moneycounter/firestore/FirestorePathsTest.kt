@@ -56,7 +56,7 @@ class FirestorePathsTest {
     @Test
     fun `stock path`() {
         assertEquals(
-            "organizations/o/b/branches/b1/stock",
+            "organizations/o/branches/b1/stock",
             FirestorePaths.stock("o", "b1")
         )
     }

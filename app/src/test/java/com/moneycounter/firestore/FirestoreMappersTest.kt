@@ -55,7 +55,7 @@ class FirestoreMappersTest {
         val member = Member(
             uid = "uid99",
             orgId = "org1",
-            role = Role.ADMIN,
+            role = Role.OWNER,
             branchIds = listOf("b1", "b2")
         )
         val map = member.toMap()
