@@ -16,7 +16,9 @@ class FirestoreMembershipRepository(
         val docRef = firestore.document(FirestorePaths.member(uid))
         val registration = docRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
-                close(error)
+                // Permission or connectivity issue: degrade to "no member" instead of crashing.
+                // A null member keeps today's single-user privileges (role gating off).
+                trySend(null)
                 return@addSnapshotListener
             }
             if (snapshot == null || !snapshot.exists()) {
