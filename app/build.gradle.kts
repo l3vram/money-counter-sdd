@@ -66,7 +66,7 @@ android {
         if (buildType.name == "release") {
             outputs.all {
                 val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
-                output.outputFileName = "MoneyCounter-v${defaultConfig.versionName}.apk"
+                output.outputFileName = "ElLuiso-MoneyCounter-v${defaultConfig.versionName}.apk"
             }
         }
     }
