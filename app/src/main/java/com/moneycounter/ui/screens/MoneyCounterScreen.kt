@@ -174,11 +174,25 @@ fun MoneyCounterScreen(
             item {
                 SummarySection(
                     result = uiState.result,
-                    targetAmount = viewModel.productsTotal().takeIf { it.signum() > 0 },
+                    targetAmount = uiState.collectingReceivable?.amount
+                        ?: viewModel.productsTotal().takeIf { it.signum() > 0 },
                     currencySymbol = currencySymbol,
                     savedCountId = uiState.savedCountId,
+                    collectingReceivable = uiState.collectingReceivable,
                     onSave = { viewModel.saveCount() },
-                    onFiado = { showFiadoDialog = true }
+                    onFiado = { showFiadoDialog = true },
+                    onRecordCollection = {
+                        val receivable = uiState.collectingReceivable
+                        if (viewModel.recordCollection() && receivable != null) {
+                            cobrarSuccessMessage =
+                                "Cobro registrado: ${receivable.debtorName} — " +
+                                    formatMoneyBigDecimal(
+                                        receivable.amount,
+                                        uiState.currencies.firstOrNull { it.id == receivable.currencyId }?.symbol.orEmpty()
+                                    )
+                        }
+                    },
+                    onCancelCollecting = { viewModel.cancelCollecting() }
                 )
             }
 
@@ -292,15 +306,8 @@ fun MoneyCounterScreen(
             openReceivables = openReceivables,
             currencies = uiState.currencies,
             onConfirm = { receivable ->
-                if (viewModel.settleReceivable(receivable.id)) {
-                    showCobrarDialog = false
-                    cobrarSuccessMessage =
-                        "Cobro registrado: ${receivable.debtorName} — " +
-                            formatMoneyBigDecimal(
-                                receivable.amount,
-                                uiState.currencies.firstOrNull { it.id == receivable.currencyId }?.symbol.orEmpty()
-                            )
-                }
+                viewModel.startCollectingReceivable(receivable.id)
+                showCobrarDialog = false
             },
             onDismiss = { showCobrarDialog = false }
         )
@@ -777,8 +784,11 @@ private fun SummarySection(
     targetAmount: BigDecimal?,
     currencySymbol: String,
     savedCountId: String?,
+    collectingReceivable: Receivable?,
     onSave: () -> Unit,
-    onFiado: () -> Unit
+    onFiado: () -> Unit,
+    onRecordCollection: () -> Unit,
+    onCancelCollecting: () -> Unit
 ) {
     val zero = Money.ZERO
     Card(
@@ -791,6 +801,19 @@ private fun SummarySection(
             modifier = Modifier.padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            if (collectingReceivable != null) {
+                Text(
+                    text = "COBRANDO: ${collectingReceivable.debtorName} — " +
+                        formatMoneyBigDecimal(collectingReceivable.amount, currencySymbol),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
             if (targetAmount != null && targetAmount > zero) {
                 SummaryRow(
                     label = "OBJETIVO",
@@ -800,6 +823,27 @@ private fun SummarySection(
                     termInfoOldName = "Objetivo",
                     termInfoExplanation = "Suma de los productos = lo que se debe cobrar."
                 )
+            }
+
+            if (collectingReceivable == null && targetAmount != null && targetAmount > zero) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    LuisoOutlineButton(
+                        text = "VENTA A CRÉDITO (FIADO)",
+                        onClick = onFiado,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TermInfo(
+                        correctTerm = "Venta a crédito → Cuenta por cobrar",
+                        oldName = "Fiado / salida con deuda",
+                        explanation = "Venta sin efectivo; crea un derecho de cobro."
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
             }
 
             SummaryRow(
@@ -853,7 +897,14 @@ private fun SummarySection(
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        if (savedCountId != null) {
+                        if (collectingReceivable != null) {
+                            LuisoButton(
+                                text = "REGISTRAR COBRO",
+                                onClick = onRecordCollection,
+                                leadingIcon = Icons.Default.Check,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else if (savedCountId != null) {
                             LuisoButton(
                                 text = "¡Conteo registrado!",
                                 onClick = {},
@@ -868,23 +919,6 @@ private fun SummarySection(
                                 leadingIcon = Icons.Default.Check,
                                 modifier = Modifier.fillMaxWidth()
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                LuisoOutlineButton(
-                                    text = "VENTA A CRÉDITO (FIADO)",
-                                    onClick = onFiado,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                TermInfo(
-                                    correctTerm = "Venta a crédito → Cuenta por cobrar",
-                                    oldName = "Fiado / salida con deuda",
-                                    explanation = "Venta sin efectivo; crea un derecho de cobro."
-                                )
-                            }
                         }
                     }
                     CounterStatus.OVER -> {
@@ -952,6 +986,15 @@ private fun SummarySection(
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
+                }
+
+                if (collectingReceivable != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LuisoOutlineButton(
+                        text = "Cancelar",
+                        onClick = onCancelCollecting,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             } else {
                 Spacer(modifier = Modifier.height(8.dp))

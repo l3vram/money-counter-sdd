@@ -13,6 +13,9 @@ import com.moneycounter.domain.MeasurementUnit
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.MoneyCounterCalculator
 import com.moneycounter.domain.Movement
+import com.moneycounter.domain.MovementDenomination
+import com.moneycounter.domain.MovementProductLine
+import com.moneycounter.domain.MovementType
 import com.moneycounter.domain.Payment
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductPrice
@@ -68,7 +71,9 @@ data class MoneyCounterUiState(
     val writeoffs: List<InventoryWriteoff> = emptyList(),
     val receivables: List<Receivable> = emptyList(),
     val payments: List<Payment> = emptyList(),
-    val movements: List<Movement> = emptyList()
+    val movements: List<Movement> = emptyList(),
+    val collectingReceivable: Receivable? = null,
+    val lastFiadoId: String? = null
 )
 
 class MoneyCounterViewModel(application: Application) : AndroidViewModel(application) {
@@ -521,6 +526,24 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         }
         persistProducts(newProducts)
         persistWriteoffs()
+        recordMovement(
+            buildMermaMovement(
+                id = writeoff.id,
+                at = writeoff.at,
+                currencyId = writeoff.currencyId,
+                reason = writeoff.reason,
+                products = listOf(
+                    MovementProductLine(
+                        name = writeoff.name,
+                        unit = writeoff.unit,
+                        quantity = writeoff.quantity,
+                        unitPrice = writeoff.unitPrice,
+                        subtotal = writeoff.lossValue
+                    )
+                ),
+                amount = writeoff.lossValue
+            )
+        )
         return true
     }
 
@@ -578,6 +601,16 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         _uiState.update { it.copy(products = newProducts) }
         persistProducts(newProducts)
         persistHistory()
+        recordMovement(
+            buildVentaMovement(
+                id = saved.id,
+                at = saved.savedAt,
+                currencyId = saved.currencyId,
+                products = savedProducts.map { it.toMovementLine() },
+                denominations = items.map { it.toMovementDenomination() },
+                amount = target
+            )
+        )
         return saved.id
     }
 
@@ -608,16 +641,17 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     }
 
     /** Registers a credit sale ("venta a crédito" / fiado): goods leave (stock deducted)
-     *  but NO cash comes in. Records an OPEN receivable for later collection. Does NOT
-     *  create a SavedCount and does NOT add to any cash total. Returns the new
-     *  receivable id, or null on invalid input (not completed, zero total, blank debtor). */
+     *  but NO cash comes in — so NO denomination count is required or read. Records an
+     *  OPEN receivable for later collection. Does NOT create a SavedCount and does NOT
+     *  add to any cash total. Resets the product selection afterward and records the
+     *  new receivable id in [MoneyCounterUiState.lastFiadoId] (never savedCountId, which
+     *  is reserved for actual cash counts). Returns the new receivable id, or null on
+     *  invalid input (zero products total or blank debtor). */
     fun registerCreditSale(debtorName: String): String? {
         val state = _uiState.value
-        if (state.result.status != CounterStatus.COMPLETED) return null
         val target = productsTotal()
-        if (target.signum() <= 0) return null
         val trimmedName = debtorName.trim()
-        if (trimmedName.isBlank()) return null
+        if (!canRegisterCreditSale(target.signum() > 0, trimmedName)) return null
 
         val savedProducts = state.productSelections.mapNotNull { selection ->
             val product = state.products.firstOrNull { it.id == selection.productId } ?: return@mapNotNull null
@@ -644,16 +678,29 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             status = ReceivableStatus.OPEN
         )
 
+        val newProducts = applyStockDeduction(state.products, state.productSelections)
         _uiState.update { st ->
             st.copy(
                 receivables = listOf(receivable) + st.receivables,
-                savedCountId = receivable.id
+                products = newProducts,
+                lastFiadoId = receivable.id,
+                productSelections = listOf(ProductSelection()),
+                savedCountId = null
             )
         }
-        val newProducts = applyStockDeduction(state.products, state.productSelections)
-        _uiState.update { it.copy(products = newProducts) }
         persistProducts(newProducts)
         persistReceivables()
+        recordMovement(
+            buildFiadoMovement(
+                id = receivable.id,
+                at = receivable.at,
+                currencyId = receivable.currencyId,
+                debtorName = receivable.debtorName,
+                products = savedProducts.map { it.toMovementLine() },
+                amount = receivable.amount
+            )
+        )
+        recalculate()
         return receivable.id
     }
 
@@ -681,6 +728,19 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
+    /** Appends [m] to the unified journal (newest first) and persists it.
+     *  Called alongside every legacy write so no event can silently vanish
+     *  from the journal even while legacy stores remain the read model. */
+    private fun recordMovement(m: Movement) {
+        _uiState.update { it.copy(movements = listOf(m) + it.movements) }
+        persistMovements()
+    }
+
+    private fun persistMovements() {
+        val movements = _uiState.value.movements
+        viewModelScope.launch { movementRepository.saveAll(movements) }
+    }
+
     /** Settles ("cobra") an OPEN receivable: records a Payment (cash in) for its full
      *  amount and flips the receivable to SETTLED. Does NOT touch stock (already deducted
      *  at the credit sale) and does NOT create a SavedCount or re-create the debt.
@@ -706,6 +766,79 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         return true
     }
 
+    /** Enters "collecting mode" ("cobro") for an OPEN receivable: the counter target
+     *  becomes the debt's amount (not productsTotal()), so counting denominations here
+     *  measures cash collected against the debt, not against selected products. Clears
+     *  any in-progress quantities. No-op if the receivable is unknown or not OPEN. */
+    fun startCollectingReceivable(receivableId: String) {
+        val state = _uiState.value
+        val receivable = state.receivables.firstOrNull {
+            it.id == receivableId && it.status == ReceivableStatus.OPEN
+        } ?: return
+        val clearedQuantities = state.denominations.associate { it.id to 0L }
+        _uiState.update {
+            it.copy(collectingReceivable = receivable, quantities = clearedQuantities, savedCountId = null)
+        }
+        recalculate()
+    }
+
+    /** Leaves collecting mode without settling anything; clears counted quantities. */
+    fun cancelCollecting() {
+        val clearedQuantities = _uiState.value.denominations.associate { it.id to 0L }
+        _uiState.update { it.copy(collectingReceivable = null, quantities = clearedQuantities) }
+        recalculate()
+    }
+
+    /** Commits the in-progress collection: requires an active [MoneyCounterUiState.collectingReceivable]
+     *  and a COMPLETED count (counted cash == debt amount). Records the legacy Payment AND a COBRO
+     *  Movement carrying the counted denominations, flips the receivable to SETTLED, then leaves
+     *  collecting mode. Returns false with no changes otherwise. */
+    fun recordCollection(): Boolean {
+        val state = _uiState.value
+        val receivable = state.collectingReceivable ?: return false
+        if (state.result.status != CounterStatus.COMPLETED) return false
+
+        val items = state.denominations
+            .mapNotNull { den ->
+                val qty = state.quantities[den.id] ?: 0L
+                if (qty <= 0) null
+                else SavedCountItem(den.value, qty, Money.fromLong(den.value * qty))
+            }
+
+        val (updatedReceivables, payment) = settleReceivablePure(
+            receivables = state.receivables,
+            receivableId = receivable.id,
+            paymentId = UUID.randomUUID().toString(),
+            now = System.currentTimeMillis()
+        )
+        if (payment == null) return false
+
+        val clearedQuantities = state.denominations.associate { it.id to 0L }
+        _uiState.update { st ->
+            st.copy(
+                receivables = updatedReceivables,
+                payments = listOf(payment) + st.payments,
+                collectingReceivable = null,
+                quantities = clearedQuantities
+            )
+        }
+        persistReceivables()
+        persistPayments()
+        recordMovement(
+            buildCobroMovement(
+                id = payment.id,
+                at = payment.at,
+                currencyId = payment.currencyId,
+                debtorName = payment.debtorName,
+                denominations = items.map { it.toMovementDenomination() },
+                amount = payment.amount,
+                linkId = payment.receivableId
+            )
+        )
+        recalculate()
+        return true
+    }
+
     private fun persistCurrencySettings() {
         val state = _uiState.value
         viewModelScope.launch {
@@ -719,7 +852,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
 
     private fun recalculate() {
         val state = _uiState.value
-        val target = productsTotal().takeIf { it.signum() > 0 }
+        val target = (state.collectingReceivable?.amount ?: productsTotal()).takeIf { it.signum() > 0 }
         val result = MoneyCounterCalculator.calculate(
             targetAmount = target,
             denominations = state.denominations,
@@ -829,5 +962,87 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             }
             return updated to payment
         }
+
+        /** Pure guard for fiado registration: requires products selected (positive total)
+         *  and a non-blank debtor name. Deliberately does NOT require a COMPLETED cash
+         *  count — a fiado has no cash counted at all. */
+        fun canRegisterCreditSale(productsTotalPositive: Boolean, debtorName: String): Boolean =
+            productsTotalPositive && debtorName.isNotBlank()
+
+        fun SavedProductItem.toMovementLine(): MovementProductLine =
+            MovementProductLine(name = name, unit = unit, quantity = quantity, unitPrice = unitPrice, subtotal = subtotal)
+
+        fun SavedCountItem.toMovementDenomination(): MovementDenomination =
+            MovementDenomination(value = denominationValue, quantity = quantity, subtotal = subtotal)
+
+        fun buildVentaMovement(
+            id: String,
+            at: Long,
+            currencyId: String,
+            products: List<MovementProductLine>,
+            denominations: List<MovementDenomination>,
+            amount: BigDecimal
+        ): Movement = Movement(
+            id = id,
+            at = at,
+            type = MovementType.VENTA,
+            currencyId = currencyId,
+            products = products,
+            denominations = denominations,
+            amount = amount
+        )
+
+        fun buildFiadoMovement(
+            id: String,
+            at: Long,
+            currencyId: String,
+            debtorName: String,
+            products: List<MovementProductLine>,
+            amount: BigDecimal
+        ): Movement = Movement(
+            id = id,
+            at = at,
+            type = MovementType.VENTA_FIADO,
+            currencyId = currencyId,
+            concept = debtorName,
+            products = products,
+            amount = amount
+        )
+
+        fun buildMermaMovement(
+            id: String,
+            at: Long,
+            currencyId: String,
+            reason: String?,
+            products: List<MovementProductLine>,
+            amount: BigDecimal
+        ): Movement = Movement(
+            id = id,
+            at = at,
+            type = MovementType.MERMA,
+            currencyId = currencyId,
+            concept = reason,
+            products = products,
+            amount = amount
+        )
+
+        fun buildCobroMovement(
+            id: String,
+            at: Long,
+            currencyId: String,
+            debtorName: String,
+            denominations: List<MovementDenomination>,
+            amount: BigDecimal,
+            linkId: String
+        ): Movement = Movement(
+            id = id,
+            at = at,
+            type = MovementType.COBRO,
+            currencyId = currencyId,
+            concept = debtorName,
+            denominations = denominations,
+            amount = amount,
+            linkId = linkId
+        )
     }
 }
