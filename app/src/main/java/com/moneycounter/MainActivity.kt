@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.moneycounter.access.UserProfileData
+import com.moneycounter.domain.Member
 import com.moneycounter.ui.AuthenticationGate
 import com.moneycounter.ui.screens.CierresScreen
 import com.moneycounter.ui.screens.DenominationManagementScreen
@@ -61,11 +62,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MoneyCounterTheme {
-                AuthenticationGate { onLogout, profile, onLoadProfile ->
+                AuthenticationGate { onLogout, profile, onLoadProfile, member ->
                     MoneyCounterApp(
                         onLogout = onLogout,
                         profile = profile,
-                        onLoadProfile = onLoadProfile
+                        onLoadProfile = onLoadProfile,
+                        member = member
                     )
                 }
             }
@@ -77,7 +79,8 @@ class MainActivity : ComponentActivity() {
 fun MoneyCounterApp(
     onLogout: () -> Unit,
     profile: UserProfileData?,
-    onLoadProfile: () -> Unit
+    onLoadProfile: () -> Unit,
+    member: Member?
 ) {
     val viewModel: MoneyCounterViewModel = viewModel()
     var currentScreen by remember { mutableStateOf("counter") }
@@ -295,7 +298,8 @@ fun MoneyCounterApp(
                     )
                     "stock" -> StockScreen(
                         viewModel = viewModel,
-                        onNavigateToReport = { currentScreen = "report" }
+                        onNavigateToReport = { currentScreen = "report" },
+                        member = member
                     )
                     "report" -> StockReportScreen(
                         viewModel = viewModel,

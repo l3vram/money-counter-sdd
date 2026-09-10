@@ -48,4 +48,24 @@ class RoleTest {
         assertNull(Role.fromStorage(null))
         assertNull(Role.fromStorage("NON_EXISTENT"))
     }
+
+    @Test
+    fun `null role keeps single-user privileges`() {
+        assertTrue((null as Role?).mayDecreaseStock())
+        assertFalse((null as Role?).mayViewOwnerDashboard())
+    }
+
+    @Test
+    fun `mayDecreaseStock gating`() {
+        assertTrue(Role.OWNER.mayDecreaseStock())
+        assertFalse(Role.SELLER.mayDecreaseStock())
+        assertFalse(Role.SUPERUSER.mayDecreaseStock())
+    }
+
+    @Test
+    fun `mayViewOwnerDashboard gating`() {
+        assertTrue(Role.OWNER.mayViewOwnerDashboard())
+        assertFalse(Role.SELLER.mayViewOwnerDashboard())
+        assertFalse(Role.SUPERUSER.mayViewOwnerDashboard())
+    }
 }

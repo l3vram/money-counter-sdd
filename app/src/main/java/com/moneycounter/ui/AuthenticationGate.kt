@@ -28,9 +28,12 @@ import com.moneycounter.access.AccessRepository
 import com.moneycounter.access.AccessStatus
 import com.moneycounter.access.AppAccessState
 import com.moneycounter.access.FirestoreAccessRepository
+import com.moneycounter.access.FirestoreMembershipRepository
+import com.moneycounter.access.MembershipRepository
 import com.moneycounter.access.UserProfileData
 import com.moneycounter.auth.AuthRepository
 import com.moneycounter.auth.FirebaseAuthRepository
+import com.moneycounter.domain.Member
 import com.moneycounter.ui.screens.AccessRequiredScreen
 import com.moneycounter.ui.screens.LoginScreen
 
@@ -39,20 +42,23 @@ private class AuthViewModelFactory : ViewModelProvider.Factory {
         val authRepository: AuthRepository = FirebaseAuthRepository()
         val accessRepository: AccessRepository =
             FirestoreAccessRepository(FirebaseFirestore.getInstance())
+        val membershipRepository: MembershipRepository =
+            FirestoreMembershipRepository(FirebaseFirestore.getInstance())
         @Suppress("UNCHECKED_CAST")
-        return AuthViewModel(authRepository, accessRepository) as T
+        return AuthViewModel(authRepository, accessRepository, membershipRepository) as T
     }
 }
 
 @Composable
 fun AuthenticationGate(
     viewModel: AuthViewModel = viewModel(factory = AuthViewModelFactory()),
-    content: @Composable (onLogout: () -> Unit, profile: UserProfileData?, onLoadProfile: () -> Unit) -> Unit
+    content: @Composable (onLogout: () -> Unit, profile: UserProfileData?, onLoadProfile: () -> Unit, member: Member?) -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
     val isLoggingIn by viewModel.isLoggingIn.collectAsState()
     val loginError by viewModel.loginError.collectAsState()
     val profile by viewModel.profile.collectAsState()
+    val member by viewModel.member.collectAsState()
 
     DisposableEffect(Unit) {
         val auth = FirebaseAuth.getInstance()
@@ -82,6 +88,7 @@ fun AuthenticationGate(
         onLoadProfile = {
             viewModel.loadProfile()
         },
+        member = member,
         content = content
     )
 }
@@ -96,7 +103,8 @@ fun AuthenticationGateContent(
     onLogout: () -> Unit,
     profile: UserProfileData?,
     onLoadProfile: () -> Unit,
-    content: @Composable (onLogout: () -> Unit, profile: UserProfileData?, onLoadProfile: () -> Unit) -> Unit
+    member: Member?,
+    content: @Composable (onLogout: () -> Unit, profile: UserProfileData?, onLoadProfile: () -> Unit, member: Member?) -> Unit
 ) {
     when (state) {
         is AppAccessState.Loading -> {
@@ -156,7 +164,7 @@ fun AuthenticationGateContent(
             LaunchedEffect(Unit) {
                 onLoadProfile()
             }
-            content(onLogout, profile, onLoadProfile)
+            content(onLogout, profile, onLoadProfile, member)
         }
     }
 }

@@ -44,3 +44,11 @@ fun Role.canManageAccounts(): Boolean = when (this) {
     Role.SUPERUSER -> true
     else -> false
 }
+
+/**
+ * Gate helpers for UI visibility. A `null` role means the user has no member doc yet
+ * (not assigned to an org/branch), which keeps today's single-user privileges.
+ */
+fun Role?.mayDecreaseStock(): Boolean = this?.canDecreaseStock() ?: true
+
+fun Role?.mayViewOwnerDashboard(): Boolean = this?.canViewAllSellersDashboard() ?: false

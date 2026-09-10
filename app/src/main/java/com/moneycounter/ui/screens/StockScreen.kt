@@ -44,10 +44,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.moneycounter.domain.Currency
 import com.moneycounter.domain.MeasurementUnit
+import com.moneycounter.domain.Member
 import com.moneycounter.domain.Movement
 import com.moneycounter.domain.MovementType
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductPrice
+import com.moneycounter.domain.mayDecreaseStock
 import com.moneycounter.ui.components.LuisoButton
 import com.moneycounter.ui.components.LuisoCard
 import com.moneycounter.ui.components.LuisoNotice
@@ -64,9 +66,11 @@ import java.util.Locale
 @Composable
 fun StockScreen(
     viewModel: MoneyCounterViewModel,
-    onNavigateToReport: () -> Unit
+    onNavigateToReport: () -> Unit,
+    member: Member? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val canDecreaseStock = member?.role.mayDecreaseStock()
     var showAddProductDialog by remember { mutableStateOf(false) }
     var showAddStockDialog by remember { mutableStateOf<Product?>(null) }
     var showDeleteProductDialog by remember { mutableStateOf<Product?>(null) }
@@ -155,17 +159,19 @@ fun StockScreen(
                 }
             }
 
-            item {
-                LuisoButton(
-                    text = "BAJA POR MERMA",
-                    onClick = {
-                        showWriteoffDialog = true
-                        writeoffError = null
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    leadingIcon = Icons.Default.Delete,
-                    enabled = uiState.products.any { it.hasPriceIn(uiState.selectedCurrencyId) }
-                )
+            if (canDecreaseStock) {
+                item {
+                    LuisoButton(
+                        text = "BAJA POR MERMA",
+                        onClick = {
+                            showWriteoffDialog = true
+                            writeoffError = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = Icons.Default.Delete,
+                        enabled = uiState.products.any { it.hasPriceIn(uiState.selectedCurrencyId) }
+                    )
+                }
             }
 
             val mermaMovements = uiState.movements.filter {
