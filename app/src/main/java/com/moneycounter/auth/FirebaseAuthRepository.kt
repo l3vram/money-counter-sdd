@@ -2,6 +2,7 @@ package com.moneycounter.auth
 
 import android.app.Activity
 import android.content.Context
+import android.util.Log
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
@@ -44,6 +45,7 @@ class FirebaseAuthRepository : AuthRepository {
                 ?: return Result.failure(Exception("Firebase returned null user"))
             Result.success(user)
         } catch (e: Exception) {
+            Log.e(TAG, "signInWithGoogle failed", e)
             val message = mapAuthError(e)
             Result.failure(Exception(message))
         }
@@ -60,4 +62,8 @@ class FirebaseAuthRepository : AuthRepository {
             displayName = displayName,
             photoUrl = photoUrl?.toString()
         )
+
+    private companion object {
+        const val TAG = "MoneyCounterAuth"
+    }
 }

@@ -33,6 +33,26 @@ class AuthErrorMessageTest {
     @Test
     fun `maps unknown exception to generic unexpected message`() {
         val ex = IllegalStateException("boom")
-        assertEquals("Error inesperado", mapAuthError(ex))
+        assertEquals("Error inesperado (boom)", mapAuthError(ex))
+    }
+
+    @Test
+    fun `maps DEVELOPER_ERROR to a clear signature warning`() {
+        val ex = Exception("The following error occurred: 10: DEVELOPER_ERROR")
+        val message = mapAuthError(ex)
+        assertTrue(message.contains("firma"))
+        assertTrue(message.contains("SHA-1/SHA-256"))
+    }
+
+    @Test
+    fun `maps internal error to signature warning`() {
+        val ex = Exception("An internal error occurred while processing the credential request")
+        assertEquals(mapAuthError(Exception("developer")), mapAuthError(ex))
+    }
+
+    @Test
+    fun `blank message keeps the exception class as detail`() {
+        val ex = Exception()
+        assertEquals("Error inesperado (Exception)", mapAuthError(ex))
     }
 }
