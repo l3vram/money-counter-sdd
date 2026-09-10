@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.moneycounter.access.UserProfileData
 import com.moneycounter.ui.AuthenticationGate
+import com.moneycounter.ui.screens.CierresScreen
 import com.moneycounter.ui.screens.DenominationManagementScreen
 import com.moneycounter.ui.screens.GastosScreen
 import com.moneycounter.ui.screens.MoneyCounterScreen
@@ -278,7 +279,12 @@ fun MoneyCounterApp(
                             selectedReportIds = ids
                             currentScreen = "summary"
                         },
-                        onNavigateToGasto = { currentScreen = "gasto" }
+                        onNavigateToGasto = { currentScreen = "gasto" },
+                        onNavigateToCierres = { currentScreen = "cierres" }
+                    )
+                    "cierres" -> CierresScreen(
+                        viewModel = viewModel,
+                        onNavigateBack = { currentScreen = "reports" }
                     )
                     "gasto" -> GastosScreen(
                         viewModel = viewModel,

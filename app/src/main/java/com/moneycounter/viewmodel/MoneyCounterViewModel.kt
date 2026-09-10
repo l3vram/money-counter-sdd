@@ -3,6 +3,7 @@ package com.moneycounter.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.moneycounter.domain.Closing
 import com.moneycounter.domain.CounterResult
 import com.moneycounter.domain.CounterStatus
 import com.moneycounter.domain.Currency
@@ -13,6 +14,7 @@ import com.moneycounter.domain.MeasurementUnit
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.MoneyCounterCalculator
 import com.moneycounter.domain.Movement
+import com.moneycounter.domain.computeClosing
 import com.moneycounter.domain.MovementDenomination
 import com.moneycounter.domain.MovementProductLine
 import com.moneycounter.domain.MovementType
@@ -25,9 +27,11 @@ import com.moneycounter.domain.ReceivableStatus
 import com.moneycounter.domain.SavedCount
 import com.moneycounter.domain.SavedCountItem
 import com.moneycounter.domain.SavedProductItem
+import com.moneycounter.repository.ClosingRepository
 import com.moneycounter.repository.CurrencyRepository
 import com.moneycounter.repository.CurrencySettings
 import com.moneycounter.repository.DenominationRepository
+import com.moneycounter.repository.JsonClosingRepository
 import com.moneycounter.repository.JsonCurrencyRepository
 import com.moneycounter.repository.JsonDenominationRepository
 import com.moneycounter.repository.JsonPaymentRepository
@@ -72,6 +76,7 @@ data class MoneyCounterUiState(
     val receivables: List<Receivable> = emptyList(),
     val payments: List<Payment> = emptyList(),
     val movements: List<Movement> = emptyList(),
+    val closings: List<Closing> = emptyList(),
     val collectingReceivable: Receivable? = null,
     val lastFiadoId: String? = null
 )
@@ -87,6 +92,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     private val receivableRepository: ReceivableRepository = JsonReceivableRepository(application)
     private val paymentRepository: PaymentRepository = JsonPaymentRepository(application)
     private val movementRepository: MovementRepository = JsonMovementRepository(application)
+    private val closingRepository: ClosingRepository = JsonClosingRepository(application)
 
     private val _uiState = MutableStateFlow(MoneyCounterUiState())
     val uiState: StateFlow<MoneyCounterUiState> = _uiState.asStateFlow()
@@ -101,6 +107,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         loadReceivables()
         loadPayments()
         loadMovements()
+        loadClosings()
     }
 
     val selectedCurrency: Currency
@@ -802,6 +809,58 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch { movementRepository.saveAll(movements) }
     }
 
+    private fun loadClosings() {
+        viewModelScope.launch {
+            val closings = closingRepository.load()
+            _uiState.update { it.copy(closings = closings) }
+        }
+    }
+
+    private fun persistClosings() {
+        val closings = _uiState.value.closings
+        viewModelScope.launch { closingRepository.saveAll(closings) }
+    }
+
+    /** OPEN (not yet closed) movements for [currencyId], newest first — the pool a
+     *  cierre can select from. See [openMovementsPure] for the underlying filter. */
+    fun openMovements(currencyId: String): List<Movement> =
+        openMovementsPure(_uiState.value.movements, currencyId)
+
+    /** Creates a Closing over exactly the OPEN movements named by [movementIds]
+     *  (already-closed or unknown ids are silently dropped from the selection).
+     *  Stamps those movements' `closingId` with the new Closing's id so they can
+     *  never be selected into another close, persists both movements and closings,
+     *  and returns the new Closing's id. Returns null (no changes) if, after
+     *  dropping invalid ids, nothing is left to close, or if the remaining
+     *  movements span more than one currency. */
+    fun createClosing(movementIds: List<String>): String? {
+        val state = _uiState.value
+        val idSet = movementIds.toSet()
+        val selected = state.movements.filter { it.id in idSet && it.closingId == null }
+        if (selected.isEmpty()) return null
+        val currencyId = selected.first().currencyId
+        if (selected.any { it.currencyId != currencyId }) return null
+
+        val closing = computeClosing(
+            id = UUID.randomUUID().toString(),
+            at = System.currentTimeMillis(),
+            movements = selected,
+            products = state.products,
+            currencyId = currencyId
+        )
+
+        val stampedIds = selected.map { it.id }.toSet()
+        val newMovements = state.movements.map {
+            if (it.id in stampedIds) it.copy(closingId = closing.id) else it
+        }
+        _uiState.update {
+            it.copy(movements = newMovements, closings = listOf(closing) + it.closings)
+        }
+        persistMovements()
+        persistClosings()
+        return closing.id
+    }
+
     /** Settles ("cobra") an OPEN receivable: records a Payment (cash in) for its full
      *  amount and flips the receivable to SETTLED. Does NOT touch stock (already deducted
      *  at the credit sale) and does NOT create a SavedCount or re-create the debt.
@@ -1144,5 +1203,11 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             val delta = new.subtract(old)
             return if (delta.signum() > 0) delta.setScale(Money.SCALE) else Money.ZERO
         }
+
+        /** Pure filter: movements not yet stamped with a closingId, for [currencyId].
+         *  Guarantees no-double-close — once a movement carries a closingId it is
+         *  excluded here regardless of currency. */
+        fun openMovementsPure(movements: List<Movement>, currencyId: String): List<Movement> =
+            movements.filter { it.closingId == null && it.currencyId == currencyId }
     }
 }

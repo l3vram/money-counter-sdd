@@ -8,7 +8,9 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import androidx.core.content.FileProvider
+import com.moneycounter.domain.Closing
 import com.moneycounter.domain.Money
+import com.moneycounter.domain.MovementType
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.SavedCount
 import com.moneycounter.domain.UnitedCount
@@ -63,6 +65,11 @@ class PdfExporter(private val context: Context) {
 
     fun exportUnited(count: UnitedCount, currencySymbol: String) {
         val file = buildUnitedPdf(count, currencySymbol)
+        share(file)
+    }
+
+    fun exportClosing(closing: Closing, currencySymbol: String) {
+        val file = buildClosingPdf(closing, currencySymbol)
         share(file)
     }
 
@@ -354,6 +361,100 @@ class PdfExporter(private val context: Context) {
         val stamp = SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.getDefault())
             .format(Date(dateMs))
         val file = File(context.cacheDir, "existencias_$stamp.pdf")
+        try {
+            FileOutputStream(file).use { fos ->
+                document.writeTo(fos)
+            }
+        } finally {
+            document.close()
+        }
+        return file
+    }
+
+    private fun buildClosingPdf(closing: Closing, currencySymbol: String): File {
+        val document = PdfDocument()
+        val pageWidth = 595
+        val pageHeight = 842
+        val margin = 48f
+        var y = 80f
+        var page = document.startPage(
+            PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 0).create()
+        )
+        var canvas: Canvas = page.canvas
+
+        fun newPageIfNeeded(needed: Float) {
+            if (y + needed > pageHeight - margin) {
+                document.finishPage(page)
+                page = document.startPage(
+                    PdfDocument.PageInfo.Builder(pageWidth, pageHeight, document.pages.size).create()
+                )
+                canvas = page.canvas
+                y = 80f
+            }
+        }
+
+        // Title
+        canvas.drawText("Cierre", margin, y, titlePaint)
+        y += 30f
+
+        // Date
+        val dateStr = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(closing.at))
+        canvas.drawText("Fecha: $dateStr", margin, y, headerPaint)
+        y += 24f
+
+        canvas.drawText("Moneda: $currencySymbol", margin, y, headerPaint)
+        y += 20f
+        canvas.drawText("Movimientos incluidos: ${closing.movementIds.size}", margin, y, headerPaint)
+        y += 20f
+        canvas.drawText(
+            "NETO EN CAJA: ${formatMoneyBigDecimal(closing.netCash, currencySymbol)}",
+            margin,
+            y,
+            headerPaint
+        )
+        y += 36f
+
+        // Totals by type
+        canvas.drawText("TOTALES POR TIPO", margin, y, headerPaint)
+        y += 16f
+        canvas.drawLine(margin, y + 6f, pageWidth - margin, y + 6f, linePaint)
+        y += 20f
+        for (type in MovementType.entries) {
+            newPageIfNeeded(20f)
+            val amount = closing.totalsByType[type] ?: Money.ZERO
+            canvas.drawText(type.name, margin, y, bodyPaint)
+            canvas.drawText(formatMoneyBigDecimal(amount, currencySymbol), 380f, y, bodyPaint)
+            y += 22f
+        }
+        y += 16f
+
+        // Stock snapshot
+        newPageIfNeeded(60f)
+        canvas.drawText("EXISTENCIAS AL CIERRE", margin, y, headerPaint)
+        y += 16f
+        canvas.drawLine(margin, y + 6f, pageWidth - margin, y + 6f, linePaint)
+        y += 20f
+        canvas.drawText("PRODUCTO", margin, y, labelPaint)
+        canvas.drawText("CANTIDAD", 380f, y, labelPaint)
+        y += 16f
+        canvas.drawLine(margin, y + 6f, pageWidth - margin, y + 6f, linePaint)
+        y += 20f
+
+        if (closing.stockSnapshot.isEmpty()) {
+            canvas.drawText("No hay existencias.", margin, y, bodyPaint)
+        } else {
+            for (line in closing.stockSnapshot) {
+                newPageIfNeeded(20f)
+                canvas.drawText(line.name, margin, y, bodyPaint)
+                canvas.drawText("${line.quantity.stripTrailingZeros().toPlainString()} ${line.unit}", 380f, y, bodyPaint)
+                y += 22f
+            }
+        }
+
+        document.finishPage(page)
+
+        val stamp = SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.getDefault()).format(Date(closing.at))
+        val file = File(context.cacheDir, "cierre_$stamp.pdf")
         try {
             FileOutputStream(file).use { fos ->
                 document.writeTo(fos)

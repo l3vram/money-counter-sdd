@@ -3,7 +3,9 @@ package com.moneycounter.util
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
+import com.moneycounter.domain.Closing
 import com.moneycounter.domain.Money
+import com.moneycounter.domain.MovementType
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.SavedCount
 import com.moneycounter.domain.UnitedCount
@@ -19,6 +21,11 @@ class ExcelExporter(private val context: Context) {
 
     fun export(saved: SavedCount) {
         val file = buildCsv(saved)
+        share(file)
+    }
+
+    fun exportClosing(closing: Closing, currencySymbol: String) {
+        val file = buildClosingCsv(closing, currencySymbol)
         share(file)
     }
 
@@ -182,6 +189,53 @@ class ExcelExporter(private val context: Context) {
         val stamp = SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.getDefault())
             .format(Date(dateMs))
         val file = File(context.cacheDir, "existencias_$stamp.csv")
+        FileOutputStream(file).use { fos ->
+            // UTF-8 BOM so Excel detects the encoding and keeps accents
+            fos.write(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))
+            fos.write(content.toByteArray(Charsets.UTF_8))
+        }
+        return file
+    }
+
+    private fun buildClosingCsv(closing: Closing, currencySymbol: String): File {
+        val lines = mutableListOf<String>()
+
+        lines += csvRow("Cierre")
+        lines += csvRow(
+            "Fecha",
+            SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(closing.at))
+        )
+        lines += csvRow("Moneda", currencySymbol)
+        lines += csvRow("Movimientos incluidos", closing.movementIds.size.toString())
+        lines += csvRow("NETO EN CAJA (VENTA + COBRO - GASTO)", formatMoneyBigDecimal(closing.netCash, currencySymbol))
+        lines += ""
+
+        lines += csvRow("TOTALES POR TIPO")
+        lines += csvRow("Tipo", "Total")
+        for (type in MovementType.entries) {
+            val amount = closing.totalsByType[type] ?: Money.ZERO
+            lines += csvRow(type.name, formatMoneyBigDecimal(amount, currencySymbol))
+        }
+        lines += ""
+
+        lines += csvRow("EXISTENCIAS AL CIERRE")
+        lines += csvRow("Producto", "Unidad", "Cantidad")
+        if (closing.stockSnapshot.isEmpty()) {
+            lines += csvRow("No hay existencias")
+        } else {
+            for (line in closing.stockSnapshot) {
+                lines += csvRow(
+                    line.name,
+                    line.unit,
+                    line.quantity.stripTrailingZeros().toPlainString()
+                )
+            }
+        }
+
+        val content = lines.joinToString("\r\n")
+
+        val stamp = SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.getDefault()).format(Date(closing.at))
+        val file = File(context.cacheDir, "cierre_$stamp.csv")
         FileOutputStream(file).use { fos ->
             // UTF-8 BOM so Excel detects the encoding and keeps accents
             fos.write(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))
