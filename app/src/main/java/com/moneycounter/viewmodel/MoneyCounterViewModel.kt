@@ -443,6 +443,39 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         return true
     }
 
+    /** Add stock to an existing product (seller "Alta"): increases stock by [quantityText],
+     *  records an ALTA movement. Returns false on invalid input. */
+    fun addStock(productId: String, quantityText: String): Boolean {
+        val qty = ProductSelection.parseQuantity(quantityText)
+        if (qty.signum() <= 0) return false
+        val state = _uiState.value
+        val product = state.products.firstOrNull { it.id == productId } ?: return false
+        val newStock = product.stock.add(qty).setScale(Money.SCALE)
+        val newProducts = state.products.map {
+            if (it.id == productId) it.copy(stock = newStock) else it
+        }
+        _uiState.update { it.copy(products = newProducts) }
+        persistProducts(newProducts)
+        val unitPrice = product.effectiveUnitPriceFor(state.selectedCurrencyId) ?: Money.ZERO
+        recordMovement(
+            buildStockInMovement(
+                id = UUID.randomUUID().toString(),
+                at = System.currentTimeMillis(),
+                type = MovementType.ALTA,
+                currencyId = state.selectedCurrencyId,
+                productLine = MovementProductLine(
+                    name = product.name,
+                    unit = product.unit,
+                    quantity = qty,
+                    unitPrice = unitPrice,
+                    subtotal = unitPrice.multiply(qty).setScale(Money.SCALE)
+                ),
+                amount = unitPrice.multiply(qty).setScale(Money.SCALE)
+            )
+        )
+        return true
+    }
+
     fun addProductRow() {
         _uiState.update {
             it.copy(productSelections = it.productSelections + ProductSelection())
@@ -541,17 +574,18 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
 
     /** Registers a "gasto" (operating expense): cash out, no stock, no denominations.
      *  Requires a non-blank concept and a positive amount. Returns false on invalid input. */
-    fun recordExpense(concept: String, amountText: String): Boolean {
+    fun recordExpense(concept: String, amountText: String, currencyId: String? = null): Boolean {
         val cleanConcept = concept.trim()
         if (cleanConcept.isEmpty()) return false
         val amount = ProductSelection.parseQuantity(amountText)
         if (amount.signum() <= 0) return false
         val state = _uiState.value
+        val effectiveCurrencyId = currencyId ?: state.selectedCurrencyId
         recordMovement(
             buildExpenseMovement(
                 id = UUID.randomUUID().toString(),
                 at = System.currentTimeMillis(),
-                currencyId = state.selectedCurrencyId,
+                currencyId = effectiveCurrencyId,
                 concept = cleanConcept,
                 amount = amount
             )

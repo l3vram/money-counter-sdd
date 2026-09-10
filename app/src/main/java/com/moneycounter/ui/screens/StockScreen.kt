@@ -19,7 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -69,10 +68,11 @@ fun StockScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showAddProductDialog by remember { mutableStateOf(false) }
-    var showEditProductDialog by remember { mutableStateOf<Product?>(null) }
+    var showAddStockDialog by remember { mutableStateOf<Product?>(null) }
     var showDeleteProductDialog by remember { mutableStateOf<Product?>(null) }
     var showWriteoffDialog by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var addStockError by remember { mutableStateOf<String?>(null) }
     var writeoffError by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
@@ -112,9 +112,9 @@ fun StockScreen(
                         product = product,
                         symbolOf = { id -> uiState.currencies.firstOrNull { it.id == id }?.symbol ?: id },
                         currencyCodeOf = { id -> uiState.currencies.firstOrNull { it.id == id }?.code ?: id },
-                        onEdit = {
-                            showEditProductDialog = product
-                            errorMessage = null
+                        onAddStock = {
+                            showAddStockDialog = product
+                            addStockError = null
                         },
                         onDelete = { showDeleteProductDialog = product }
                     )
@@ -217,33 +217,22 @@ fun StockScreen(
         )
     }
 
-    showEditProductDialog?.let { product ->
-        val editPrices = uiState.currencies.associate { c ->
-            val pp = product.prices[c.id]
-            c.id to ((pp?.unitPrice?.stripTrailingZeros()?.toPlainString() ?: "0") to (pp?.surcharge?.stripTrailingZeros()?.toPlainString() ?: "0"))
-        }
-        ProductDialog(
-            title = "Editar producto",
-            units = uiState.units,
-            currencies = uiState.currencies,
-            initialName = product.name,
-            initialUnit = product.unit,
-            initialStock = product.stock.stripTrailingZeros().toPlainString(),
-            initialPrices = editPrices,
-            confirmText = "GUARDAR",
-            onConfirm = { name, unit, stock, prices ->
-                if (viewModel.editProduct(product.id, name, unit, stock, prices)) {
-                    showEditProductDialog = null
-                    errorMessage = null
+    showAddStockDialog?.let { product ->
+        AddStockDialog(
+            product = product,
+            onConfirm = { quantityText ->
+                if (viewModel.addStock(product.id, quantityText)) {
+                    showAddStockDialog = null
+                    addStockError = null
                 } else {
-                    errorMessage = "Revisa los datos: nombre y unidad obligatorios."
+                    addStockError = "Revisa los datos: cantidad mayor que cero."
                 }
             },
             onDismiss = {
-                showEditProductDialog = null
-                errorMessage = null
+                showAddStockDialog = null
+                addStockError = null
             },
-            errorMessage = errorMessage
+            errorMessage = addStockError
         )
     }
 
@@ -444,11 +433,85 @@ private fun WriteoffDialog(
 }
 
 @Composable
+private fun AddStockDialog(
+    product: Product,
+    onConfirm: (quantityText: String) -> Unit,
+    onDismiss: () -> Unit,
+    errorMessage: String? = null
+) {
+    var quantityText by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Alta de stock") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 400.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = product.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Stock actual: ${product.stock.stripTrailingZeros().toPlainString()} ${product.unit}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                LuisoTextField(
+                    value = quantityText,
+                    onValueChange = { newValue ->
+                        if (
+                            newValue.isEmpty() ||
+                            newValue.trim()
+                                .replace(',', '.')
+                                .matches(Regex("\\d*\\.?\\d*"))
+                        ) {
+                            quantityText = newValue
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = "Cantidad a agregar (${product.unit})",
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal
+                    )
+                )
+
+                if (errorMessage != null) {
+                    Text(
+                        text = errorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(quantityText) }
+            ) {
+                Text("AGREGAR")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("CANCELAR")
+            }
+        }
+    )
+}
+
+@Composable
 private fun ProductRow(
     product: Product,
     symbolOf: (String) -> String = { it },
     currencyCodeOf: (String) -> String = { it },
-    onEdit: () -> Unit,
+    onAddStock: () -> Unit,
     onDelete: () -> Unit
 ) {
     LuisoCard(modifier = Modifier.fillMaxWidth()) {
@@ -483,10 +546,10 @@ private fun ProductRow(
             }
 
             Row {
-                IconButton(onClick = onEdit) {
+                IconButton(onClick = onAddStock) {
                     Icon(
-                        Icons.Default.Edit,
-                        contentDescription = "Editar",
+                        Icons.Default.Add,
+                        contentDescription = "Dar entrada",
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }

@@ -130,7 +130,7 @@ fun MoneyCounterScreen(
                         .padding(horizontal = 16.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = "Contador de dinero",
+                        text = "El Luiso",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimary
                     )

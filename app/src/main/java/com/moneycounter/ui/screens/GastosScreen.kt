@@ -1,18 +1,23 @@
 package com.moneycounter.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,11 +42,14 @@ fun GastosScreen(
     onNavigateBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val currencySymbol = uiState.currencies.firstOrNull { it.id == uiState.selectedCurrencyId }?.symbol ?: "$"
+    var selectedCurrencyId by remember { mutableStateOf(uiState.selectedCurrencyId) }
+    val selectedCurrency = uiState.currencies.firstOrNull { it.id == selectedCurrencyId }
+    val currencySymbol = selectedCurrency?.symbol ?: "$"
     var concept by remember { mutableStateOf("") }
     var amountText by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var successMessage by remember { mutableStateOf<String?>(null) }
+    var currencyMenuOpen by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -69,6 +77,32 @@ fun GastosScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             LuisoSectionHeader(text = "REGISTRAR GASTO")
+
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = { currencyMenuOpen = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Moneda: $currencySymbol ${selectedCurrency?.code ?: ""}",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                DropdownMenu(
+                    expanded = currencyMenuOpen,
+                    onDismissRequest = { currencyMenuOpen = false }
+                ) {
+                    uiState.currencies.forEach { currency ->
+                        DropdownMenuItem(
+                            text = { Text("${currency.symbol} ${currency.code} — ${currency.name}") },
+                            onClick = {
+                                selectedCurrencyId = currency.id
+                                currencyMenuOpen = false
+                            }
+                        )
+                    }
+                }
+            }
 
             LuisoTextField(
                 value = concept,
@@ -105,7 +139,7 @@ fun GastosScreen(
             LuisoButton(
                 text = "REGISTRAR GASTO",
                 onClick = {
-                    if (viewModel.recordExpense(concept, amountText)) {
+                    if (viewModel.recordExpense(concept, amountText, selectedCurrencyId)) {
                         successMessage = "Gasto registrado."
                         errorMessage = null
                         concept = ""

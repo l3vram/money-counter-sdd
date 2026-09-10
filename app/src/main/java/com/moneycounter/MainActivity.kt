@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.Receipt
@@ -83,7 +84,7 @@ fun MoneyCounterApp(
     var selectedHistoryId by remember { mutableStateOf<String?>(null) }
 
     val showBottomBar =
-        currentScreen == "counter" || currentScreen == "stock" || currentScreen == "reports"
+        currentScreen == "counter" || currentScreen == "stock" || currentScreen == "reports" || currentScreen == "cierres"
 
     val currentDensity = LocalDensity.current
     CompositionLocalProvider(
@@ -191,7 +192,7 @@ fun MoneyCounterApp(
                                     }
                                 }
 
-                                // REPORTES
+                                // HISTORIAL
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
@@ -221,6 +222,43 @@ fun MoneyCounterApp(
                                             text = "Historial",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = if (currentScreen == "reports")
+                                                MaterialTheme.colorScheme.primary
+                                            else
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                // CIERRES
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                        .clickable {
+                                            currentScreen = "cierres"
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.FavoriteBorder,
+                                            contentDescription = "Cierres",
+                                            modifier = Modifier.size(23.dp),
+                                            tint = if (currentScreen == "cierres")
+                                                MaterialTheme.colorScheme.primary
+                                            else
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+
+                                        Spacer(modifier = Modifier.height(3.dp))
+
+                                        Text(
+                                            text = "Cierres",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (currentScreen == "cierres")
                                                 MaterialTheme.colorScheme.primary
                                             else
                                                 MaterialTheme.colorScheme.onSurfaceVariant
@@ -273,12 +311,11 @@ fun MoneyCounterApp(
                             selectedHistoryId = id
                             currentScreen = "detail"
                         },
-                        onNavigateToGasto = { currentScreen = "gasto" },
-                        onNavigateToCierres = { currentScreen = "cierres" }
+                        onNavigateToGasto = { currentScreen = "gasto" }
                     )
                     "cierres" -> CierresScreen(
                         viewModel = viewModel,
-                        onNavigateBack = { currentScreen = "reports" }
+                        onNavigateBack = { currentScreen = "counter" }
                     )
                     "gasto" -> GastosScreen(
                         viewModel = viewModel,
