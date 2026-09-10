@@ -12,6 +12,7 @@ import com.moneycounter.domain.InventoryWriteoff
 import com.moneycounter.domain.MeasurementUnit
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.MoneyCounterCalculator
+import com.moneycounter.domain.Movement
 import com.moneycounter.domain.Payment
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductPrice
@@ -27,11 +28,13 @@ import com.moneycounter.repository.DenominationRepository
 import com.moneycounter.repository.JsonCurrencyRepository
 import com.moneycounter.repository.JsonDenominationRepository
 import com.moneycounter.repository.JsonPaymentRepository
+import com.moneycounter.repository.JsonMovementRepository
 import com.moneycounter.repository.JsonProductRepository
 import com.moneycounter.repository.JsonSavedCountRepository
 import com.moneycounter.repository.JsonReceivableRepository
 import com.moneycounter.repository.JsonUnitRepository
 import com.moneycounter.repository.JsonWriteoffRepository
+import com.moneycounter.repository.MovementRepository
 import com.moneycounter.repository.PaymentRepository
 import com.moneycounter.repository.ProductRepository
 import com.moneycounter.repository.ReceivableRepository
@@ -64,7 +67,8 @@ data class MoneyCounterUiState(
     val units: List<MeasurementUnit> = emptyList(),
     val writeoffs: List<InventoryWriteoff> = emptyList(),
     val receivables: List<Receivable> = emptyList(),
-    val payments: List<Payment> = emptyList()
+    val payments: List<Payment> = emptyList(),
+    val movements: List<Movement> = emptyList()
 )
 
 class MoneyCounterViewModel(application: Application) : AndroidViewModel(application) {
@@ -77,6 +81,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     private val writeoffRepository: WriteoffRepository = JsonWriteoffRepository(application)
     private val receivableRepository: ReceivableRepository = JsonReceivableRepository(application)
     private val paymentRepository: PaymentRepository = JsonPaymentRepository(application)
+    private val movementRepository: MovementRepository = JsonMovementRepository(application)
 
     private val _uiState = MutableStateFlow(MoneyCounterUiState())
     val uiState: StateFlow<MoneyCounterUiState> = _uiState.asStateFlow()
@@ -90,6 +95,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         loadWriteoffs()
         loadReceivables()
         loadPayments()
+        loadMovements()
     }
 
     val selectedCurrency: Currency
@@ -666,6 +672,13 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     private fun persistPayments() {
         val payments = _uiState.value.payments
         viewModelScope.launch { paymentRepository.saveAll(payments) }
+    }
+
+    private fun loadMovements() {
+        viewModelScope.launch {
+            val movements = movementRepository.load()
+            _uiState.update { it.copy(movements = movements) }
+        }
     }
 
     /** Settles ("cobra") an OPEN receivable: records a Payment (cash in) for its full
