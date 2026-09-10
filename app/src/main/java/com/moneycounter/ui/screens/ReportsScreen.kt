@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,12 +64,15 @@ import java.util.Locale
 fun ReportsScreen(
     viewModel: MoneyCounterViewModel,
     onOpenDetail: (String) -> Unit,
-    onNavigateToGasto: () -> Unit
+    onNavigateToGasto: () -> Unit,
+    onOpenSummary: (List<String>) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var filterCurrencyId by remember { mutableStateOf(DefaultCurrencies.CUP.id) }
     var ascending by remember { mutableStateOf(false) }
     var expandedKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     val filterCurrency = uiState.currencies.firstOrNull { it.id == filterCurrencyId }
     val filtered = uiState.movements.filter { it.currencyId == filterCurrencyId }
@@ -80,6 +84,14 @@ fun ReportsScreen(
 
     fun toggleKey(key: String) {
         expandedKeys = if (key in expandedKeys) expandedKeys - key else expandedKeys + key
+    }
+
+    fun toggleId(id: String) {
+        selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
+    }
+
+    fun toggleGroup(ids: List<String>) {
+        selectedIds = if (ids.all { it in selectedIds }) selectedIds - ids.toSet() else selectedIds + ids.toSet()
     }
 
     val rows = buildList {
@@ -107,6 +119,31 @@ fun ReportsScreen(
     Scaffold(
         topBar = {
             LuisoTopBar(title = "Historial")
+        },
+        bottomBar = {
+            if (selectionMode) {
+                Surface(shadowElevation = 8.dp) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Seleccionadas: ${selectedIds.size}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                        LuisoButton(
+                            text = if (selectedIds.isEmpty()) "GENERAR RESUMEN" else "GENERAR RESUMEN (${selectedIds.size})",
+                            onClick = { onOpenSummary(selectedIds.toList()) },
+                            enabled = selectedIds.isNotEmpty()
+                        )
+                    }
+                }
+            }
         }
     ) { padding ->
         LazyColumn(
@@ -128,12 +165,34 @@ fun ReportsScreen(
                         onSelectCurrency = {
                             filterCurrencyId = it
                             expandedKeys = emptySet()
+                            selectedIds = emptySet()
                         }
                     )
+                    LuisoOutlineButton(
+                        text = if (selectionMode) "Listo" else "Selección",
+                        onClick = { selectionMode = !selectionMode },
+                        modifier = Modifier.width(110.dp)
+                    )
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     LuisoOutlineButton(
                         text = if (ascending) "Antiguos ↑" else "Recientes ↓",
                         onClick = { ascending = !ascending }
                     )
+                    if (selectionMode) {
+                        Text(
+                            text = "Marca las ventas a consolidar",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
@@ -172,32 +231,52 @@ fun ReportsScreen(
                     when (row) {
                         is MovementMonthItem -> {
                             val isCurrentMonth = row.group.key.year == currentYear && row.group.key.month == currentMonth
+                            val monthSelectable = row.group.days
+                                .flatMap { it.movements }
+                                .filter { it.denominations.isNotEmpty() }
+                                .map { it.id }
                             Surface(color = MaterialTheme.colorScheme.surface) {
                                 MovementMonthRow(
                                     group = row.group,
                                     expanded = row.group.key.keyString() in expandedKeys,
                                     accent = isCurrentMonth,
+                                    selectionMode = selectionMode,
+                                    selectableCount = monthSelectable.size,
+                                    allSelected = monthSelectable.isNotEmpty() && monthSelectable.all { it in selectedIds },
+                                    onToggleAll = { toggleGroup(monthSelectable) },
                                     onToggleExpand = { toggleKey(row.group.key.keyString()) }
                                 )
                             }
                             Separator()
                         }
                         is MovementDayItem -> {
+                            val daySelectable = row.day.movements
+                                .filter { it.denominations.isNotEmpty() }
+                                .map { it.id }
                             Surface(color = MaterialTheme.colorScheme.surface) {
                                 MovementDayRow(
                                     day = row.day,
                                     expanded = row.day.key.keyString() in expandedKeys,
                                     symbol = filterCurrency?.symbol ?: "$",
+                                    selectionMode = selectionMode,
+                                    selectableCount = daySelectable.size,
+                                    allSelected = daySelectable.isNotEmpty() && daySelectable.all { it in selectedIds },
+                                    onToggleAll = { toggleGroup(daySelectable) },
                                     onToggleExpand = { toggleKey(row.day.key.keyString()) }
                                 )
                             }
                             Separator()
                         }
                         is MovementRowItem -> {
+                            val selectable = row.movement.denominations.isNotEmpty()
                             Surface(color = MaterialTheme.colorScheme.surface) {
                                 MovementRow(
                                     movement = row.movement,
                                     symbol = filterCurrency?.symbol ?: "$",
+                                    selectionMode = selectionMode,
+                                    selectable = selectable,
+                                    selected = row.movement.id in selectedIds,
+                                    onToggle = { toggleId(row.movement.id) },
                                     onOpenDetail = { onOpenDetail(row.movement.id) }
                                 )
                             }
@@ -223,6 +302,10 @@ private fun MovementMonthRow(
     group: MovementMonthGroup,
     expanded: Boolean,
     accent: Boolean = false,
+    selectionMode: Boolean = false,
+    selectableCount: Int = 0,
+    allSelected: Boolean = false,
+    onToggleAll: () -> Unit = {},
     onToggleExpand: () -> Unit
 ) {
     val monthLabel = remember(group.key) {
@@ -236,6 +319,9 @@ private fun MovementMonthRow(
             .padding(horizontal = 4.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (selectionMode && selectableCount > 0) {
+            Checkbox(checked = allSelected, onCheckedChange = { onToggleAll() })
+        }
         LuisoSectionHeader(
             text = monthLabel,
             accent = accent,
@@ -260,6 +346,10 @@ private fun MovementDayRow(
     day: MovementDayGroup,
     expanded: Boolean,
     symbol: String,
+    selectionMode: Boolean = false,
+    selectableCount: Int = 0,
+    allSelected: Boolean = false,
+    onToggleAll: () -> Unit = {},
     onToggleExpand: () -> Unit
 ) {
     val dayLabel = remember(day.key) {
@@ -273,6 +363,9 @@ private fun MovementDayRow(
             .padding(start = 20.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (selectionMode && selectableCount > 0) {
+            Checkbox(checked = allSelected, onCheckedChange = { onToggleAll() })
+        }
         Text(
             text = dayLabel,
             style = MaterialTheme.typography.bodyMedium,
@@ -303,6 +396,10 @@ private fun MovementDayRow(
 private fun MovementRow(
     movement: Movement,
     symbol: String,
+    selectionMode: Boolean = false,
+    selectable: Boolean = true,
+    selected: Boolean = false,
+    onToggle: () -> Unit = {},
     onOpenDetail: () -> Unit
 ) {
     val subtitle = movement.concept?.takeIf { it.isNotBlank() }
@@ -312,9 +409,15 @@ private fun MovementRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 5.dp)
-            .clickable(onClick = onOpenDetail),
+            .clickable(
+                enabled = !selectionMode || selectable,
+                onClick = { if (selectionMode) onToggle() else onOpenDetail() }
+            ),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (selectionMode && selectable) {
+            Checkbox(checked = selected, onCheckedChange = { onToggle() })
+        }
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             MovementTypeBadge(type = movement.type)
@@ -339,11 +442,13 @@ private fun MovementRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Icon(
-            Icons.Filled.ChevronRight,
-            contentDescription = "Ver detalle",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        if (!selectionMode) {
+            Icon(
+                Icons.Filled.ChevronRight,
+                contentDescription = "Ver detalle",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

@@ -100,14 +100,20 @@
 ### Deuda técnica / mejoras
 | Item | Qué | Detalle |
 |------|-----|---------|
-| Dead code `uniteCounts`/`exportUnited` | `ReportAggregation` + overloads PDF/CSV ya no son llamados por ninguna pantalla | conectar o eliminar |
+| Avatar `LuisoAvatar` (Components.kt) | Con `photoUrl` de Google pinta la foto pero le superpone la inicial (ver `Components.kt`) | si hay foto mostrar SOLO la foto; si no hay, la inicial |
+| Login Google en Cuba | Google Sign-In no funciona en Cuba (embargo: endpoints de identidad bloqueados) — no es bug de código | decidir: modo sin cuenta (guest/offline), email+password, o ambos |
 | `LuisoButton` 40dp vs 48dp | Touch target bajo el mínimo a11y del design kit | subir a 48dp |
 | Permission matrix sin conectar | `Role.canDecreaseStock()`/`canManageAccounts()`/`canViewAllSellersDashboard()` no se usan fuera de `Role.kt` | conectar al UI cuando llegue Roles |
+| ELIMINAR en lote del Historial | El modo selección volvió con GENERAR RESUMEN pero sin batch-delete | opcional: `deleteMovements(ids)` + persistir journal |
+| Señales +/- en reportes y cierres | Gasto/Merma deben verse como salida (`-`) y Venta/Cobro/Alta/Entrada como entrada (`+`) para identificarlas de un vistazo | aplicar a Historial + Cierres (y resumen) |
+| Stock: solo OWNER borra | Un seller nunca puede borrar/eliminar nada del stock; solo el owner | gating en StockScreen (relacionado a `canEditStock`) |
+| Cobro/fiado con detalle | Al saldar cuenta (COBRO de un fiado) mostrar además del total a cobrar los PRODUCTOS y cantidades de la deuda | en la ventana de contador, modo collecting |
+| Cantidades en el Historial | En el listado de movimientos mostrar la cantidad junto al producto, p. ej. `Arroz 20 Lb` (hoy la fila solo muestra el nombre del primer producto) | `MovementRow` en ReportsScreen |
 | Firestore repos | `FirestorePaths`/`FirestoreMappers` existen pero no hay repositorios reales (todo es `Json*`) | parte de fase 3, sub-plan 2 |
 
 ## 3. Riesgos / decisiones retiradas (registro)
 
-- **Modo selección + GENERAR RESUMEN + ELIMINAR** (reports-currency 008/009/012): retirado en Phase 2b; el reporte unificado se reemplazó por **Cierres**. Si el owner quiere re-restaurarlo sobre el modelo `Movement`, es un work item nuevo.
+- **Modo selección + GENERAR RESUMEN** (reports-currency 008/009/012): re-restaurado sobre el modelo `Movement` en `feature/reportes-seleccionables` (`uniteMovements` + modo selección en Historial + `UnifiedReportScreen` + export PDF/CSV). ELIMINAR en lote sigue pendiente.
 - **Migrar todo JSON a Firestore**: rechazado — viola offline-first; solo entidades compartidas (stock, catálogo) van al cloud, en Phase 3.
 - **Superuser CRUD dentro del APK**: rechazado por el owner — se usa un web admin serverless separado.
 - **Nota de crédito/débito**: deferido (devoluciones/ajustes post-venta).

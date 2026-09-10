@@ -52,6 +52,7 @@ import com.moneycounter.ui.screens.MovementDetailScreen
 import com.moneycounter.ui.screens.ReportsScreen
 import com.moneycounter.ui.screens.StockReportScreen
 import com.moneycounter.ui.screens.StockScreen
+import com.moneycounter.ui.screens.UnifiedReportScreen
 import com.moneycounter.ui.screens.UserProfileScreen
 import com.moneycounter.ui.theme.MoneyCounterTheme
 import com.moneycounter.viewmodel.MoneyCounterViewModel
@@ -89,6 +90,7 @@ fun MoneyCounterApp(
     }
     var currentScreen by remember { mutableStateOf("counter") }
     var selectedHistoryId by remember { mutableStateOf<String?>(null) }
+    var selectedSummaryIds by remember { mutableStateOf<List<String>>(emptyList()) }
 
     val showBottomBar =
         currentScreen == "counter" || currentScreen == "stock" || currentScreen == "reports" || currentScreen == "cierres"
@@ -319,7 +321,11 @@ fun MoneyCounterApp(
                             selectedHistoryId = id
                             currentScreen = "detail"
                         },
-                        onNavigateToGasto = { currentScreen = "gasto" }
+                        onNavigateToGasto = { currentScreen = "gasto" },
+                        onOpenSummary = { ids ->
+                            selectedSummaryIds = ids
+                            currentScreen = "summary"
+                        }
                     )
                     "cierres" -> CierresScreen(
                         viewModel = viewModel,
@@ -332,6 +338,11 @@ fun MoneyCounterApp(
                     "detail" -> MovementDetailScreen(
                         viewModel = viewModel,
                         movementId = selectedHistoryId.orEmpty(),
+                        onNavigateBack = { currentScreen = "reports" }
+                    )
+                    "summary" -> UnifiedReportScreen(
+                        viewModel = viewModel,
+                        selectedMovementIds = selectedSummaryIds,
                         onNavigateBack = { currentScreen = "reports" }
                     )
                 }

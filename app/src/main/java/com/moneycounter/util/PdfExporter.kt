@@ -13,6 +13,7 @@ import com.moneycounter.domain.Money
 import com.moneycounter.domain.MovementType
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.SavedCount
+import com.moneycounter.domain.UnitedCount
 import com.moneycounter.ui.components.formatMoney
 import com.moneycounter.ui.components.formatMoneyBigDecimal
 import java.io.File
@@ -64,6 +65,11 @@ class PdfExporter(private val context: Context) {
 
     fun exportClosing(closing: Closing, currencySymbol: String) {
         val file = buildClosingPdf(closing, currencySymbol)
+        share(file)
+    }
+
+    fun exportUnited(count: UnitedCount, currencySymbol: String) {
+        val file = buildUnitedPdf(count, currencySymbol)
         share(file)
     }
 
@@ -167,6 +173,113 @@ class PdfExporter(private val context: Context) {
         val stamp = SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.getDefault())
             .format(Date(saved.savedAt))
         val file = File(context.cacheDir, "reporte_$stamp.pdf")
+        try {
+            FileOutputStream(file).use { fos ->
+                document.writeTo(fos)
+            }
+        } finally {
+            document.close()
+        }
+        return file
+    }
+
+    private fun buildUnitedPdf(count: UnitedCount, currencySymbol: String): File {
+        val document = PdfDocument()
+        val pageWidth = 595
+        val pageHeight = 842
+        val margin = 48f
+        var y = 80f
+        var page = document.startPage(
+            PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 0).create()
+        )
+        var canvas: Canvas = page.canvas
+
+        fun newPageIfNeeded(needed: Float) {
+            if (y + needed > pageHeight - margin) {
+                document.finishPage(page)
+                page = document.startPage(
+                    PdfDocument.PageInfo.Builder(pageWidth, pageHeight, document.pages.size).create()
+                )
+                canvas = page.canvas
+                y = 80f
+            }
+        }
+
+        // Title
+        canvas.drawText("Reporte de conteo unificado", margin, y, titlePaint)
+        y += 30f
+
+        // Date
+        val dateStr = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+            .format(Date(System.currentTimeMillis()))
+        canvas.drawText("Fecha: $dateStr", margin, y, headerPaint)
+        y += 24f
+
+        canvas.drawText("Moneda: $currencySymbol (${count.currencyCode})", margin, y, headerPaint)
+        y += 20f
+        canvas.drawText("Nº de ventas: ${count.count}", margin, y, headerPaint)
+        y += 20f
+        canvas.drawText(
+            "TOTAL GENERAL: ${formatMoneyBigDecimal(count.total(), currencySymbol)}",
+            margin,
+            y,
+            headerPaint
+        )
+        y += 36f
+
+        // Products section (if any)
+        if (count.products.isNotEmpty()) {
+            canvas.drawText("PRODUCTOS", margin, y, headerPaint)
+            y += 16f
+            canvas.drawLine(margin, y + 6f, pageWidth - margin, y + 6f, linePaint)
+            y += 20f
+            canvas.drawText("PRODUCTO", margin, y, labelPaint)
+            canvas.drawText("CANT.", 240f, y, labelPaint)
+            canvas.drawText("TOTAL", 380f, y, labelPaint)
+            y += 16f
+            canvas.drawLine(margin, y + 6f, pageWidth - margin, y + 6f, linePaint)
+            y += 20f
+            for (product in count.products) {
+                newPageIfNeeded(20f)
+                canvas.drawText(product.name, margin, y, bodyPaint)
+                canvas.drawText("${product.quantity.stripTrailingZeros().toPlainString()} ${product.unit}", 240f, y, bodyPaint)
+                canvas.drawText(formatMoneyBigDecimal(product.subtotal, currencySymbol), 380f, y, bodyPaint)
+                y += 22f
+            }
+            y += 16f
+        }
+
+        // Denomination header
+        canvas.drawText("DENOMINACIONES", margin, y, headerPaint)
+        y += 16f
+        canvas.drawLine(margin, y + 6f, pageWidth - margin, y + 6f, linePaint)
+        y += 20f
+        canvas.drawText("DENOMINACIÓN", margin, y, labelPaint)
+        canvas.drawText("CANTIDAD", 240f, y, labelPaint)
+        canvas.drawText("TOTAL", 380f, y, labelPaint)
+        y += 16f
+        canvas.drawLine(margin, y + 6f, pageWidth - margin, y + 6f, linePaint)
+        y += 20f
+
+        if (count.items.isEmpty()) {
+            canvas.drawText("No hay denominaciones registradas.", margin, y, bodyPaint)
+        } else {
+            for (item in count.items) {
+                newPageIfNeeded(20f)
+                val denom = formatMoney(item.denominationValue, currencySymbol)
+                val subtotal = formatMoneyBigDecimal(item.subtotal, currencySymbol)
+                canvas.drawText(denom, margin, y, bodyPaint)
+                canvas.drawText(item.quantity.toString(), 240f, y, bodyPaint)
+                canvas.drawText(subtotal, 380f, y, bodyPaint)
+                y += 22f
+            }
+        }
+
+        document.finishPage(page)
+
+        val stamp = SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.getDefault())
+            .format(Date(System.currentTimeMillis()))
+        val file = File(context.cacheDir, "resumen_$stamp.pdf")
         try {
             FileOutputStream(file).use { fos ->
                 document.writeTo(fos)

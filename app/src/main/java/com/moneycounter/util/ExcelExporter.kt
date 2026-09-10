@@ -8,6 +8,7 @@ import com.moneycounter.domain.Money
 import com.moneycounter.domain.MovementType
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.SavedCount
+import com.moneycounter.domain.UnitedCount
 import com.moneycounter.ui.components.formatMoney
 import com.moneycounter.ui.components.formatMoneyBigDecimal
 import java.io.File
@@ -30,6 +31,11 @@ class ExcelExporter(private val context: Context) {
 
     fun exportStockReport(products: List<Product>, currencyId: String, currencySymbol: String, currencyCode: String, generatedAt: Long) {
         val file = buildStockCsv(products, currencyId, currencySymbol, currencyCode, generatedAt)
+        share(file)
+    }
+
+    fun exportUnited(count: UnitedCount, currencySymbol: String) {
+        val file = buildUnitedCsv(count, currencySymbol)
         share(file)
     }
 
@@ -83,6 +89,63 @@ class ExcelExporter(private val context: Context) {
         val stamp = SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.getDefault())
             .format(Date(saved.savedAt))
         val file = File(context.cacheDir, "reporte_$stamp.csv")
+        FileOutputStream(file).use { fos ->
+            // UTF-8 BOM so Excel detects the encoding and keeps accents
+            fos.write(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))
+            fos.write(content.toByteArray(Charsets.UTF_8))
+        }
+        return file
+    }
+
+    private fun buildUnitedCsv(count: UnitedCount, currencySymbol: String): File {
+        val lines = mutableListOf<String>()
+
+        lines += csvRow("Reporte de conteo unificado")
+        lines += csvRow(
+            "Fecha",
+            SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(System.currentTimeMillis()))
+        )
+        lines += csvRow("Moneda", "${currencySymbol} (${count.currencyCode})")
+        lines += csvRow("Nº de ventas", count.count.toString())
+        lines += csvRow(
+            "TOTAL GENERAL",
+            formatMoneyBigDecimal(count.total(), currencySymbol)
+        )
+        lines += ""
+
+        lines += csvRow("PRODUCTOS")
+        lines += csvRow("Producto", "Unidad", "Cantidad", "Precio unitario", "Recargo", "Subtotal")
+        for (prod in count.products) {
+            lines += csvRow(
+                prod.name,
+                prod.unit,
+                prod.quantity.stripTrailingZeros().toPlainString(),
+                formatMoneyBigDecimal(prod.unitPrice, currencySymbol),
+                if (prod.surcharge.signum() > 0) formatMoneyBigDecimal(prod.surcharge, currencySymbol) else "",
+                formatMoneyBigDecimal(prod.subtotal, currencySymbol)
+            )
+        }
+        lines += ""
+
+        lines += csvRow("DENOMINACIONES")
+        lines += csvRow("Denominación", "Cantidad", "Total")
+        if (count.items.isEmpty()) {
+            lines += csvRow("No hay denominaciones registradas")
+        } else {
+            for (item in count.items) {
+                lines += csvRow(
+                    formatMoney(item.denominationValue, currencySymbol),
+                    item.quantity.toString(),
+                    formatMoneyBigDecimal(item.subtotal, currencySymbol)
+                )
+            }
+        }
+
+        val content = lines.joinToString("\r\n")
+
+        val stamp = SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.getDefault())
+            .format(Date(System.currentTimeMillis()))
+        val file = File(context.cacheDir, "resumen_$stamp.csv")
         FileOutputStream(file).use { fos ->
             // UTF-8 BOM so Excel detects the encoding and keeps accents
             fos.write(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))
