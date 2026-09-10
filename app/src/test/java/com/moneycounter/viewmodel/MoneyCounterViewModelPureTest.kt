@@ -204,4 +204,72 @@ class MoneyCounterViewModelPureTest {
         assertNull(payment)
         assertEquals(listOf(settled), updated)
     }
+
+    // ---- buildExpenseMovement ----
+
+    @Test
+    fun `buildExpenseMovement produces GASTO with no products or denominations and preserved concept`() {
+        val m = MoneyCounterViewModel.buildExpenseMovement(
+            id = "g1",
+            at = 1000L,
+            currencyId = "cup",
+            concept = "pago por descarga",
+            amount = BigDecimal("50.00")
+        )
+        assertEquals(MovementType.GASTO, m.type)
+        assertTrue(m.products.isEmpty())
+        assertTrue(m.denominations.isEmpty())
+        assertEquals(BigDecimal("50.00"), m.amount)
+        assertEquals("pago por descarga", m.concept)
+    }
+
+    // ---- buildStockInMovement ----
+
+    @Test
+    fun `buildStockInMovement produces ALTA carrying the product line and no denominations`() {
+        val line = productLine(quantity = "10", unitPrice = "2.00", subtotal = "20.00")
+        val m = MoneyCounterViewModel.buildStockInMovement(
+            id = "a1",
+            at = 1000L,
+            type = MovementType.ALTA,
+            currencyId = "cup",
+            productLine = line,
+            amount = BigDecimal("20.00")
+        )
+        assertEquals(MovementType.ALTA, m.type)
+        assertEquals(listOf(line), m.products)
+        assertTrue(m.denominations.isEmpty())
+        assertEquals(BigDecimal("20.00"), m.amount)
+    }
+
+    @Test
+    fun `buildStockInMovement produces ENTRADA carrying the product line and no denominations`() {
+        val line = productLine(quantity = "5", unitPrice = "2.00", subtotal = "10.00")
+        val m = MoneyCounterViewModel.buildStockInMovement(
+            id = "e1",
+            at = 1000L,
+            type = MovementType.ENTRADA,
+            currencyId = "cup",
+            productLine = line,
+            amount = BigDecimal("10.00")
+        )
+        assertEquals(MovementType.ENTRADA, m.type)
+        assertEquals(listOf(line), m.products)
+        assertTrue(m.denominations.isEmpty())
+        assertEquals(BigDecimal("10.00"), m.amount)
+    }
+
+    // ---- stockInDelta ----
+
+    @Test
+    fun `stockInDelta returns the positive difference when stock increases`() {
+        val delta = MoneyCounterViewModel.stockInDelta(BigDecimal("5.00"), BigDecimal("8.00"))
+        assertEquals(BigDecimal("3.00"), delta)
+    }
+
+    @Test
+    fun `stockInDelta returns ZERO when stock does not increase`() {
+        assertEquals(Money.ZERO, MoneyCounterViewModel.stockInDelta(BigDecimal("5.00"), BigDecimal("5.00")))
+        assertEquals(Money.ZERO, MoneyCounterViewModel.stockInDelta(BigDecimal("5.00"), BigDecimal("2.00")))
+    }
 }

@@ -386,6 +386,25 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         val newProducts = state.products + new
         _uiState.update { it.copy(products = newProducts) }
         persistProducts(newProducts)
+        if (stock.signum() > 0) {
+            val unitPrice = new.effectiveUnitPriceFor(state.selectedCurrencyId) ?: Money.ZERO
+            recordMovement(
+                buildStockInMovement(
+                    id = UUID.randomUUID().toString(),
+                    at = System.currentTimeMillis(),
+                    type = MovementType.ALTA,
+                    currencyId = state.selectedCurrencyId,
+                    productLine = MovementProductLine(
+                        name = new.name,
+                        unit = new.unit,
+                        quantity = stock,
+                        unitPrice = unitPrice,
+                        subtotal = unitPrice.multiply(stock).setScale(Money.SCALE)
+                    ),
+                    amount = unitPrice.multiply(stock).setScale(Money.SCALE)
+                )
+            )
+        }
         return true
     }
 
@@ -395,13 +414,35 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         if (cleanName.isEmpty() || cleanUnit.isEmpty()) return false
         if (stock.signum() < 0) return false
         val state = _uiState.value
-        if (state.products.none { it.id == id }) return false
+        val oldProduct = state.products.firstOrNull { it.id == id } ?: return false
+        val oldStock = oldProduct.stock
 
         val newProducts = state.products.map {
             if (it.id == id) it.copy(name = cleanName, unit = cleanUnit, stock = stock, prices = prices) else it
         }
         _uiState.update { it.copy(products = newProducts) }
         persistProducts(newProducts)
+        val delta = stockInDelta(oldStock, stock)
+        if (delta.signum() > 0) {
+            val updated = newProducts.first { it.id == id }
+            val unitPrice = updated.effectiveUnitPriceFor(state.selectedCurrencyId) ?: Money.ZERO
+            recordMovement(
+                buildStockInMovement(
+                    id = UUID.randomUUID().toString(),
+                    at = System.currentTimeMillis(),
+                    type = MovementType.ENTRADA,
+                    currencyId = state.selectedCurrencyId,
+                    productLine = MovementProductLine(
+                        name = updated.name,
+                        unit = updated.unit,
+                        quantity = delta,
+                        unitPrice = unitPrice,
+                        subtotal = unitPrice.multiply(delta).setScale(Money.SCALE)
+                    ),
+                    amount = unitPrice.multiply(delta).setScale(Money.SCALE)
+                )
+            )
+        }
         return true
     }
 
@@ -550,6 +591,26 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     private fun persistWriteoffs() {
         val writeoffs = _uiState.value.writeoffs
         viewModelScope.launch { writeoffRepository.saveAll(writeoffs) }
+    }
+
+    /** Registers a "gasto" (operating expense): cash out, no stock, no denominations.
+     *  Requires a non-blank concept and a positive amount. Returns false on invalid input. */
+    fun recordExpense(concept: String, amountText: String): Boolean {
+        val cleanConcept = concept.trim()
+        if (cleanConcept.isEmpty()) return false
+        val amount = ProductSelection.parseQuantity(amountText)
+        if (amount.signum() <= 0) return false
+        val state = _uiState.value
+        recordMovement(
+            buildExpenseMovement(
+                id = UUID.randomUUID().toString(),
+                at = System.currentTimeMillis(),
+                currencyId = state.selectedCurrencyId,
+                concept = cleanConcept,
+                amount = amount
+            )
+        )
+        return true
     }
 
     fun saveCount(): String? {
@@ -1044,5 +1105,44 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             amount = amount,
             linkId = linkId
         )
+
+        /** Builds a GASTO movement: cash out, no stock, no denominations. */
+        fun buildExpenseMovement(
+            id: String,
+            at: Long,
+            currencyId: String,
+            concept: String,
+            amount: BigDecimal
+        ): Movement = Movement(
+            id = id,
+            at = at,
+            type = MovementType.GASTO,
+            currencyId = currencyId,
+            concept = concept,
+            amount = amount
+        )
+
+        /** Builds an ALTA or ENTRADA movement: stock in, no cash, no denominations. */
+        fun buildStockInMovement(
+            id: String,
+            at: Long,
+            type: MovementType,
+            currencyId: String,
+            productLine: MovementProductLine,
+            amount: BigDecimal
+        ): Movement = Movement(
+            id = id,
+            at = at,
+            type = type,
+            currencyId = currencyId,
+            products = listOf(productLine),
+            amount = amount
+        )
+
+        /** Positive delta between old and new stock, or ZERO when not increasing. */
+        fun stockInDelta(old: BigDecimal, new: BigDecimal): BigDecimal {
+            val delta = new.subtract(old)
+            return if (delta.signum() > 0) delta.setScale(Money.SCALE) else Money.ZERO
+        }
     }
 }

@@ -63,7 +63,8 @@ import java.util.Locale
 fun ReportsScreen(
     viewModel: MoneyCounterViewModel,
     onOpenDetail: (String) -> Unit,
-    onOpenSummary: (List<String>) -> Unit
+    onOpenSummary: (List<String>) -> Unit,
+    onNavigateToGasto: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var filterCurrencyId by remember { mutableStateOf(DefaultCurrencies.CUP.id) }
@@ -135,6 +136,14 @@ fun ReportsScreen(
                         onClick = { ascending = !ascending }
                     )
                 }
+            }
+
+            item {
+                LuisoButton(
+                    text = "REGISTRAR GASTO",
+                    onClick = onNavigateToGasto,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             item {
