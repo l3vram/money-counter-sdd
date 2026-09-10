@@ -42,8 +42,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.moneycounter.access.UserProfileData
 import com.moneycounter.ui.AuthenticationGate
 import com.moneycounter.ui.screens.DenominationManagementScreen
-import com.moneycounter.ui.screens.HistoryDetailScreen
 import com.moneycounter.ui.screens.MoneyCounterScreen
+import com.moneycounter.ui.screens.MovementDetailScreen
 import com.moneycounter.ui.screens.ReportsScreen
 import com.moneycounter.ui.screens.StockReportScreen
 import com.moneycounter.ui.screens.StockScreen
@@ -207,7 +207,7 @@ fun MoneyCounterApp(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Filled.Receipt,
-                                            contentDescription = "Reportes",
+                                            contentDescription = "Historial",
                                             modifier = Modifier.size(23.dp),
                                             tint = if (currentScreen == "reports")
                                                 MaterialTheme.colorScheme.primary
@@ -218,7 +218,7 @@ fun MoneyCounterApp(
                                         Spacer(modifier = Modifier.height(3.dp))
 
                                         Text(
-                                            text = "Reportes",
+                                            text = "Historial",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = if (currentScreen == "reports")
                                                 MaterialTheme.colorScheme.primary
@@ -283,9 +283,9 @@ fun MoneyCounterApp(
                         selectedCountIds = selectedReportIds,
                         onNavigateBack = { currentScreen = "reports" }
                     )
-                    "detail" -> HistoryDetailScreen(
+                    "detail" -> MovementDetailScreen(
                         viewModel = viewModel,
-                        savedCountId = selectedHistoryId.orEmpty(),
+                        movementId = selectedHistoryId.orEmpty(),
                         onNavigateBack = { currentScreen = "reports" }
                     )
                 }

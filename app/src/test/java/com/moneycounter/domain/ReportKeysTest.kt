@@ -23,6 +23,15 @@ class ReportKeysTest {
             items = emptyList()
         )
 
+    private fun movement(id: String, at: Long) =
+        Movement(
+            id = id,
+            at = at,
+            type = MovementType.VENTA,
+            currencyId = "cup",
+            amount = BigDecimal("50.00")
+        )
+
     @Test
     fun `monthKeyOf extracts year and month`() {
         assertEquals(MonthKey(2026, 9), monthKeyOf(millisFor(2026, 9, 7)))
@@ -197,5 +206,59 @@ class ReportKeysTest {
         assertEquals(MonthKey(2026, 8), groups[1].key)
         assertEquals(DayKey(2026, 9, 7), groups[0].days[0].key)
         assertEquals(listOf("b", "a"), groups[0].days[0].counts.map { it.id })
+    }
+
+    @Test
+    fun `groupMovementsByMonthDay groups by month and day newest first by default`() {
+        val day1 = millisFor(2026, 9, 7, 10)
+        val day1b = millisFor(2026, 9, 7, 11)
+        val day2 = millisFor(2026, 9, 5, 10)
+        val otherMonth = millisFor(2026, 8, 20, 10)
+
+        val movements = listOf(
+            movement("a", day1), movement("b", day1b),
+            movement("c", day2),
+            movement("d", otherMonth)
+        )
+
+        val groups = groupMovementsByMonthDay(movements)
+
+        assertEquals(2, groups.size)
+        assertEquals(MonthKey(2026, 9), groups[0].key)
+        assertEquals(MonthKey(2026, 8), groups[1].key)
+
+        val september = groups[0]
+        assertEquals(DayKey(2026, 9, 7), september.days[0].key)
+        assertEquals(listOf("b", "a"), september.days[0].movements.map { it.id })
+        assertEquals(DayKey(2026, 9, 5), september.days[1].key)
+        assertEquals(listOf("c"), september.days[1].movements.map { it.id })
+
+        assertEquals(DayKey(2026, 8, 20), groups[1].days[0].key)
+        assertEquals(listOf("d"), groups[1].days[0].movements.map { it.id })
+    }
+
+    @Test
+    fun `groupMovementsByMonthDay ascending orders oldest first`() {
+        val day1 = millisFor(2026, 9, 7, 10)
+        val day2 = millisFor(2026, 9, 5, 10)
+        val otherMonth = millisFor(2026, 8, 20, 10)
+
+        val movements = listOf(
+            movement("a", day1),
+            movement("b", day2),
+            movement("c", otherMonth)
+        )
+
+        val groups = groupMovementsByMonthDay(movements, ascending = true)
+
+        assertEquals(MonthKey(2026, 8), groups[0].key)
+        assertEquals(MonthKey(2026, 9), groups[1].key)
+        assertEquals(listOf("b"), groups[1].days[0].movements.map { it.id })
+        assertEquals(listOf("a"), groups[1].days[1].movements.map { it.id })
+    }
+
+    @Test
+    fun `groupMovementsByMonthDay empty input yields empty groups`() {
+        assertTrue(groupMovementsByMonthDay(emptyList()).isEmpty())
     }
 }

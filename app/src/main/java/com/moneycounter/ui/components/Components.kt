@@ -18,9 +18,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddBox
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.MoneyOff
+import androidx.compose.material.icons.filled.MoveToInbox
+import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PointOfSale
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -58,6 +64,7 @@ import com.moneycounter.ui.theme.LuisoInfoContainer
 import com.moneycounter.ui.theme.LuisoOnWarning
 import com.moneycounter.ui.theme.LuisoWarningContainer
 import com.moneycounter.ui.theme.LuisoYellow
+import com.moneycounter.domain.MovementType
 
 @Composable
 fun LuisoButton(
@@ -441,5 +448,50 @@ fun LuisoAvatar(
                 modifier = Modifier.size((size / 2).dp)
             )
         }
+    }
+}
+
+private data class MovementTypeVisual(
+    val icon: ImageVector,
+    val color: Color,
+    val label: String
+)
+
+private fun movementTypeVisual(type: MovementType, warningColor: Color, errorColor: Color, primaryColor: Color): MovementTypeVisual =
+    when (type) {
+        MovementType.VENTA -> MovementTypeVisual(Icons.Filled.PointOfSale, LuisoGreen, "Venta")
+        MovementType.VENTA_FIADO -> MovementTypeVisual(Icons.Filled.Schedule, warningColor, "Fiado")
+        MovementType.COBRO -> MovementTypeVisual(Icons.Filled.Paid, LuisoGreen, "Cobro")
+        MovementType.MERMA -> MovementTypeVisual(Icons.Filled.Warning, errorColor, "Merma")
+        MovementType.GASTO -> MovementTypeVisual(Icons.Filled.MoneyOff, errorColor, "Gasto")
+        MovementType.ALTA -> MovementTypeVisual(Icons.Filled.AddBox, primaryColor, "Alta")
+        MovementType.ENTRADA -> MovementTypeVisual(Icons.Filled.MoveToInbox, primaryColor, "Entrada")
+    }
+
+/** Colored icon + label identifying a journal movement's type. Exhaustive over [MovementType]. */
+@Composable
+fun MovementTypeBadge(type: MovementType, modifier: Modifier = Modifier) {
+    val visual = movementTypeVisual(
+        type = type,
+        warningColor = LuisoYellow,
+        errorColor = MaterialTheme.colorScheme.error,
+        primaryColor = MaterialTheme.colorScheme.primary
+    )
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Icon(
+            imageVector = visual.icon,
+            contentDescription = visual.label,
+            tint = visual.color,
+            modifier = Modifier.size(16.dp)
+        )
+        Text(
+            text = visual.label,
+            style = MaterialTheme.typography.labelMedium,
+            color = visual.color
+        )
     }
 }

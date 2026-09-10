@@ -18,8 +18,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,7 +27,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -39,21 +36,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.moneycounter.domain.Currency
-import com.moneycounter.domain.DayGroup
 import com.moneycounter.domain.DefaultCurrencies
-import com.moneycounter.domain.MonthGroup
-import com.moneycounter.domain.SavedCount
-import com.moneycounter.domain.groupByMonthDay
+import com.moneycounter.domain.Movement
+import com.moneycounter.domain.MovementDayGroup
+import com.moneycounter.domain.MovementMonthGroup
+import com.moneycounter.domain.groupMovementsByMonthDay
 import com.moneycounter.domain.keyString
 import com.moneycounter.ui.components.LuisoButton
 import com.moneycounter.ui.components.LuisoNotice
 import com.moneycounter.ui.components.LuisoOutlineButton
 import com.moneycounter.ui.components.LuisoSectionHeader
 import com.moneycounter.ui.components.LuisoTopBar
-import com.moneycounter.ui.components.TermInfo
+import com.moneycounter.ui.components.MovementTypeBadge
 import com.moneycounter.ui.components.formatMoneyBigDecimal
 import com.moneycounter.viewmodel.MoneyCounterViewModel
 import java.math.BigDecimal
@@ -71,15 +67,12 @@ fun ReportsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var filterCurrencyId by remember { mutableStateOf(DefaultCurrencies.CUP.id) }
-    var ascending by remember { mutableStateOf(true) }
-    var selectionMode by remember { mutableStateOf(false) }
+    var ascending by remember { mutableStateOf(false) }
     var expandedKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var confirmDelete by remember { mutableStateOf(false) }
 
     val filterCurrency = uiState.currencies.firstOrNull { it.id == filterCurrencyId }
-    val filtered = uiState.history.filter { it.currencyId == filterCurrencyId }
-    val groups = remember(filtered, ascending) { groupByMonthDay(filtered, ascending) }
+    val filtered = uiState.movements.filter { it.currencyId == filterCurrencyId }
+    val groups = remember(filtered, ascending) { groupMovementsByMonthDay(filtered, ascending) }
 
     val now = remember { Calendar.getInstance() }
     val currentYear = now.get(Calendar.YEAR)
@@ -89,39 +82,31 @@ fun ReportsScreen(
         expandedKeys = if (key in expandedKeys) expandedKeys - key else expandedKeys + key
     }
 
-    fun toggleSingle(id: String) {
-        selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
-    }
-
-    fun toggleAll(ids: List<String>) {
-        selectedIds = if (ids.all { it in selectedIds }) selectedIds - ids.toSet() else selectedIds + ids
-    }
-
     val rows = buildList {
         groups.forEach { group ->
-            add(MonthItem(group))
+            add(MovementMonthItem(group))
             if (group.key.keyString() in expandedKeys) {
                 group.days.forEach { day ->
-                    add(DayItem(day))
+                    add(MovementDayItem(day))
                     if (day.key.keyString() in expandedKeys) {
-                        day.counts.forEach { add(CountItem(it)) }
+                        day.movements.forEach { add(MovementRowItem(it)) }
                     }
                 }
             }
         }
     }
 
-    val lastCountKeys = buildSet {
+    val lastMovementKeys = buildSet {
         groups.forEach { month ->
             month.days.forEach { day ->
-                day.counts.lastOrNull()?.let { add(it.id) }
+                day.movements.lastOrNull()?.let { add(it.id) }
             }
         }
     }
 
     Scaffold(
         topBar = {
-            LuisoTopBar(title = "Reportes")
+            LuisoTopBar(title = "Historial")
         }
     ) { padding ->
         LazyColumn(
@@ -142,17 +127,12 @@ fun ReportsScreen(
                         selectedCurrencyId = filterCurrencyId,
                         onSelectCurrency = {
                             filterCurrencyId = it
-                            selectedIds = emptySet()
                             expandedKeys = emptySet()
                         }
                     )
                     LuisoOutlineButton(
                         text = if (ascending) "Antiguos ↑" else "Recientes ↓",
                         onClick = { ascending = !ascending }
-                    )
-                    LuisoButton(
-                        text = if (selectionMode) "Listo" else "Selección",
-                        onClick = { selectionMode = !selectionMode }
                     )
                 }
             }
@@ -164,48 +144,22 @@ fun ReportsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     LuisoSectionHeader(
-                        text = "REPORTES EN $currencyLabel",
+                        text = "HISTORIAL DE MOVIMIENTOS EN $currencyLabel",
                         modifier = Modifier.weight(1f)
                     )
-                    TermInfo(
-                        correctTerm = "Cierre / Resumen consolidado",
-                        oldName = "Reporte unificado",
-                        explanation = "Consolidación de las ventas del período."
+                    val summaryIds = uiState.history.filter { it.currencyId == filterCurrencyId }.map { it.id }
+                    LuisoButton(
+                        text = "RESUMEN",
+                        onClick = { onOpenSummary(summaryIds) },
+                        enabled = summaryIds.isNotEmpty()
                     )
-                }
-            }
-
-            if (selectionMode) {
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        LuisoOutlineButton(
-                            text = "ELIMINAR",
-                            onClick = { confirmDelete = true },
-                            modifier = Modifier.weight(1f),
-                            enabled = selectedIds.isNotEmpty(),
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                        LuisoButton(
-                            text = if (selectedIds.isEmpty()) "RESUMEN"
-                            else "RESUMEN (${selectedIds.size})",
-                            onClick = { onOpenSummary(selectedIds.toList()) },
-                            modifier = Modifier.weight(1f),
-                            enabled = selectedIds.isNotEmpty()
-                        )
-                    }
                 }
             }
 
             if (filtered.isEmpty()) {
                 item {
                     LuisoNotice(
-                        message = "Todavía no hay reportes.",
+                        message = "Todavía no hay movimientos.",
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(24.dp)
@@ -214,48 +168,38 @@ fun ReportsScreen(
             } else {
                 items(rows, key = { it.key }) { row ->
                     when (row) {
-                        is MonthItem -> {
-                            val monthIds = row.group.days.flatMap { it.counts }.map { it.id }
+                        is MovementMonthItem -> {
                             val isCurrentMonth = row.group.key.year == currentYear && row.group.key.month == currentMonth
                             Surface(color = MaterialTheme.colorScheme.surface) {
-                                MonthRow(
+                                MovementMonthRow(
                                     group = row.group,
                                     expanded = row.group.key.keyString() in expandedKeys,
-                                    selectionMode = selectionMode,
-                                    allSelected = monthIds.all { it in selectedIds },
                                     accent = isCurrentMonth,
-                                    onToggleExpand = { toggleKey(row.group.key.keyString()) },
-                                    onToggleAll = { toggleAll(monthIds) }
+                                    onToggleExpand = { toggleKey(row.group.key.keyString()) }
                                 )
                             }
                             Separator()
                         }
-                        is DayItem -> {
-                            val dayIds = row.day.counts.map { it.id }
+                        is MovementDayItem -> {
                             Surface(color = MaterialTheme.colorScheme.surface) {
-                                DayRow(
+                                MovementDayRow(
                                     day = row.day,
                                     expanded = row.day.key.keyString() in expandedKeys,
-                                    selectionMode = selectionMode,
-                                    allSelected = dayIds.all { it in selectedIds },
                                     symbol = filterCurrency?.symbol ?: "$",
-                                    onToggleExpand = { toggleKey(row.day.key.keyString()) },
-                                    onToggleAll = { toggleAll(dayIds) }
+                                    onToggleExpand = { toggleKey(row.day.key.keyString()) }
                                 )
                             }
                             Separator()
                         }
-                        is CountItem -> {
+                        is MovementRowItem -> {
                             Surface(color = MaterialTheme.colorScheme.surface) {
-                                ReportRow(
-                                    saved = row.saved,
-                                    selected = row.saved.id in selectedIds,
-                                    selectionMode = selectionMode,
-                                    onToggle = { toggleSingle(row.saved.id) },
-                                    onOpenDetail = { onOpenDetail(row.saved.id) }
+                                MovementRow(
+                                    movement = row.movement,
+                                    symbol = filterCurrency?.symbol ?: "$",
+                                    onOpenDetail = { onOpenDetail(row.movement.id) }
                                 )
                             }
-                            if (row.saved.id !in lastCountKeys) {
+                            if (row.movement.id !in lastMovementKeys) {
                                 Separator()
                             }
                         }
@@ -266,35 +210,6 @@ fun ReportsScreen(
             }
         }
     }
-
-    if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("Eliminar operaciones") },
-            text = {
-                Text(
-                    if (selectedIds.size == 1) "¿Eliminar esta operación?"
-                    else "¿Eliminar ${selectedIds.size} operaciones? Esta acción no se puede deshacer."
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.deleteSavedCounts(selectedIds.toList())
-                        selectedIds = emptySet()
-                        confirmDelete = false
-                    }
-                ) {
-                    Text("Eliminar", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) {
-                    Text("Cancelar")
-                }
-            }
-        )
-    }
 }
 
 private fun formatTime(millis: Long): String {
@@ -302,29 +217,23 @@ private fun formatTime(millis: Long): String {
 }
 
 @Composable
-private fun MonthRow(
-    group: MonthGroup,
+private fun MovementMonthRow(
+    group: MovementMonthGroup,
     expanded: Boolean,
-    selectionMode: Boolean,
-    allSelected: Boolean,
     accent: Boolean = false,
-    onToggleExpand: () -> Unit,
-    onToggleAll: () -> Unit
+    onToggleExpand: () -> Unit
 ) {
     val monthLabel = remember(group.key) {
         val cal = Calendar.getInstance().apply { set(group.key.year, group.key.month - 1, 1, 12, 0, 0) }
         SimpleDateFormat("MMMM yyyy", Locale("es")).format(Date(cal.timeInMillis))
     }
-    val operaciones = group.days.sumOf { it.counts.size }
+    val operaciones = group.days.sumOf { it.movements.size }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 4.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (selectionMode) {
-            Checkbox(checked = allSelected, onCheckedChange = { onToggleAll() })
-        }
         LuisoSectionHeader(
             text = monthLabel,
             accent = accent,
@@ -345,29 +254,23 @@ private fun MonthRow(
 }
 
 @Composable
-private fun DayRow(
-    day: DayGroup,
+private fun MovementDayRow(
+    day: MovementDayGroup,
     expanded: Boolean,
-    selectionMode: Boolean,
-    allSelected: Boolean,
     symbol: String,
-    onToggleExpand: () -> Unit,
-    onToggleAll: () -> Unit
+    onToggleExpand: () -> Unit
 ) {
     val dayLabel = remember(day.key) {
         val cal = Calendar.getInstance().apply { set(day.key.year, day.key.month - 1, day.key.day, 12, 0, 0) }
         SimpleDateFormat("EEE dd/MM/yyyy", Locale("es")).format(Date(cal.timeInMillis))
     }
-    val dayTotal = day.counts.fold(BigDecimal.ZERO) { acc, c -> acc.add(c.targetAmount) }
+    val dayTotal = day.movements.fold(BigDecimal.ZERO) { acc, m -> acc.add(m.amount) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 20.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (selectionMode) {
-            Checkbox(checked = allSelected, onCheckedChange = { onToggleAll() })
-        }
         Text(
             text = dayLabel,
             style = MaterialTheme.typography.bodyMedium,
@@ -381,7 +284,7 @@ private fun DayRow(
             color = MaterialTheme.colorScheme.onSurface
         )
         Text(
-            text = "· ${day.counts.size}",
+            text = "· ${day.movements.size}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -395,52 +298,50 @@ private fun DayRow(
 }
 
 @Composable
-private fun ReportRow(
-    saved: SavedCount,
-    selected: Boolean,
-    selectionMode: Boolean,
-    onToggle: () -> Unit,
+private fun MovementRow(
+    movement: Movement,
+    symbol: String,
     onOpenDetail: () -> Unit
 ) {
+    val subtitle = movement.concept?.takeIf { it.isNotBlank() }
+        ?: movement.products.firstOrNull()?.name
+        ?: ""
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 5.dp)
-            .clickable(onClick = if (selectionMode) onToggle else onOpenDetail),
+            .clickable(onClick = onOpenDetail),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (selectionMode) {
-            Checkbox(
-                checked = selected,
-                onCheckedChange = { onToggle() }
-            )
-        } else {
-            Spacer(Modifier.width(12.dp))
-        }
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = formatMoneyBigDecimal(saved.targetAmount, saved.currency),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                text = formatTime(saved.savedAt),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (!selectionMode) {
-                Icon(
-                    Icons.Filled.ChevronRight,
-                    contentDescription = "Ver detalle",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            MovementTypeBadge(type = movement.type)
+            if (subtitle.isNotBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                text = formatMoneyBigDecimal(movement.amount, symbol),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = formatTime(movement.at),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Icon(
+            Icons.Filled.ChevronRight,
+            contentDescription = "Ver detalle",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -454,20 +355,20 @@ private fun Separator() {
     )
 }
 
-sealed interface ReportItem {
+sealed interface MovementReportItem {
     val key: String
 }
 
-data class MonthItem(val group: MonthGroup) : ReportItem {
+data class MovementMonthItem(val group: MovementMonthGroup) : MovementReportItem {
     override val key: String get() = group.key.keyString()
 }
 
-data class DayItem(val day: DayGroup) : ReportItem {
+data class MovementDayItem(val day: MovementDayGroup) : MovementReportItem {
     override val key: String get() = day.key.keyString()
 }
 
-data class CountItem(val saved: SavedCount) : ReportItem {
-    override val key: String get() = saved.id
+data class MovementRowItem(val movement: Movement) : MovementReportItem {
+    override val key: String get() = movement.id
 }
 
 @Composable
