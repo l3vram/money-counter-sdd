@@ -1,32 +1,140 @@
+rules_version = '2';
+
+// Money Counter — multi-tenant security rules (Phase 3, slice 02).
+// Identity + access gate for users/{uid} is preserved from Phase "Google Login".
+// Org/branch/member data is scoped to the caller's membership; role/org assignment
+// and org/branch structure are writable ONLY by a trusted superuser custom claim.
 service cloud.firestore {
-  // Root of Firestore rules
   match /databases/{database}/documents {
 
-    // Default: deny everything
+    // ---- helpers ----
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isSuperuser() {
+      return isSignedIn() && request.auth.token.superuser == true;
+    }
+    function isOwnUser(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    function hasMembership() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/members/$(request.auth.uid));
+    }
+    // Only call after hasMembership() has short-circuited true.
+    function myMembership() {
+      return get(/databases/$(database)/documents/members/$(request.auth.uid)).data;
+    }
+    function isMemberOfOrg(orgId) {
+      return hasMembership() && myMembership().orgId == orgId;
+    }
+    function isOwnerOfOrg(orgId) {
+      return isMemberOfOrg(orgId) && myMembership().role == 'OWNER';
+    }
+    // A record whose sellerUid is the caller (per-seller authorship).
+    function stampsSelf() {
+      return request.resource.data.sellerUid == request.auth.uid;
+    }
+
+    // ---- default deny (explicit; a more specific match may still allow) ----
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Users collection: each user can read their own document
+    // ---- users/{uid}: identity + access. Client can never self-elevate. ----
     match /users/{uid} {
-      // Read only by the authenticated owner
-      allow read: if request.auth != null && request.auth.uid == uid;
+      allow read: if isOwnUser(uid) || isSuperuser();
 
-      // Create allowed only for the owner and must start with access = 'PENDING'
-      allow create: if request.auth != null && request.auth.uid == uid
+      // Self-create must start PENDING (no self-approval).
+      allow create: if isOwnUser(uid)
                     && request.resource.data.access == 'PENDING';
 
-      // Update allowed only for the owner and access field cannot change
-      allow update: if request.auth != null && request.auth.uid == uid
-                    && request.resource.data.access == resource.data.access;
+      // Self-update may change profile fields but NOT access / role / orgId.
+      // Superuser may change anything (approve, assign role/org).
+      allow update: if isSuperuser()
+                    || ( isOwnUser(uid)
+                         && request.resource.data.access == resource.data.access
+                         && request.resource.data.get('role', '') == resource.data.get('role', '')
+                         && request.resource.data.get('orgId', '') == resource.data.get('orgId', '') );
 
-      // Delete is not allowed (no rule, inherits default deny)
+      // delete: inherits default deny.
+
+      // Legacy per-user private subcollections (products, denominations, ...): own subtree
+      // only. NOTE: the {collection} segment is required so this match can NEVER cover the
+      // users/{uid} document itself — otherwise it would bypass the access/role/orgId freeze
+      // above (in rules_version 2 a bare {x=**} matches zero segments, i.e. the parent doc).
+      match /{collection}/{docId=**} {
+        allow read, write: if isOwnUser(uid);
+      }
     }
 
-    // All subcollections of a user (e.g., products, denominations, etc.)
-    match /users/{uid}/{sub=**} {
-      // Read and write only by the authenticated owner
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+    // ---- members/{uid}: role + org assignment. Superuser-writable ONLY. ----
+    match /members/{uid} {
+      allow read: if isOwnUser(uid)
+                  || isSuperuser()
+                  || ( isOwnerOfOrg(resource.data.orgId) );
+      allow write: if isSuperuser();
+    }
+
+    // ---- organizations/{orgId} and their branches: superuser-writable ONLY ----
+    match /organizations/{orgId} {
+      allow read: if isMemberOfOrg(orgId) || isSuperuser();
+      allow write: if isSuperuser();
+
+      match /branches/{branchId} {
+        allow read: if isMemberOfOrg(orgId) || isSuperuser();
+        allow write: if isSuperuser();
+
+        // Shared catalog config — owner manages, everyone in the org reads.
+        match /catalog/{doc=**} {
+          allow read: if isMemberOfOrg(orgId) || isSuperuser();
+          allow write: if isOwnerOfOrg(orgId) || isSuperuser();
+        }
+
+        // Shared stock — any org member may adjust (sales deduct via increments).
+        // Owner-only merma/manual-decrease is enforced by writeoffs + the app layer,
+        // because rules cannot distinguish a sale-decrement from a manual one.
+        match /stock/{productId} {
+          allow read: if isMemberOfOrg(orgId) || isSuperuser();
+          allow write: if isMemberOfOrg(orgId);
+        }
+
+        // Per-seller sales: seller creates stamping own sellerUid; owner sees all.
+        match /sales/{saleId} {
+          allow read: if isSuperuser()
+                      || isOwnerOfOrg(orgId)
+                      || ( isMemberOfOrg(orgId) && resource.data.sellerUid == request.auth.uid );
+          allow create: if isMemberOfOrg(orgId) && stampsSelf();
+          allow update, delete: if isOwnerOfOrg(orgId) || isSuperuser();
+        }
+
+        // Write-offs (merma): OWNER-only create.
+        match /writeoffs/{id} {
+          allow read: if isSuperuser()
+                      || isOwnerOfOrg(orgId)
+                      || ( isMemberOfOrg(orgId) && resource.data.sellerUid == request.auth.uid );
+          allow create: if isOwnerOfOrg(orgId) && stampsSelf();
+          allow update, delete: if isOwnerOfOrg(orgId) || isSuperuser();
+        }
+
+        // Receivables (fiado): seller-authored.
+        match /receivables/{id} {
+          allow read: if isSuperuser()
+                      || isOwnerOfOrg(orgId)
+                      || ( isMemberOfOrg(orgId) && resource.data.sellerUid == request.auth.uid );
+          allow create: if isMemberOfOrg(orgId) && stampsSelf();
+          allow update, delete: if isOwnerOfOrg(orgId) || isSuperuser();
+        }
+
+        // Payments (cobros): seller-authored.
+        match /payments/{id} {
+          allow read: if isSuperuser()
+                      || isOwnerOfOrg(orgId)
+                      || ( isMemberOfOrg(orgId) && resource.data.sellerUid == request.auth.uid );
+          allow create: if isMemberOfOrg(orgId) && stampsSelf();
+          allow update, delete: if isOwnerOfOrg(orgId) || isSuperuser();
+        }
+      }
     }
   }
 }
