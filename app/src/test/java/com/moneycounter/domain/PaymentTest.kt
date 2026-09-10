@@ -15,14 +15,18 @@ class PaymentTest {
         receivableId: String = "r1",
         debtorName: String = "Juan Perez",
         amount: String = "5.00",
-        currencyId: String = "cup"
+        currencyId: String = "cup",
+        sellerUid: String = "",
+        sellerName: String = ""
     ) = Payment(
         id = id,
         at = at,
         receivableId = receivableId,
         debtorName = debtorName,
         amount = BigDecimal(amount).setScale(Money.SCALE),
-        currencyId = currencyId
+        currencyId = currencyId,
+        sellerUid = sellerUid,
+        sellerName = sellerName
     )
 
     // ---- domain invariants ----
@@ -63,6 +67,14 @@ class PaymentTest {
         assertEquals(p.debtorName, l.debtorName)
         assertEquals(p.amount, l.amount)
         assertEquals(p.currencyId, l.currencyId)
+    }
+
+    @Test
+    fun `round trip preserves author stamp`() {
+        val p = payment(sellerUid = "seller-4", sellerName = "Vendedor Cuatro")
+        val loaded = PaymentJson.fromJson(PaymentJson.toJson(listOf(p)))
+        assertEquals("seller-4", loaded[0].sellerUid)
+        assertEquals("Vendedor Cuatro", loaded[0].sellerName)
     }
 
     @Test

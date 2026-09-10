@@ -19,7 +19,9 @@ data class Receivable(
     val currencyId: String,
     val products: List<SavedProductItem>,   // snapshot of what was taken
     val status: ReceivableStatus = ReceivableStatus.OPEN,
-    val settledAt: Long? = null
+    val settledAt: Long? = null,
+    val sellerUid: String = "",
+    val sellerName: String = ""
 ) {
     init {
         require(id.isNotBlank()) { "Receivable ID must not be blank" }

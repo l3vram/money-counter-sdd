@@ -56,6 +56,8 @@ object SavedCountJson {
             item.put("targetAmount", saved.targetAmount.toPlainString())
             item.put("currency", saved.currency)
             item.put("currencyId", saved.currencyId)
+            item.put("sellerUid", saved.sellerUid)
+            item.put("sellerName", saved.sellerName)
 
             val itemsArray = JSONArray()
             for (entry in saved.items) {
@@ -159,9 +161,11 @@ object SavedCountJson {
                 targetAmount = target,
                 items = items,
                 currency = currency,
-                products = products,
-                currencyId = currencyId
-            ))
+                    products = products,
+                    currencyId = currencyId,
+                    sellerUid = entry.optString("sellerUid", ""),
+                    sellerName = entry.optString("sellerName", "")
+                ))
         }
 
         return result.sortedByDescending { it.savedAt }

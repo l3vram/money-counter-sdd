@@ -49,7 +49,7 @@ import com.moneycounter.domain.Movement
 import com.moneycounter.domain.MovementType
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductPrice
-import com.moneycounter.domain.mayDecreaseStock
+import com.moneycounter.domain.mayRegisterWriteoff
 import com.moneycounter.ui.components.LuisoButton
 import com.moneycounter.ui.components.LuisoCard
 import com.moneycounter.ui.components.LuisoNotice
@@ -70,7 +70,7 @@ fun StockScreen(
     member: Member? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val canDecreaseStock = member?.role.mayDecreaseStock()
+    val canRegisterWriteoff = member?.role.mayRegisterWriteoff()
     var showAddProductDialog by remember { mutableStateOf(false) }
     var showAddStockDialog by remember { mutableStateOf<Product?>(null) }
     var showDeleteProductDialog by remember { mutableStateOf<Product?>(null) }
@@ -159,7 +159,7 @@ fun StockScreen(
                 }
             }
 
-            if (canDecreaseStock) {
+            if (canRegisterWriteoff) {
                 item {
                     LuisoButton(
                         text = "BAJA POR MERMA",

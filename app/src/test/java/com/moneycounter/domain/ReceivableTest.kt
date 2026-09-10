@@ -46,7 +46,9 @@ class ReceivableTest {
         currencyId: String = "cup",
         products: List<SavedProductItem> = listOf(savedProductItem()),
         status: ReceivableStatus = ReceivableStatus.OPEN,
-        settledAt: Long? = null
+        settledAt: Long? = null,
+        sellerUid: String = "",
+        sellerName: String = ""
     ) = Receivable(
         id = id,
         at = at,
@@ -55,7 +57,9 @@ class ReceivableTest {
         currencyId = currencyId,
         products = products,
         status = status,
-        settledAt = settledAt
+        settledAt = settledAt,
+        sellerUid = sellerUid,
+        sellerName = sellerName
     )
 
     // ---- domain invariants ----
@@ -140,6 +144,14 @@ class ReceivableTest {
         assertEquals(1, loaded.size)
         assertEquals(ReceivableStatus.SETTLED, loaded[0].status)
         assertEquals(2000L, loaded[0].settledAt)
+    }
+
+    @Test
+    fun `round trip preserves author stamp`() {
+        val r = receivable(sellerUid = "seller-3", sellerName = "Vendedor Tres")
+        val loaded = ReceivableJson.fromJson(ReceivableJson.toJson(listOf(r)))
+        assertEquals("seller-3", loaded[0].sellerUid)
+        assertEquals("Vendedor Tres", loaded[0].sellerName)
     }
 
     @Test

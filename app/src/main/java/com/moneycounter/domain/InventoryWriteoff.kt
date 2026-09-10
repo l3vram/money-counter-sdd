@@ -18,7 +18,9 @@ data class InventoryWriteoff(
     val unitPrice: BigDecimal,   // effective unit price in currency at write-off time
     val lossValue: BigDecimal,   // quantity * unitPrice, setScale(Money.SCALE)
     val currencyId: String,
-    val reason: String? = null
+    val reason: String? = null,
+    val sellerUid: String = "",
+    val sellerName: String = ""
 ) {
     init {
         require(id.isNotBlank()) { "InventoryWriteoff ID must not be blank" }

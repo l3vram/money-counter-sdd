@@ -31,7 +31,9 @@ data class Closing(
      *  - ALTA/ENTRADA: stock-in value, not a cash movement.
      */
     val netCash: BigDecimal,
-    val stockSnapshot: List<ClosingStockLine>
+    val stockSnapshot: List<ClosingStockLine>,
+    val sellerUid: String = "",
+    val sellerName: String = ""
 ) {
     init {
         require(id.isNotBlank()) { "Closing ID must not be blank" }

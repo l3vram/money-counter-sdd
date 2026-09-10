@@ -29,6 +29,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -83,6 +84,9 @@ fun MoneyCounterApp(
     member: Member?
 ) {
     val viewModel: MoneyCounterViewModel = viewModel()
+    LaunchedEffect(profile?.uid) {
+        viewModel.setSeller(profile?.uid, profile?.displayName)
+    }
     var currentScreen by remember { mutableStateOf("counter") }
     var selectedHistoryId by remember { mutableStateOf<String?>(null) }
 

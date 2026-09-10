@@ -54,6 +54,8 @@ object PaymentJson {
             item.put("debtorName", p.debtorName)
             item.put("amount", p.amount.toPlainString())
             item.put("currencyId", p.currencyId)
+            item.put("sellerUid", p.sellerUid)
+            item.put("sellerName", p.sellerName)
             array.put(item)
         }
 
@@ -94,7 +96,9 @@ object PaymentJson {
                     receivableId = receivableId,
                     debtorName = debtorName,
                     amount = amount.setScale(Money.SCALE),
-                    currencyId = currencyId
+                    currencyId = currencyId,
+                    sellerUid = entry.optString("sellerUid", ""),
+                    sellerName = entry.optString("sellerName", "")
                 )
             )
         }

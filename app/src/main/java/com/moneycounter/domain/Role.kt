@@ -25,7 +25,14 @@ fun Role.canAddStock(): Boolean = when (this) {
     Role.SUPERUSER -> false
 }
 
-fun Role.canDecreaseStock(): Boolean = when (this) {
+/** Registrar una baja por merma (writeoff): el SELLER sí puede documentar bajas de inventario. */
+fun Role.canRegisterWriteoff(): Boolean = when (this) {
+    Role.SELLER, Role.OWNER -> true
+    Role.SUPERUSER -> false
+}
+
+/** Editar/ajustar el stock de un producto directamente: solo el OWNER. */
+fun Role.canEditStock(): Boolean = when (this) {
     Role.OWNER -> true
     else -> false
 }
@@ -49,6 +56,8 @@ fun Role.canManageAccounts(): Boolean = when (this) {
  * Gate helpers for UI visibility. A `null` role means the user has no member doc yet
  * (not assigned to an org/branch), which keeps today's single-user privileges.
  */
-fun Role?.mayDecreaseStock(): Boolean = this?.canDecreaseStock() ?: true
+fun Role?.mayRegisterWriteoff(): Boolean = this?.canRegisterWriteoff() ?: true
+
+fun Role?.mayEditStock(): Boolean = this?.canEditStock() ?: true
 
 fun Role?.mayViewOwnerDashboard(): Boolean = this?.canViewAllSellersDashboard() ?: false

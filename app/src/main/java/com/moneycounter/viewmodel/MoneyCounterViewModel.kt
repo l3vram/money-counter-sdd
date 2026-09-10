@@ -86,6 +86,15 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         loadClosings()
     }
 
+    /** Author identity stamped on movements/counts/closings created by this user. */
+    private var sellerUid: String = ""
+    private var sellerName: String = ""
+
+    fun setSeller(uid: String?, name: String?) {
+        sellerUid = uid.orEmpty()
+        sellerName = name.orEmpty()
+    }
+
     val selectedCurrency: Currency
         get() = _uiState.value.currencies.firstOrNull { it.id == _uiState.value.selectedCurrencyId }
             ?: DefaultCurrencies.CUP
@@ -384,7 +393,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                         unitPrice = unitPrice,
                         subtotal = unitPrice.multiply(stock).setScale(Money.SCALE)
                     ),
-                    amount = unitPrice.multiply(stock).setScale(Money.SCALE)
+                    amount = unitPrice.multiply(stock).setScale(Money.SCALE),
+                    sellerUid = sellerUid,
+                    sellerName = sellerName
                 )
             )
         }
@@ -422,7 +433,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                         unitPrice = unitPrice,
                         subtotal = unitPrice.multiply(delta).setScale(Money.SCALE)
                     ),
-                    amount = unitPrice.multiply(delta).setScale(Money.SCALE)
+                    amount = unitPrice.multiply(delta).setScale(Money.SCALE),
+                    sellerUid = sellerUid,
+                    sellerName = sellerName
                 )
             )
         }
@@ -470,7 +483,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                     unitPrice = unitPrice,
                     subtotal = unitPrice.multiply(qty).setScale(Money.SCALE)
                 ),
-                amount = unitPrice.multiply(qty).setScale(Money.SCALE)
+                amount = unitPrice.multiply(qty).setScale(Money.SCALE),
+                sellerUid = sellerUid,
+                sellerName = sellerName
             )
         )
         return true
@@ -566,7 +581,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                         subtotal = lossValue
                     )
                 ),
-                amount = lossValue
+                amount = lossValue,
+                sellerUid = sellerUid,
+                sellerName = sellerName
             )
         )
         return true
@@ -587,7 +604,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                 at = System.currentTimeMillis(),
                 currencyId = effectiveCurrencyId,
                 concept = cleanConcept,
-                amount = amount
+                amount = amount,
+                sellerUid = sellerUid,
+                sellerName = sellerName
             )
         )
         return true
@@ -628,7 +647,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             items = items,
             currency = currencySymbol(),
             products = savedProducts,
-            currencyId = state.selectedCurrencyId
+            currencyId = state.selectedCurrencyId,
+            sellerUid = sellerUid,
+            sellerName = sellerName
         )
 
         _uiState.update { st ->
@@ -647,7 +668,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                 currencyId = saved.currencyId,
                 products = savedProducts.map { it.toMovementLine() },
                 denominations = items.map { it.toMovementDenomination() },
-                amount = target
+                amount = target,
+                sellerUid = sellerUid,
+                sellerName = sellerName
             )
         )
         return saved.id
@@ -701,7 +724,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                 currencyId = state.selectedCurrencyId,
                 debtorName = trimmedName,
                 products = savedProducts.map { it.toMovementLine() },
-                amount = target
+                amount = target,
+                sellerUid = sellerUid,
+                sellerName = sellerName
             )
         )
         recalculate()
@@ -770,7 +795,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             at = System.currentTimeMillis(),
             movements = selected,
             products = state.products,
-            currencyId = currencyId
+            currencyId = currencyId,
+            sellerUid = sellerUid,
+            sellerName = sellerName
         )
 
         val stampedIds = selected.map { it.id }.toSet()
@@ -844,7 +871,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                 debtorName = fiado.concept.orEmpty(),
                 denominations = items.map { it.toMovementDenomination() },
                 amount = fiado.amount,
-                linkId = fiado.id
+                linkId = fiado.id,
+                sellerUid = sellerUid,
+                sellerName = sellerName
             )
         )
         recalculate()
@@ -964,7 +993,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             currencyId: String,
             products: List<MovementProductLine>,
             denominations: List<MovementDenomination>,
-            amount: BigDecimal
+            amount: BigDecimal,
+            sellerUid: String = "",
+            sellerName: String = ""
         ): Movement = Movement(
             id = id,
             at = at,
@@ -972,7 +1003,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             currencyId = currencyId,
             products = products,
             denominations = denominations,
-            amount = amount
+            amount = amount,
+            sellerUid = sellerUid,
+            sellerName = sellerName
         )
 
         fun buildFiadoMovement(
@@ -981,7 +1014,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             currencyId: String,
             debtorName: String,
             products: List<MovementProductLine>,
-            amount: BigDecimal
+            amount: BigDecimal,
+            sellerUid: String = "",
+            sellerName: String = ""
         ): Movement = Movement(
             id = id,
             at = at,
@@ -989,7 +1024,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             currencyId = currencyId,
             concept = debtorName,
             products = products,
-            amount = amount
+            amount = amount,
+            sellerUid = sellerUid,
+            sellerName = sellerName
         )
 
         fun buildMermaMovement(
@@ -998,7 +1035,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             currencyId: String,
             reason: String?,
             products: List<MovementProductLine>,
-            amount: BigDecimal
+            amount: BigDecimal,
+            sellerUid: String = "",
+            sellerName: String = ""
         ): Movement = Movement(
             id = id,
             at = at,
@@ -1006,7 +1045,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             currencyId = currencyId,
             concept = reason,
             products = products,
-            amount = amount
+            amount = amount,
+            sellerUid = sellerUid,
+            sellerName = sellerName
         )
 
         fun buildCobroMovement(
@@ -1016,7 +1057,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             debtorName: String,
             denominations: List<MovementDenomination>,
             amount: BigDecimal,
-            linkId: String
+            linkId: String,
+            sellerUid: String = "",
+            sellerName: String = ""
         ): Movement = Movement(
             id = id,
             at = at,
@@ -1025,7 +1068,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             concept = debtorName,
             denominations = denominations,
             amount = amount,
-            linkId = linkId
+            linkId = linkId,
+            sellerUid = sellerUid,
+            sellerName = sellerName
         )
 
         /** Builds a GASTO movement: cash out, no stock, no denominations. */
@@ -1034,14 +1079,18 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             at: Long,
             currencyId: String,
             concept: String,
-            amount: BigDecimal
+            amount: BigDecimal,
+            sellerUid: String = "",
+            sellerName: String = ""
         ): Movement = Movement(
             id = id,
             at = at,
             type = MovementType.GASTO,
             currencyId = currencyId,
             concept = concept,
-            amount = amount
+            amount = amount,
+            sellerUid = sellerUid,
+            sellerName = sellerName
         )
 
         /** Builds an ALTA or ENTRADA movement: stock in, no cash, no denominations. */
@@ -1051,14 +1100,18 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             type: MovementType,
             currencyId: String,
             productLine: MovementProductLine,
-            amount: BigDecimal
+            amount: BigDecimal,
+            sellerUid: String = "",
+            sellerName: String = ""
         ): Movement = Movement(
             id = id,
             at = at,
             type = type,
             currencyId = currencyId,
             products = listOf(productLine),
-            amount = amount
+            amount = amount,
+            sellerUid = sellerUid,
+            sellerName = sellerName
         )
 
         /** Positive delta between old and new stock, or ZERO when not increasing. */

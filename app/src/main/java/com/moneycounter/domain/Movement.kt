@@ -34,7 +34,9 @@ data class Movement(
     val denominations: List<MovementDenomination> = emptyList(),
     val amount: BigDecimal,
     val linkId: String? = null,
-    val closingId: String? = null
+    val closingId: String? = null,
+    val sellerUid: String = "",
+    val sellerName: String = ""
 ) {
     init {
         require(id.isNotBlank()) { "Movement ID must not be blank" }

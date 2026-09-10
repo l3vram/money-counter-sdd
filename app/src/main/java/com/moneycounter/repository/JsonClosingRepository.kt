@@ -69,6 +69,8 @@ object ClosingJson {
             item.put("totalsByType", totalsObj)
 
             item.put("netCash", c.netCash.toPlainString())
+            item.put("sellerUid", c.sellerUid)
+            item.put("sellerName", c.sellerName)
 
             val stockArray = JSONArray()
             for (line in c.stockSnapshot) {
@@ -149,7 +151,9 @@ object ClosingJson {
                     movementIds = movementIds,
                     totalsByType = totalsByType,
                     netCash = netCash.setScale(Money.SCALE),
-                    stockSnapshot = stockSnapshot
+                    stockSnapshot = stockSnapshot,
+                    sellerUid = entry.optString("sellerUid", ""),
+                    sellerName = entry.optString("sellerName", "")
                 )
             }.getOrNull() ?: continue
 

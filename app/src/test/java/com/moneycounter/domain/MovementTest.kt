@@ -37,7 +37,9 @@ class MovementTest {
         denominations: List<MovementDenomination> = listOf(denom()),
         amount: String = "4.00",
         linkId: String? = null,
-        closingId: String? = null
+        closingId: String? = null,
+        sellerUid: String = "",
+        sellerName: String = ""
     ) = Movement(
         id = id,
         at = at,
@@ -48,7 +50,9 @@ class MovementTest {
         denominations = denominations,
         amount = BigDecimal(amount).setScale(Money.SCALE),
         linkId = linkId,
-        closingId = closingId
+        closingId = closingId,
+        sellerUid = sellerUid,
+        sellerName = sellerName
     )
 
     // ---- invariants ----
@@ -136,6 +140,29 @@ class MovementTest {
                 assertEquals(original.denominations[0].subtotal, l.denominations[0].subtotal)
             }
         }
+    }
+
+    @Test
+    fun `round trip preserves author stamp`() {
+        val m = movement(sellerUid = "seller-1", sellerName = "Vendedor Uno")
+        val loaded = MovementJson.fromJson(MovementJson.toJson(listOf(m)))
+        assertEquals("seller-1", loaded[0].sellerUid)
+        assertEquals("Vendedor Uno", loaded[0].sellerName)
+    }
+
+    @Test
+    fun `missing author fields default to empty`() {
+        val json = """
+            {
+              "version": 1,
+              "movements": [
+                {"id": "ok", "at": 1, "type": "VENTA", "currencyId": "cup", "concept": null, "amount": "5.00", "linkId": null, "closingId": null, "products": [], "denominations": []}
+              ]
+            }
+        """.trimIndent()
+        val loaded = MovementJson.fromJson(json)
+        assertEquals("", loaded[0].sellerUid)
+        assertEquals("", loaded[0].sellerName)
     }
 
     @Test

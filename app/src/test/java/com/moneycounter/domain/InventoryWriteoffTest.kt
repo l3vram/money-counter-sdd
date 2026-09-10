@@ -27,7 +27,9 @@ class InventoryWriteoffTest {
         quantity: String = "2",
         unitPrice: String = "2.00",
         currencyId: String = "cup",
-        reason: String? = null
+        reason: String? = null,
+        sellerUid: String = "",
+        sellerName: String = ""
     ): InventoryWriteoff {
         val qty = BigDecimal(quantity).setScale(Money.SCALE)
         val price = BigDecimal(unitPrice).setScale(Money.SCALE)
@@ -41,7 +43,9 @@ class InventoryWriteoffTest {
             unitPrice = price,
             lossValue = price.multiply(qty).setScale(Money.SCALE),
             currencyId = currencyId,
-            reason = reason
+            reason = reason,
+            sellerUid = sellerUid,
+            sellerName = sellerName
         )
     }
 
@@ -135,6 +139,14 @@ class InventoryWriteoffTest {
         val loaded = WriteoffJson.fromJson(WriteoffJson.toJson(listOf(w)))
         assertEquals(1, loaded.size)
         assertEquals(null, loaded[0].reason)
+    }
+
+    @Test
+    fun `round trip preserves author stamp`() {
+        val w = writeoff(sellerUid = "seller-2", sellerName = "Vendedor Dos")
+        val loaded = WriteoffJson.fromJson(WriteoffJson.toJson(listOf(w)))
+        assertEquals("seller-2", loaded[0].sellerUid)
+        assertEquals("Vendedor Dos", loaded[0].sellerName)
     }
 
     @Test

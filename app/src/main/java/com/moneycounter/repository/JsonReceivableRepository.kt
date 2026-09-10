@@ -57,6 +57,8 @@ object ReceivableJson {
             item.put("currencyId", r.currencyId)
             item.put("status", r.status.name)
             item.put("settledAt", r.settledAt ?: JSONObject.NULL)
+            item.put("sellerUid", r.sellerUid)
+            item.put("sellerName", r.sellerName)
 
             val productsArray = JSONArray()
             for (p in r.products) {
@@ -148,7 +150,9 @@ object ReceivableJson {
                     currencyId = currencyId,
                     products = products,
                     status = status,
-                    settledAt = settledAt
+                    settledAt = settledAt,
+                    sellerUid = entry.optString("sellerUid", ""),
+                    sellerName = entry.optString("sellerName", "")
                 )
             )
         }

@@ -14,7 +14,9 @@ data class Payment(
     val receivableId: String,
     val debtorName: String,      // snapshot for reporting
     val amount: BigDecimal,      // = receivable.amount, setScale(Money.SCALE)
-    val currencyId: String
+    val currencyId: String,
+    val sellerUid: String = "",
+    val sellerName: String = ""
 ) {
     init {
         require(id.isNotBlank()) { "Payment ID must not be blank" }

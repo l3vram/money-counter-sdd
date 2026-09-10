@@ -20,7 +20,9 @@ class SavedCountRepositoryTest {
             items = listOf(
                 item(500, 1, "500.00"),
                 item(100, 2, "200.00")
-            )
+            ),
+            sellerUid = "seller-6",
+            sellerName = "Vendedor Seis"
         )
 
         val json = SavedCountJson.toJson(listOf(saved))
@@ -30,6 +32,8 @@ class SavedCountRepositoryTest {
         assertEquals("abc-123", loaded[0].id)
         assertEquals(1750000000000L, loaded[0].savedAt)
         assertEquals(BigDecimal("5000.00"), loaded[0].targetAmount)
+        assertEquals("seller-6", loaded[0].sellerUid)
+        assertEquals("Vendedor Seis", loaded[0].sellerName)
         assertEquals(2, loaded[0].items.size)
         assertEquals(500L, loaded[0].items[0].denominationValue)
         assertEquals(1L, loaded[0].items[0].quantity)

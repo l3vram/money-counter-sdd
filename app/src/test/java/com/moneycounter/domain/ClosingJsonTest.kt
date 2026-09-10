@@ -15,7 +15,9 @@ class ClosingJsonTest {
         movementIds: List<String> = listOf("m1", "m2"),
         totalsByType: Map<MovementType, BigDecimal> = MovementType.entries.associateWith { BigDecimal("0.00") },
         netCash: String = "150.00",
-        stockSnapshot: List<ClosingStockLine> = listOf(ClosingStockLine("Arroz", "Lb", BigDecimal("10.00")))
+        stockSnapshot: List<ClosingStockLine> = listOf(ClosingStockLine("Arroz", "Lb", BigDecimal("10.00"))),
+        sellerUid: String = "",
+        sellerName: String = ""
     ) = Closing(
         id = id,
         at = at,
@@ -23,8 +25,18 @@ class ClosingJsonTest {
         movementIds = movementIds,
         totalsByType = totalsByType,
         netCash = BigDecimal(netCash),
-        stockSnapshot = stockSnapshot
+        stockSnapshot = stockSnapshot,
+        sellerUid = sellerUid,
+        sellerName = sellerName
     )
+
+    @Test
+    fun `round trip preserves author stamp`() {
+        val original = closing(sellerUid = "seller-5", sellerName = "Vendedor Cinco")
+        val loaded = ClosingJson.fromJson(ClosingJson.toJson(listOf(original)))
+        assertEquals("seller-5", loaded[0].sellerUid)
+        assertEquals("Vendedor Cinco", loaded[0].sellerName)
+    }
 
     @Test
     fun `round trip preserves all fields`() {

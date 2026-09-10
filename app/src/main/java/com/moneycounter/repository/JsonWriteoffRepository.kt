@@ -58,6 +58,8 @@ object WriteoffJson {
             item.put("lossValue", w.lossValue.toPlainString())
             item.put("currencyId", w.currencyId)
             item.put("reason", w.reason ?: "")
+            item.put("sellerUid", w.sellerUid)
+            item.put("sellerName", w.sellerName)
             array.put(item)
         }
 
@@ -111,7 +113,9 @@ object WriteoffJson {
                     unitPrice = unitPrice.setScale(Money.SCALE),
                     lossValue = lossValue.setScale(Money.SCALE),
                     currencyId = currencyId,
-                    reason = reason
+                    reason = reason,
+                    sellerUid = entry.optString("sellerUid", ""),
+                    sellerName = entry.optString("sellerName", "")
                 )
             )
         }

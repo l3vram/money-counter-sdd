@@ -94,6 +94,8 @@ object MovementJson {
             item.put("amount", m.amount.toPlainString())
             item.put("linkId", m.linkId ?: JSONObject.NULL)
             item.put("closingId", m.closingId ?: JSONObject.NULL)
+            item.put("sellerUid", m.sellerUid)
+            item.put("sellerName", m.sellerName)
 
             val productsArray = JSONArray()
             for (p in m.products) {
@@ -204,7 +206,9 @@ object MovementJson {
                     denominations = denominations,
                     amount = amount.setScale(Money.SCALE),
                     linkId = linkId,
-                    closingId = closingId
+                    closingId = closingId,
+                    sellerUid = entry.optString("sellerUid", ""),
+                    sellerName = entry.optString("sellerName", "")
                 )
             }.getOrNull() ?: continue
 
