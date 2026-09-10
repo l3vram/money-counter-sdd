@@ -44,8 +44,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.moneycounter.domain.Currency
-import com.moneycounter.domain.InventoryWriteoff
 import com.moneycounter.domain.MeasurementUnit
+import com.moneycounter.domain.Movement
+import com.moneycounter.domain.MovementType
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductPrice
 import com.moneycounter.ui.components.LuisoButton
@@ -167,14 +168,17 @@ fun StockScreen(
                 )
             }
 
-            if (uiState.writeoffs.isEmpty()) {
+            val mermaMovements = uiState.movements.filter {
+                it.type == MovementType.MERMA && it.currencyId == uiState.selectedCurrencyId
+            }
+            if (mermaMovements.isEmpty()) {
                 item {
                     LuisoNotice(
                         message = "Todavía no hay bajas por merma registradas."
                     )
                 }
             } else {
-                items(uiState.writeoffs, key = { it.id }) { writeoff ->
+                items(mermaMovements, key = { it.id }) { writeoff ->
                     WriteoffRow(
                         writeoff = writeoff,
                         symbolOf = { id -> uiState.currencies.firstOrNull { it.id == id }?.symbol ?: id }
@@ -287,9 +291,10 @@ fun StockScreen(
 
 @Composable
 private fun WriteoffRow(
-    writeoff: InventoryWriteoff,
+    writeoff: Movement,
     symbolOf: (String) -> String
 ) {
+    val line = writeoff.products.firstOrNull()
     LuisoCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -298,7 +303,7 @@ private fun WriteoffRow(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = writeoff.name,
+                    text = line?.name.orEmpty(),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -306,8 +311,8 @@ private fun WriteoffRow(
                 )
                 Text(
                     text = "${writeoffDateFormatter.format(Date(writeoff.at))} · " +
-                            "${writeoff.quantity.stripTrailingZeros().toPlainString()} ${writeoff.unit}" +
-                            (writeoff.reason?.let { " · $it" } ?: ""),
+                            "${line?.quantity?.stripTrailingZeros()?.toPlainString().orEmpty()} ${line?.unit.orEmpty()}" +
+                            (writeoff.concept?.let { " · $it" } ?: ""),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -315,7 +320,7 @@ private fun WriteoffRow(
                 )
             }
             Text(
-                text = "-${symbolOf(writeoff.currencyId)}${writeoff.lossValue.toPlainString()}",
+                text = "-${symbolOf(writeoff.currencyId)}${writeoff.amount.toPlainString()}",
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.error

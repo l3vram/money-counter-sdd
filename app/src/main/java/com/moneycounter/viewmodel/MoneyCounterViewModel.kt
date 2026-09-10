@@ -9,7 +9,6 @@ import com.moneycounter.domain.CounterStatus
 import com.moneycounter.domain.Currency
 import com.moneycounter.domain.DefaultCurrencies
 import com.moneycounter.domain.Denomination
-import com.moneycounter.domain.InventoryWriteoff
 import com.moneycounter.domain.MeasurementUnit
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.MoneyCounterCalculator
@@ -18,12 +17,9 @@ import com.moneycounter.domain.computeClosing
 import com.moneycounter.domain.MovementDenomination
 import com.moneycounter.domain.MovementProductLine
 import com.moneycounter.domain.MovementType
-import com.moneycounter.domain.Payment
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductPrice
 import com.moneycounter.domain.ProductSelection
-import com.moneycounter.domain.Receivable
-import com.moneycounter.domain.ReceivableStatus
 import com.moneycounter.domain.SavedCount
 import com.moneycounter.domain.SavedCountItem
 import com.moneycounter.domain.SavedProductItem
@@ -34,20 +30,12 @@ import com.moneycounter.repository.DenominationRepository
 import com.moneycounter.repository.JsonClosingRepository
 import com.moneycounter.repository.JsonCurrencyRepository
 import com.moneycounter.repository.JsonDenominationRepository
-import com.moneycounter.repository.JsonPaymentRepository
 import com.moneycounter.repository.JsonMovementRepository
 import com.moneycounter.repository.JsonProductRepository
-import com.moneycounter.repository.JsonSavedCountRepository
-import com.moneycounter.repository.JsonReceivableRepository
 import com.moneycounter.repository.JsonUnitRepository
-import com.moneycounter.repository.JsonWriteoffRepository
 import com.moneycounter.repository.MovementRepository
-import com.moneycounter.repository.PaymentRepository
 import com.moneycounter.repository.ProductRepository
-import com.moneycounter.repository.ReceivableRepository
-import com.moneycounter.repository.SavedCountRepository
 import com.moneycounter.repository.UnitRepository
-import com.moneycounter.repository.WriteoffRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -64,7 +52,6 @@ data class MoneyCounterUiState(
         Money.ZERO, Money.ZERO, Money.ZERO, CounterStatus.EMPTY
     ),
     val hasActiveCount: Boolean = false,
-    val history: List<SavedCount> = emptyList(),
     val lastSavedId: String? = null,
     val savedCountId: String? = null,
     val currencies: List<Currency> = DefaultCurrencies.get(),
@@ -72,25 +59,18 @@ data class MoneyCounterUiState(
     val products: List<Product> = emptyList(),
     val productSelections: List<ProductSelection> = listOf(ProductSelection()),
     val units: List<MeasurementUnit> = emptyList(),
-    val writeoffs: List<InventoryWriteoff> = emptyList(),
-    val receivables: List<Receivable> = emptyList(),
-    val payments: List<Payment> = emptyList(),
     val movements: List<Movement> = emptyList(),
     val closings: List<Closing> = emptyList(),
-    val collectingReceivable: Receivable? = null,
+    val collectingFiado: Movement? = null,
     val lastFiadoId: String? = null
 )
 
 class MoneyCounterViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository: DenominationRepository = JsonDenominationRepository(application)
-    private val historyRepository: SavedCountRepository = JsonSavedCountRepository(application)
     private val currencyRepository: CurrencyRepository = JsonCurrencyRepository(application)
     private val productRepository: ProductRepository = JsonProductRepository(application)
     private val unitRepository: UnitRepository = JsonUnitRepository(application)
-    private val writeoffRepository: WriteoffRepository = JsonWriteoffRepository(application)
-    private val receivableRepository: ReceivableRepository = JsonReceivableRepository(application)
-    private val paymentRepository: PaymentRepository = JsonPaymentRepository(application)
     private val movementRepository: MovementRepository = JsonMovementRepository(application)
     private val closingRepository: ClosingRepository = JsonClosingRepository(application)
 
@@ -99,13 +79,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
 
     init {
         loadDenominations()
-        loadHistory()
         loadCurrencySettings()
         loadProducts()
         loadUnits()
-        loadWriteoffs()
-        loadReceivables()
-        loadPayments()
         loadMovements()
         loadClosings()
     }
@@ -528,20 +504,6 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             ?.multiply(quantity)?.setScale(Money.SCALE) ?: Money.ZERO
     }
 
-    private fun loadHistory() {
-        viewModelScope.launch {
-            val history = historyRepository.load()
-            _uiState.update { it.copy(history = history) }
-        }
-    }
-
-    private fun loadWriteoffs() {
-        viewModelScope.launch {
-            val writeoffs = writeoffRepository.load()
-            _uiState.update { it.copy(writeoffs = writeoffs) }
-        }
-    }
-
     /** Registers a "baja por merma": reduces stock and records a valued loss.
      *  Moves NO cash. Returns false on invalid product/quantity/missing price. */
     fun registerWriteoff(productId: String, quantityText: String, reason: String?): Boolean {
@@ -551,53 +513,30 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         if (quantity.signum() <= 0) return false
         val unitPrice = product.effectiveUnitPriceFor(state.selectedCurrencyId) ?: return false
         val lossValue = unitPrice.multiply(quantity).setScale(Money.SCALE)
-
-        val writeoff = InventoryWriteoff(
-            id = UUID.randomUUID().toString(),
-            at = System.currentTimeMillis(),
-            productId = product.id,
-            name = product.name,
-            unit = product.unit,
-            quantity = quantity,
-            unitPrice = unitPrice,
-            lossValue = lossValue,
-            currencyId = state.selectedCurrencyId,
-            reason = reason?.trim()?.takeIf { it.isNotEmpty() }
-        )
+        val cleanReason = reason?.trim()?.takeIf { it.isNotEmpty() }
 
         val newProducts = applyWriteoff(state.products, product.id, quantity)
-        _uiState.update {
-            it.copy(
-                writeoffs = listOf(writeoff) + it.writeoffs,
-                products = newProducts
-            )
-        }
+        _uiState.update { it.copy(products = newProducts) }
         persistProducts(newProducts)
-        persistWriteoffs()
         recordMovement(
             buildMermaMovement(
-                id = writeoff.id,
-                at = writeoff.at,
-                currencyId = writeoff.currencyId,
-                reason = writeoff.reason,
+                id = UUID.randomUUID().toString(),
+                at = System.currentTimeMillis(),
+                currencyId = state.selectedCurrencyId,
+                reason = cleanReason,
                 products = listOf(
                     MovementProductLine(
-                        name = writeoff.name,
-                        unit = writeoff.unit,
-                        quantity = writeoff.quantity,
-                        unitPrice = writeoff.unitPrice,
-                        subtotal = writeoff.lossValue
+                        name = product.name,
+                        unit = product.unit,
+                        quantity = quantity,
+                        unitPrice = unitPrice,
+                        subtotal = lossValue
                     )
                 ),
-                amount = writeoff.lossValue
+                amount = lossValue
             )
         )
         return true
-    }
-
-    private fun persistWriteoffs() {
-        val writeoffs = _uiState.value.writeoffs
-        viewModelScope.launch { writeoffRepository.saveAll(writeoffs) }
     }
 
     /** Registers a "gasto" (operating expense): cash out, no stock, no denominations.
@@ -660,7 +599,6 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
 
         _uiState.update { st ->
             st.copy(
-                history = listOf(saved) + st.history,
                 lastSavedId = saved.id,
                 savedCountId = saved.id
             )
@@ -668,7 +606,6 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         val newProducts = applyStockDeduction(state.products, state.productSelections)
         _uiState.update { it.copy(products = newProducts) }
         persistProducts(newProducts)
-        persistHistory()
         recordMovement(
             buildVentaMovement(
                 id = saved.id,
@@ -680,32 +617,6 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             )
         )
         return saved.id
-    }
-
-    fun deleteSavedCount(id: String) {
-        _uiState.update { st ->
-            st.copy(history = st.history.filterNot { it.id == id })
-        }
-        persistHistory()
-    }
-
-    fun deleteSavedCounts(ids: List<String>) {
-        if (ids.isEmpty()) return
-        val idSet = ids.toSet()
-        _uiState.update { st -> st.copy(history = st.history.filterNot { it.id in idSet }) }
-        persistHistory()
-    }
-
-    private fun persistHistory() {
-        val history = _uiState.value.history
-        viewModelScope.launch { historyRepository.saveAll(history) }
-    }
-
-    private fun loadReceivables() {
-        viewModelScope.launch {
-            val receivables = receivableRepository.load()
-            _uiState.update { it.copy(receivables = receivables) }
-        }
     }
 
     /** Registers a credit sale ("venta a crédito" / fiado): goods leave (stock deducted)
@@ -736,57 +647,31 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             )
         }
 
-        val receivable = Receivable(
-            id = UUID.randomUUID().toString(),
-            at = System.currentTimeMillis(),
-            debtorName = trimmedName,
-            amount = target,
-            currencyId = state.selectedCurrencyId,
-            products = savedProducts,
-            status = ReceivableStatus.OPEN
-        )
+        val fiadoId = UUID.randomUUID().toString()
+        val fiadoAt = System.currentTimeMillis()
 
         val newProducts = applyStockDeduction(state.products, state.productSelections)
         _uiState.update { st ->
             st.copy(
-                receivables = listOf(receivable) + st.receivables,
                 products = newProducts,
-                lastFiadoId = receivable.id,
+                lastFiadoId = fiadoId,
                 productSelections = listOf(ProductSelection()),
                 savedCountId = null
             )
         }
         persistProducts(newProducts)
-        persistReceivables()
         recordMovement(
             buildFiadoMovement(
-                id = receivable.id,
-                at = receivable.at,
-                currencyId = receivable.currencyId,
-                debtorName = receivable.debtorName,
+                id = fiadoId,
+                at = fiadoAt,
+                currencyId = state.selectedCurrencyId,
+                debtorName = trimmedName,
                 products = savedProducts.map { it.toMovementLine() },
-                amount = receivable.amount
+                amount = target
             )
         )
         recalculate()
-        return receivable.id
-    }
-
-    private fun persistReceivables() {
-        val receivables = _uiState.value.receivables
-        viewModelScope.launch { receivableRepository.saveAll(receivables) }
-    }
-
-    private fun loadPayments() {
-        viewModelScope.launch {
-            val payments = paymentRepository.load()
-            _uiState.update { it.copy(payments = payments) }
-        }
-    }
-
-    private fun persistPayments() {
-        val payments = _uiState.value.payments
-        viewModelScope.launch { paymentRepository.saveAll(payments) }
+        return fiadoId
     }
 
     private fun loadMovements() {
@@ -826,6 +711,11 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     fun openMovements(currencyId: String): List<Movement> =
         openMovementsPure(_uiState.value.movements, currencyId)
 
+    /** OPEN fiado (VENTA_FIADO) movements for [currencyId] — the pool the cobro
+     *  popup and collecting mode select from. See [openFiadoMovementsPure]. */
+    fun openFiadoMovements(currencyId: String): List<Movement> =
+        openFiadoMovementsPure(_uiState.value.movements, currencyId)
+
     /** Creates a Closing over exactly the OPEN movements named by [movementIds]
      *  (already-closed or unknown ids are silently dropped from the selection).
      *  Stamps those movements' `closingId` with the new Closing's id so they can
@@ -861,61 +751,41 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         return closing.id
     }
 
-    /** Settles ("cobra") an OPEN receivable: records a Payment (cash in) for its full
-     *  amount and flips the receivable to SETTLED. Does NOT touch stock (already deducted
-     *  at the credit sale) and does NOT create a SavedCount or re-create the debt.
-     *  Returns false with no changes if the receivable is unknown or not OPEN. */
-    fun settleReceivable(receivableId: String): Boolean {
+    /** Enters "collecting mode" ("cobro") for an OPEN fiado (VENTA_FIADO) movement: the
+     *  counter target becomes the debt's amount (not productsTotal()), so counting
+     *  denominations here measures cash collected against the debt, not against selected
+     *  products. Clears any in-progress quantities. No-op if [movementId] does not name
+     *  a currently-OPEN fiado movement. */
+    fun startCollectingFiado(movementId: String) {
         val state = _uiState.value
-        val (updatedReceivables, payment) = settleReceivablePure(
-            receivables = state.receivables,
-            receivableId = receivableId,
-            paymentId = UUID.randomUUID().toString(),
-            now = System.currentTimeMillis()
-        )
-        if (payment == null) return false
-
-        _uiState.update { st ->
-            st.copy(
-                receivables = updatedReceivables,
-                payments = listOf(payment) + st.payments
-            )
-        }
-        persistReceivables()
-        persistPayments()
-        return true
-    }
-
-    /** Enters "collecting mode" ("cobro") for an OPEN receivable: the counter target
-     *  becomes the debt's amount (not productsTotal()), so counting denominations here
-     *  measures cash collected against the debt, not against selected products. Clears
-     *  any in-progress quantities. No-op if the receivable is unknown or not OPEN. */
-    fun startCollectingReceivable(receivableId: String) {
-        val state = _uiState.value
-        val receivable = state.receivables.firstOrNull {
-            it.id == receivableId && it.status == ReceivableStatus.OPEN
+        val cobroLinkIds = state.movements
+            .filter { it.type == MovementType.COBRO }
+            .mapNotNull { it.linkId }
+            .toSet()
+        val fiado = state.movements.firstOrNull {
+            it.id == movementId && isFiadoOpen(it, cobroLinkIds)
         } ?: return
         val clearedQuantities = state.denominations.associate { it.id to 0L }
         _uiState.update {
-            it.copy(collectingReceivable = receivable, quantities = clearedQuantities, savedCountId = null)
+            it.copy(collectingFiado = fiado, quantities = clearedQuantities, savedCountId = null)
         }
         recalculate()
     }
 
-    /** Leaves collecting mode without settling anything; clears counted quantities. */
+    /** Leaves collecting mode without recording anything; clears counted quantities. */
     fun cancelCollecting() {
         val clearedQuantities = _uiState.value.denominations.associate { it.id to 0L }
-        _uiState.update { it.copy(collectingReceivable = null, quantities = clearedQuantities) }
+        _uiState.update { it.copy(collectingFiado = null, quantities = clearedQuantities) }
         recalculate()
     }
 
-    /** Commits the in-progress collection: requires an active [MoneyCounterUiState.collectingReceivable]
-     *  and a COMPLETED count (counted cash == debt amount). Records the legacy Payment AND a COBRO
-     *  Movement carrying the counted denominations, flips the receivable to SETTLED, then leaves
-     *  collecting mode. Returns false with no changes otherwise. */
+    /** Commits the in-progress collection: requires an active [MoneyCounterUiState.collectingFiado]
+     *  and a COMPLETED count (counted cash == debt amount). Records ONLY a COBRO Movement
+     *  (linkId = the fiado's id) carrying the counted denominations, then leaves collecting
+     *  mode. Returns false with no changes otherwise. */
     fun recordCollection(): Boolean {
         val state = _uiState.value
-        val receivable = state.collectingReceivable ?: return false
+        val fiado = state.collectingFiado ?: return false
         if (state.result.status != CounterStatus.COMPLETED) return false
 
         val items = state.denominations
@@ -925,34 +795,22 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                 else SavedCountItem(den.value, qty, Money.fromLong(den.value * qty))
             }
 
-        val (updatedReceivables, payment) = settleReceivablePure(
-            receivables = state.receivables,
-            receivableId = receivable.id,
-            paymentId = UUID.randomUUID().toString(),
-            now = System.currentTimeMillis()
-        )
-        if (payment == null) return false
-
         val clearedQuantities = state.denominations.associate { it.id to 0L }
         _uiState.update { st ->
             st.copy(
-                receivables = updatedReceivables,
-                payments = listOf(payment) + st.payments,
-                collectingReceivable = null,
+                collectingFiado = null,
                 quantities = clearedQuantities
             )
         }
-        persistReceivables()
-        persistPayments()
         recordMovement(
             buildCobroMovement(
-                id = payment.id,
-                at = payment.at,
-                currencyId = payment.currencyId,
-                debtorName = payment.debtorName,
+                id = UUID.randomUUID().toString(),
+                at = System.currentTimeMillis(),
+                currencyId = fiado.currencyId,
+                debtorName = fiado.concept.orEmpty(),
                 denominations = items.map { it.toMovementDenomination() },
-                amount = payment.amount,
-                linkId = payment.receivableId
+                amount = fiado.amount,
+                linkId = fiado.id
             )
         )
         recalculate()
@@ -972,7 +830,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
 
     private fun recalculate() {
         val state = _uiState.value
-        val target = (state.collectingReceivable?.amount ?: productsTotal()).takeIf { it.signum() > 0 }
+        val target = (state.collectingFiado?.amount ?: productsTotal()).takeIf { it.signum() > 0 }
         val result = MoneyCounterCalculator.calculate(
             targetAmount = target,
             denominations = state.denominations,
@@ -1052,35 +910,6 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                 if (product.id != productId) product
                 else product.copy(stock = product.stock.subtract(quantity).setScale(Money.SCALE))
             }
-        }
-
-        /** Pure settlement logic for a "cobro": if [receivableId] names an OPEN receivable,
-         *  returns the receivables list with that one flipped to SETTLED (settledAt = [now])
-         *  plus the Payment recording the cash collected (amount = receivable.amount).
-         *  Does not touch products/stock. If the id is unknown or the receivable is not
-         *  OPEN, returns the original list unchanged and a null Payment (no-op). */
-        fun settleReceivablePure(
-            receivables: List<Receivable>,
-            receivableId: String,
-            paymentId: String,
-            now: Long
-        ): Pair<List<Receivable>, Payment?> {
-            val receivable = receivables.firstOrNull { it.id == receivableId && it.status == ReceivableStatus.OPEN }
-                ?: return receivables to null
-
-            val payment = Payment(
-                id = paymentId,
-                at = now,
-                receivableId = receivable.id,
-                debtorName = receivable.debtorName,
-                amount = receivable.amount,
-                currencyId = receivable.currencyId
-            )
-
-            val updated = receivables.map {
-                if (it.id == receivableId) it.copy(status = ReceivableStatus.SETTLED, settledAt = now) else it
-            }
-            return updated to payment
         }
 
         /** Pure guard for fiado registration: requires products selected (positive total)
@@ -1209,5 +1038,22 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
          *  excluded here regardless of currency. */
         fun openMovementsPure(movements: List<Movement>, currencyId: String): List<Movement> =
             movements.filter { it.closingId == null && it.currencyId == currencyId }
+
+        /** True iff [movement] is a VENTA_FIADO with no COBRO movement linking to it
+         *  (i.e. `linkId == movement.id`). Unrelated movement types are never "open". */
+        fun isFiadoOpen(movement: Movement, cobroLinkIds: Set<String>): Boolean =
+            movement.type == MovementType.VENTA_FIADO && movement.id !in cobroLinkIds
+
+        /** OPEN fiado (VENTA_FIADO) movements for [currencyId]: VENTA_FIADO movements with
+         *  no COBRO movement whose linkId points back to them. Order follows [movements]. */
+        fun openFiadoMovementsPure(movements: List<Movement>, currencyId: String): List<Movement> {
+            val cobroLinkIds = movements
+                .filter { it.type == MovementType.COBRO }
+                .mapNotNull { it.linkId }
+                .toSet()
+            return movements.filter {
+                it.currencyId == currencyId && isFiadoOpen(it, cobroLinkIds)
+            }
+        }
     }
 }

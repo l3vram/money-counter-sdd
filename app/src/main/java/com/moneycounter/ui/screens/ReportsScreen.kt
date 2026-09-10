@@ -63,7 +63,6 @@ import java.util.Locale
 fun ReportsScreen(
     viewModel: MoneyCounterViewModel,
     onOpenDetail: (String) -> Unit,
-    onOpenSummary: (List<String>) -> Unit,
     onNavigateToGasto: () -> Unit,
     onNavigateToCierres: () -> Unit
 ) {
@@ -166,12 +165,6 @@ fun ReportsScreen(
                     LuisoSectionHeader(
                         text = "HISTORIAL DE MOVIMIENTOS EN $currencyLabel",
                         modifier = Modifier.weight(1f)
-                    )
-                    val summaryIds = uiState.history.filter { it.currencyId == filterCurrencyId }.map { it.id }
-                    LuisoButton(
-                        text = "RESUMEN",
-                        onClick = { onOpenSummary(summaryIds) },
-                        enabled = summaryIds.isNotEmpty()
                     )
                 }
             }

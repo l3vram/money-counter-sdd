@@ -39,6 +39,13 @@ import com.moneycounter.ui.components.MovementTypeBadge
 import com.moneycounter.ui.components.formatMoney
 import com.moneycounter.ui.components.formatMoneyBigDecimal
 import com.moneycounter.viewmodel.MoneyCounterViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+fun formatDate(millis: Long): String {
+    return SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(millis))
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

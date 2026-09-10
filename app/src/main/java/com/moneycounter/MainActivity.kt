@@ -49,7 +49,6 @@ import com.moneycounter.ui.screens.MovementDetailScreen
 import com.moneycounter.ui.screens.ReportsScreen
 import com.moneycounter.ui.screens.StockReportScreen
 import com.moneycounter.ui.screens.StockScreen
-import com.moneycounter.ui.screens.UnifiedReportScreen
 import com.moneycounter.ui.screens.UserProfileScreen
 import com.moneycounter.ui.theme.MoneyCounterTheme
 import com.moneycounter.viewmodel.MoneyCounterViewModel
@@ -82,7 +81,6 @@ fun MoneyCounterApp(
     val viewModel: MoneyCounterViewModel = viewModel()
     var currentScreen by remember { mutableStateOf("counter") }
     var selectedHistoryId by remember { mutableStateOf<String?>(null) }
-    var selectedReportIds by remember { mutableStateOf<List<String>>(emptyList()) }
 
     val showBottomBar =
         currentScreen == "counter" || currentScreen == "stock" || currentScreen == "reports"
@@ -275,10 +273,6 @@ fun MoneyCounterApp(
                             selectedHistoryId = id
                             currentScreen = "detail"
                         },
-                        onOpenSummary = { ids ->
-                            selectedReportIds = ids
-                            currentScreen = "summary"
-                        },
                         onNavigateToGasto = { currentScreen = "gasto" },
                         onNavigateToCierres = { currentScreen = "cierres" }
                     )
@@ -288,11 +282,6 @@ fun MoneyCounterApp(
                     )
                     "gasto" -> GastosScreen(
                         viewModel = viewModel,
-                        onNavigateBack = { currentScreen = "reports" }
-                    )
-                    "summary" -> UnifiedReportScreen(
-                        viewModel = viewModel,
-                        selectedCountIds = selectedReportIds,
                         onNavigateBack = { currentScreen = "reports" }
                     )
                     "detail" -> MovementDetailScreen(

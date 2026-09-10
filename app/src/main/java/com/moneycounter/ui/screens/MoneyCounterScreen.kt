@@ -57,10 +57,9 @@ import com.moneycounter.domain.CounterResult
 import com.moneycounter.domain.CounterStatus
 import com.moneycounter.domain.Currency
 import com.moneycounter.domain.Money
+import com.moneycounter.domain.Movement
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductSelection
-import com.moneycounter.domain.Receivable
-import com.moneycounter.domain.ReceivableStatus
 import com.moneycounter.access.UserProfileData
 import com.moneycounter.ui.components.DenominationRow
 import com.moneycounter.ui.components.LuisoAvatar
@@ -174,21 +173,21 @@ fun MoneyCounterScreen(
             item {
                 SummarySection(
                     result = uiState.result,
-                    targetAmount = uiState.collectingReceivable?.amount
+                    targetAmount = uiState.collectingFiado?.amount
                         ?: viewModel.productsTotal().takeIf { it.signum() > 0 },
                     currencySymbol = currencySymbol,
                     savedCountId = uiState.savedCountId,
-                    collectingReceivable = uiState.collectingReceivable,
+                    collectingFiado = uiState.collectingFiado,
                     onSave = { viewModel.saveCount() },
                     onFiado = { showFiadoDialog = true },
                     onRecordCollection = {
-                        val receivable = uiState.collectingReceivable
-                        if (viewModel.recordCollection() && receivable != null) {
+                        val fiado = uiState.collectingFiado
+                        if (viewModel.recordCollection() && fiado != null) {
                             cobrarSuccessMessage =
-                                "Cobro registrado: ${receivable.debtorName} — " +
+                                "Cobro registrado: ${fiado.concept.orEmpty()} — " +
                                     formatMoneyBigDecimal(
-                                        receivable.amount,
-                                        uiState.currencies.firstOrNull { it.id == receivable.currencyId }?.symbol.orEmpty()
+                                        fiado.amount,
+                                        uiState.currencies.firstOrNull { it.id == fiado.currencyId }?.symbol.orEmpty()
                                     )
                         }
                     },
@@ -301,12 +300,12 @@ fun MoneyCounterScreen(
     }
 
     if (showCobrarDialog) {
-        val openReceivables = uiState.receivables.filter { it.status == ReceivableStatus.OPEN }
+        val openFiados = viewModel.openFiadoMovements(uiState.selectedCurrencyId)
         CobrarDialog(
-            openReceivables = openReceivables,
+            openFiados = openFiados,
             currencies = uiState.currencies,
-            onConfirm = { receivable ->
-                viewModel.startCollectingReceivable(receivable.id)
+            onConfirm = { fiado ->
+                viewModel.startCollectingFiado(fiado.id)
                 showCobrarDialog = false
             },
             onDismiss = { showCobrarDialog = false }
@@ -388,9 +387,9 @@ private fun FiadoDialog(
 
 @Composable
 private fun CobrarDialog(
-    openReceivables: List<Receivable>,
+    openFiados: List<Movement>,
     currencies: List<Currency>,
-    onConfirm: (Receivable) -> Unit,
+    onConfirm: (Movement) -> Unit,
     onDismiss: () -> Unit
 ) {
     var selectedId by remember { mutableStateOf<String?>(null) }
@@ -400,7 +399,7 @@ private fun CobrarDialog(
         onDismissRequest = onDismiss,
         title = { Text("Cobrar / Saldar cuenta") },
         text = {
-            if (openReceivables.isEmpty()) {
+            if (openFiados.isEmpty()) {
                 Text(
                     text = "No hay cuentas por cobrar pendientes.",
                     style = MaterialTheme.typography.bodyMedium
@@ -412,33 +411,33 @@ private fun CobrarDialog(
                         style = MaterialTheme.typography.bodySmall
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    openReceivables.forEach { receivable ->
-                        val symbol = currencies.firstOrNull { it.id == receivable.currencyId }?.symbol.orEmpty()
+                    openFiados.forEach { fiado ->
+                        val symbol = currencies.firstOrNull { it.id == fiado.currencyId }?.symbol.orEmpty()
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { selectedId = receivable.id }
+                                .clickable { selectedId = fiado.id }
                                 .padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
-                                selected = selectedId == receivable.id,
-                                onClick = { selectedId = receivable.id }
+                                selected = selectedId == fiado.id,
+                                onClick = { selectedId = fiado.id }
                             )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = receivable.debtorName,
+                                    text = fiado.concept.orEmpty(),
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Medium
                                 )
                                 Text(
-                                    text = dateFormatter.format(Date(receivable.at)),
+                                    text = dateFormatter.format(Date(fiado.at)),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                             Text(
-                                text = formatMoneyBigDecimal(receivable.amount, symbol),
+                                text = formatMoneyBigDecimal(fiado.amount, symbol),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -452,8 +451,8 @@ private fun CobrarDialog(
             TextButton(
                 enabled = selectedId != null,
                 onClick = {
-                    val receivable = openReceivables.firstOrNull { it.id == selectedId }
-                    if (receivable != null) onConfirm(receivable)
+                    val fiado = openFiados.firstOrNull { it.id == selectedId }
+                    if (fiado != null) onConfirm(fiado)
                 }
             ) {
                 Text("Confirmar cobro")
@@ -784,7 +783,7 @@ private fun SummarySection(
     targetAmount: BigDecimal?,
     currencySymbol: String,
     savedCountId: String?,
-    collectingReceivable: Receivable?,
+    collectingFiado: Movement?,
     onSave: () -> Unit,
     onFiado: () -> Unit,
     onRecordCollection: () -> Unit,
@@ -801,10 +800,10 @@ private fun SummarySection(
             modifier = Modifier.padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (collectingReceivable != null) {
+            if (collectingFiado != null) {
                 Text(
-                    text = "COBRANDO: ${collectingReceivable.debtorName} — " +
-                        formatMoneyBigDecimal(collectingReceivable.amount, currencySymbol),
+                    text = "COBRANDO: ${collectingFiado.concept.orEmpty()} — " +
+                        formatMoneyBigDecimal(collectingFiado.amount, currencySymbol),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
@@ -825,7 +824,7 @@ private fun SummarySection(
                 )
             }
 
-            if (collectingReceivable == null && targetAmount != null && targetAmount > zero) {
+            if (collectingFiado == null && targetAmount != null && targetAmount > zero) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -897,7 +896,7 @@ private fun SummarySection(
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        if (collectingReceivable != null) {
+                        if (collectingFiado != null) {
                             LuisoButton(
                                 text = "REGISTRAR COBRO",
                                 onClick = onRecordCollection,
@@ -988,7 +987,7 @@ private fun SummarySection(
                     }
                 }
 
-                if (collectingReceivable != null) {
+                if (collectingFiado != null) {
                     Spacer(modifier = Modifier.height(8.dp))
                     LuisoOutlineButton(
                         text = "Cancelar",

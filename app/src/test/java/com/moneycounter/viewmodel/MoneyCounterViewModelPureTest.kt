@@ -1,12 +1,10 @@
 package com.moneycounter.viewmodel
 
 import com.moneycounter.domain.Money
+import com.moneycounter.domain.Movement
 import com.moneycounter.domain.MovementDenomination
 import com.moneycounter.domain.MovementProductLine
 import com.moneycounter.domain.MovementType
-import com.moneycounter.domain.Receivable
-import com.moneycounter.domain.ReceivableStatus
-import com.moneycounter.domain.SavedProductItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -38,29 +36,19 @@ class MoneyCounterViewModelPureTest {
     private fun denom(value: Long = 500, quantity: Long = 2, subtotal: String = "1000.00") =
         MovementDenomination(value = value, quantity = quantity, subtotal = BigDecimal(subtotal).setScale(Money.SCALE))
 
-    private fun receivable(
+    private fun fiadoMovement(
         id: String = "r1",
         at: Long = 1000L,
-        debtorName: String = "Juan",
-        amount: String = "4.00",
         currencyId: String = "cup",
-        status: ReceivableStatus = ReceivableStatus.OPEN
-    ) = Receivable(
+        debtorName: String = "Juan",
+        amount: String = "4.00"
+    ) = MoneyCounterViewModel.buildFiadoMovement(
         id = id,
         at = at,
-        debtorName = debtorName,
-        amount = BigDecimal(amount).setScale(Money.SCALE),
         currencyId = currencyId,
-        products = listOf(
-            SavedProductItem(
-                name = "Arroz",
-                unit = "Lb",
-                quantity = BigDecimal("2.00"),
-                unitPrice = BigDecimal("2.00"),
-                subtotal = BigDecimal("4.00")
-            )
-        ),
-        status = status
+        debtorName = debtorName,
+        products = listOf(productLine()),
+        amount = BigDecimal(amount).setScale(Money.SCALE)
     )
 
     // ---- REGRESSION: the actual bug being fixed ----
@@ -156,53 +144,90 @@ class MoneyCounterViewModelPureTest {
         assertEquals("Juan", m.concept)
     }
 
-    // ---- Cobro end-to-end pure path: settleReceivablePure + buildCobroMovement ----
+    // ---- isFiadoOpen / openFiadoMovementsPure ----
 
     @Test
-    fun `collection path settles an OPEN receivable and yields a matching COBRO movement`() {
-        val open = receivable(amount = "1000.00")
-        val (updated, payment) = MoneyCounterViewModel.settleReceivablePure(
-            receivables = listOf(open),
-            receivableId = open.id,
-            paymentId = "p1",
-            now = 2000L
-        )
-
-        requireNotNull(payment)
-        assertEquals(open.amount, payment.amount)
-        assertEquals(open.id, payment.receivableId)
-
-        val settled = updated.first { it.id == open.id }
-        assertEquals(ReceivableStatus.SETTLED, settled.status)
-        assertEquals(2000L, settled.settledAt)
-
-        val counted = listOf(denom(value = 500, quantity = 2, subtotal = "1000.00"))
-        val movement = MoneyCounterViewModel.buildCobroMovement(
-            id = payment.id,
-            at = payment.at,
-            currencyId = payment.currencyId,
-            debtorName = payment.debtorName,
-            denominations = counted,
-            amount = payment.amount,
-            linkId = payment.receivableId
-        )
-        assertEquals(MovementType.COBRO, movement.type)
-        assertEquals(open.amount, movement.amount)
-        assertTrue(movement.denominations.isNotEmpty())
-        assertEquals(open.id, movement.linkId)
+    fun `isFiadoOpen is true for a VENTA_FIADO with no linking COBRO`() {
+        val fiado = fiadoMovement(id = "r1")
+        assertTrue(MoneyCounterViewModel.isFiadoOpen(fiado, cobroLinkIds = emptySet()))
     }
 
     @Test
-    fun `collection path is a no-op for a receivable that is not OPEN`() {
-        val settled = receivable(status = ReceivableStatus.SETTLED)
-        val (updated, payment) = MoneyCounterViewModel.settleReceivablePure(
-            receivables = listOf(settled),
-            receivableId = settled.id,
-            paymentId = "p1",
-            now = 2000L
+    fun `isFiadoOpen is false once a COBRO links to it`() {
+        val fiado = fiadoMovement(id = "r1")
+        assertFalse(MoneyCounterViewModel.isFiadoOpen(fiado, cobroLinkIds = setOf("r1")))
+    }
+
+    @Test
+    fun `isFiadoOpen is false for a non-fiado movement type`() {
+        val venta = MoneyCounterViewModel.buildVentaMovement(
+            id = "sc1",
+            at = 1000L,
+            currencyId = "cup",
+            products = listOf(productLine()),
+            denominations = listOf(denom()),
+            amount = BigDecimal("4.00")
         )
-        assertNull(payment)
-        assertEquals(listOf(settled), updated)
+        assertFalse(MoneyCounterViewModel.isFiadoOpen(venta, cobroLinkIds = emptySet()))
+    }
+
+    @Test
+    fun `openFiadoMovementsPure excludes a fiado already linked by a COBRO`() {
+        val open = fiadoMovement(id = "r1")
+        val closed = fiadoMovement(id = "r2")
+        val cobro = MoneyCounterViewModel.buildCobroMovement(
+            id = "p1",
+            at = 2000L,
+            currencyId = "cup",
+            debtorName = "Juan",
+            denominations = listOf(denom()),
+            amount = BigDecimal("4.00"),
+            linkId = "r2"
+        )
+        val movements = listOf(cobro, open, closed)
+        val result = MoneyCounterViewModel.openFiadoMovementsPure(movements, currencyId = "cup")
+        assertEquals(listOf(open), result)
+    }
+
+    @Test
+    fun `openFiadoMovementsPure includes a fiado with no linking COBRO`() {
+        val open = fiadoMovement(id = "r1")
+        val result = MoneyCounterViewModel.openFiadoMovementsPure(listOf(open), currencyId = "cup")
+        assertEquals(listOf(open), result)
+    }
+
+    @Test
+    fun `openFiadoMovementsPure is currency-filtered`() {
+        val cup = fiadoMovement(id = "r1", currencyId = "cup")
+        val usd = fiadoMovement(id = "r2", currencyId = "usd")
+        val result = MoneyCounterViewModel.openFiadoMovementsPure(listOf(cup, usd), currencyId = "cup")
+        assertEquals(listOf(cup), result)
+    }
+
+    // ---- Cobro end-to-end pure path: fiado Movement + buildCobroMovement ----
+
+    @Test
+    fun `collecting an OPEN fiado yields a matching COBRO movement linked to it`() {
+        val fiado = fiadoMovement(id = "r1", amount = "1000.00")
+        val counted = listOf(denom(value = 500, quantity = 2, subtotal = "1000.00"))
+        val movement = MoneyCounterViewModel.buildCobroMovement(
+            id = "p1",
+            at = 2000L,
+            currencyId = fiado.currencyId,
+            debtorName = fiado.concept.orEmpty(),
+            denominations = counted,
+            amount = fiado.amount,
+            linkId = fiado.id
+        )
+        assertEquals(MovementType.COBRO, movement.type)
+        assertEquals(fiado.amount, movement.amount)
+        assertTrue(movement.denominations.isNotEmpty())
+        assertEquals(fiado.id, movement.linkId)
+
+        // once collected, the fiado is no longer OPEN
+        assertFalse(
+            MoneyCounterViewModel.isFiadoOpen(fiado, cobroLinkIds = setOf(movement.linkId!!))
+        )
     }
 
     // ---- buildExpenseMovement ----
