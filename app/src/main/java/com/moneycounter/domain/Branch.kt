@@ -3,7 +3,10 @@ package com.moneycounter.domain
 data class Branch(
     val id: String,
     val orgId: String,
-    val name: String
+    val name: String,
+    val address: String? = null,
+    val active: Boolean = true,
+    val createdAt: Long = 0L
 ) {
     init {
         require(id.isNotBlank()) { "Branch id must not be blank" }

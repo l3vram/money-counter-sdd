@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.moneycounter.domain.AppContext
+import com.moneycounter.domain.Branch
 import com.moneycounter.domain.Closing
 import com.moneycounter.domain.CounterResult
 import com.moneycounter.domain.CounterStatus
@@ -20,6 +21,7 @@ import com.moneycounter.domain.computeClosing
 import com.moneycounter.domain.MovementDenomination
 import com.moneycounter.domain.MovementProductLine
 import com.moneycounter.domain.MovementType
+import com.moneycounter.domain.Organization
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductPrice
 import com.moneycounter.domain.ProductSelection
@@ -36,11 +38,15 @@ import com.moneycounter.repository.JsonClosingRepository
 import com.moneycounter.repository.JsonCurrencyRepository
 import com.moneycounter.repository.JsonDenominationRepository
 import com.moneycounter.repository.JsonMovementRepository
+import com.moneycounter.repository.JsonTenantRepository
 import com.moneycounter.repository.JsonProductRepository
 import com.moneycounter.repository.JsonUnitRepository
 import com.moneycounter.repository.MovementRepository
 import com.moneycounter.repository.ProductRepository
+import com.moneycounter.repository.TenantRepository
 import com.moneycounter.repository.UnitRepository
+import com.moneycounter.repository.branchBelongsToOrg
+import com.moneycounter.repository.resolveOrganizationId
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -79,7 +85,10 @@ data class MoneyCounterUiState(
     val canCreateSellerClosing: Boolean = true,
     val canCreateBranchClosing: Boolean = true,
     val canManageCatalog: Boolean = true,
-    val canViewAllSellersDashboard: Boolean = false
+    val canViewAllSellersDashboard: Boolean = false,
+    val organization: Organization? = null,
+    val branches: List<Branch> = emptyList(),
+    val selectedBranchId: String? = null
 )
 
 class MoneyCounterViewModel(application: Application) : AndroidViewModel(application) {
@@ -90,6 +99,12 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     private val unitRepository: UnitRepository = JsonUnitRepository(application)
     private val movementRepository: MovementRepository = JsonMovementRepository(application)
     private val closingRepository: ClosingRepository = JsonClosingRepository(application)
+    private val tenantRepository: TenantRepository = JsonTenantRepository(application)
+
+    /** Cloud-authoritative tenant (from members/{uid}.orgId); null until known. */
+    private var memberOrgId: String? = null
+    private var currentOrgId: String = ""
+    private var currentBranchId: String = ""
 
     /** Security boundary: every mutation below must consult this before acting. */
     private var permissionService: PermissionService = DefaultPermissionService
@@ -109,6 +124,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         loadUnits()
         loadMovements()
         loadClosings()
+        resolveTenantContext()
     }
 
     /** Author identity stamped on movements/counts/closings created by this user. */
@@ -119,14 +135,41 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         setSellerContext(uid, name, null)
     }
 
-    fun setSellerContext(uid: String?, name: String?, role: Role?) {
+    fun setSellerContext(uid: String?, name: String?, role: Role?, cloudOrgId: String? = null) {
         sellerUid = uid.orEmpty()
         sellerName = name.orEmpty()
+        memberOrgId = cloudOrgId?.takeIf { it.isNotBlank() }
         permissionService = DefaultPermissionService.forRole(role)
         uid?.takeIf { it.isNotBlank() }?.let { cleanUid ->
             context = AppContext(cleanUid, role = role)
         }
         refreshPermissions()
+        resolveTenantContext()
+    }
+
+    private fun resolveTenantContext() {
+        val (org, branch) = tenantRepository.ensureDefaultBootstrap(sellerUid)
+        val allBranches = tenantRepository.loadBranches().ifEmpty { listOf(branch) }
+        val orgId = resolveOrganizationId(memberOrgId, org.id)
+        currentOrgId = orgId
+        currentBranchId = branch.id
+        _uiState.update {
+            it.copy(
+                organization = org,
+                branches = allBranches,
+                selectedBranchId = branch.id
+            )
+        }
+        context = context?.copy(organizationId = orgId, branchId = branch.id)
+    }
+
+    fun selectBranch(branchId: String): Boolean {
+        val branch = _uiState.value.branches.firstOrNull { it.id == branchId } ?: return false
+        if (!branchBelongsToOrg(branch, currentOrgId)) return false
+        currentBranchId = branchId
+        _uiState.update { it.copy(selectedBranchId = branchId) }
+        context = context?.copy(branchId = branchId)
+        return true
     }
 
     private fun refreshPermissions() {

@@ -5,7 +5,8 @@ data class Organization(
     val name: String,
     val ownerUid: String,
     val whatsappNumber: String? = null,
-    val createdAt: Long
+    val createdAt: Long,
+    val active: Boolean = true
 ) {
     init {
         require(id.isNotBlank()) { "Organization id must not be blank" }
