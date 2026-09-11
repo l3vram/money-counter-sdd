@@ -105,6 +105,13 @@
 | Señales +/− por tipo en Historial y Cierres (preview por tipo): GASTO/MERMA `-` en rojo, fiado `~` apagado, resto `+` | ✅ DONE |
 | **TOTAL del día sign-aware** (corrección fiado): `netCashTotal` = VENTA+COBRO−GASTO−MERMA; fiado/alta/entrada fuera; línea aparte `Por cobrar (fiado): ~X` | ✅ DONE 246 tests verde |
 
+### Iteración 2026-09-11 (rama `feature/pendientes-menores`)
+| Qué | Estado |
+|-----|--------|
+| Stock: solo OWNER puede eliminar productos (`canEditStock` gating en StockScreen) | ✅ DONE |
+| Avatar `LuisoAvatar` con photoUrl: sin inicial superpuesta (muestra SOLO foto) | ✅ DONE |
+| `LuisoButton` 48dp (touch target a11y mínimo) | ✅ DONE 246 tests verde |
+
 > Nota iteración: el TOTAL del día ya NO muestra el fiado como efectivo en caja (antes sumaba todo
 > con signo positivo). El fiado sale excluido del neto y se lista aparte como **por cobrar**.
 
@@ -119,13 +126,13 @@
 ### Deuda técnica / mejoras
 | Item | Qué | Detalle |
 |------|-----|---------|
-| Avatar `LuisoAvatar` (Components.kt) | Con `photoUrl` de Google pinta la foto pero le superpone la inicial (ver `Components.kt`) | si hay foto mostrar SOLO la foto; si no hay, la inicial |
+| `LuisoAvatar` (Components.kt) | Con `photoUrl` de Google superponía la inicial sobre la foto | ✅ DONE **`feature/pendientes-menores`** — si hay foto se muestra SOLO la foto; si no, la inicial; si no hay inicial, icono Person |
 | Login Google en Cuba | Google Sign-In no funcionaba en Cuba (embargo: endpoints identidad bloqueados) | **RESUELTO por Appwrite email+password** (fase migración) |
-| `LuisoButton` 40dp vs 48dp | Touch target bajo el mínimo a11y del design kit | subir a 48dp |
+| `LuisoButton` 40dp vs 48dp | Touch target bajo el mínimo a11y del design kit | ✅ DONE **`feature/pendientes-menores`** — subido a 48dp |
 | Permission matrix sin conectar | `Role.canDecreaseStock()`/`canManageAccounts()`/`canViewAllSellersDashboard()` no se usan fuera de `Role.kt` | conectar al UI cuando llegue Roles |
 | Cantidades en el Historial | En el listado de movimientos mostrar la cantidad junto al producto, p. ej. `Arroz 20 Lb` (hoy la fila solo muestra el nombre del primer producto) | ✅ DONE **`feature/historial-productos-signos`** — `MovementProductSummary` en ReportsScreen + CierresScreen |
 | Señales +/- en reportes y cierres | Gasto/Merma deben verse como salida (`-`) y Venta/Cobro/Alta/Entrada como entrada (`+`) para identificarlas de un vistazo | ✅ DONE **`feature/historial-productos-signos`** — `MovementType.moneySign()` en Components.kt + Historial/Cierres (GASTO/MERMA en rojo) |
-| Stock: solo OWNER borra | Un seller nunca puede borrar/eliminar nada del stock; solo el owner | gating en StockScreen (relacionado a `canEditStock`) — **PENDIENTE** |
+| Stock: solo OWNER borra | Un seller nunca puede borrar/eliminar nada del stock; solo el owner | ✅ DONE **`feature/pendientes-menores`** — `canEditStock` gating: el botón Eliminar del ProductRow solo se renderiza si `mayEditStock()` |
 | ELIMINAR en lote del Historial | ~~El modo selección volvió con GENERAR RESUMEN pero sin batch-delete~~ | **CANCELADO por el dueño: el historial nunca se borra** |
 | Firestore repos | `FirestorePaths`/`FirestoreMappers` existen pero no hay repositorios reales (todo es `Json*`) | parte de fase 3, sub-plan 2 |
 
@@ -149,4 +156,4 @@
 - **Migrar todo JSON a Firestore**: rechazado — viola offline-first; solo entidades compartidas (stock, catálogo) van al cloud, en Phase 3.
 - **Superuser CRUD dentro del APK**: rechazado por el owner — se usa un web admin serverless separado.
 - **Nota de crédito/débito**: deferido (devoluciones/ajustes post-venta).
-- **Cobro parcial (fiado en cuotas)**: deferido — **fiado por partes** planificado en `014-cobro-fiado-por-partes.md` (dirección preferida: Variante 3 — cerrar la deuda y reabrir una nueva con lo pendiente, pudiendo modificar cantidades/eliminar productos). Hoy: COBRO salda completo y los productos de la deuda se muestran en solo lectura.
+- **Cobro parcial (fiado por partes)**: **NO SE HACE** (decisión del dueño, 2026-09-11). `014-cobro-fiado-por-partes.md` queda solo como referencia. Hoy: COBRO salda completo y los productos de la deuda se muestran en solo lectura.
