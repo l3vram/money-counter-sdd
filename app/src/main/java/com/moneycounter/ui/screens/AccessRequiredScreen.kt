@@ -31,7 +31,7 @@ fun AccessRequiredScreen(
     val bodyText = if (isBlocked) {
         "Tu acceso está bloqueado. Contacta al administrador para solicitar acceso."
     } else {
-        "Tu cuenta de Google está autenticada, pero todavía no tiene acceso a la aplicación. Contacta al administrador para solicitar acceso."
+        "Tu cuenta está autenticada, pero todavía no tiene acceso a la aplicación. Contacta al administrador para solicitar acceso."
     }
     val context = LocalContext.current
 

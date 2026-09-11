@@ -25,29 +25,27 @@ class AuthErrorMessageTest {
     }
 
     @Test
-    fun `maps FirebaseAuthException to generic firebase message`() {
-        val ex = RuntimeException("FirebaseAuthException: token expired")
-        assertEquals("Error de autenticación", mapAuthError(ex))
+    fun `maps invalid credentials message to friendly message`() {
+        val ex = RuntimeException("user (invalid_credentials): A user with the email address was not found")
+        assertEquals("Correo o contraseña incorrectos", mapAuthError(ex))
+    }
+
+    @Test
+    fun `maps user_not_found message to friendly message`() {
+        val ex = RuntimeException("user (user_not_found): User was not found.")
+        assertEquals("La cuenta no existe", mapAuthError(ex))
+    }
+
+    @Test
+    fun `maps already-exists message to friendly message`() {
+        val ex = RuntimeException("user (user_already_exists): User already exists.")
+        assertEquals("La cuenta ya existe", mapAuthError(ex))
     }
 
     @Test
     fun `maps unknown exception to generic unexpected message`() {
         val ex = IllegalStateException("boom")
         assertEquals("Error inesperado (boom)", mapAuthError(ex))
-    }
-
-    @Test
-    fun `maps DEVELOPER_ERROR to a clear signature warning`() {
-        val ex = Exception("The following error occurred: 10: DEVELOPER_ERROR")
-        val message = mapAuthError(ex)
-        assertTrue(message.contains("firma"))
-        assertTrue(message.contains("SHA-1/SHA-256"))
-    }
-
-    @Test
-    fun `maps internal error to signature warning`() {
-        val ex = Exception("An internal error occurred while processing the credential request")
-        assertEquals(mapAuthError(Exception("developer")), mapAuthError(ex))
     }
 
     @Test

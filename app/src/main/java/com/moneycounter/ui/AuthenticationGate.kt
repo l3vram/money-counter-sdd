@@ -1,6 +1,6 @@
 package com.moneycounter.ui
 
-import android.app.Activity
+import android.content.Context
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -12,38 +12,38 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import com.moneycounter.access.AccessRepository
 import com.moneycounter.access.AccessStatus
 import com.moneycounter.access.AppAccessState
-import com.moneycounter.access.FirestoreAccessRepository
-import com.moneycounter.access.FirestoreMembershipRepository
 import com.moneycounter.access.MembershipRepository
 import com.moneycounter.access.UserProfileData
+import com.moneycounter.appwrite.Appwrite
+import com.moneycounter.appwrite.AppwriteAccessRepository
+import com.moneycounter.appwrite.AppwriteAuthRepository
+import com.moneycounter.appwrite.AppwriteHealth
+import com.moneycounter.appwrite.AppwriteMembershipRepository
 import com.moneycounter.auth.AuthRepository
-import com.moneycounter.auth.FirebaseAuthRepository
 import com.moneycounter.domain.Member
 import com.moneycounter.ui.screens.AccessRequiredScreen
 import com.moneycounter.ui.screens.LoginScreen
 
-private class AuthViewModelFactory : ViewModelProvider.Factory {
+private class AuthViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        val authRepository: AuthRepository = FirebaseAuthRepository()
-        val accessRepository: AccessRepository =
-            FirestoreAccessRepository(FirebaseFirestore.getInstance())
-        val membershipRepository: MembershipRepository =
-            FirestoreMembershipRepository(FirebaseFirestore.getInstance())
+        Appwrite.init(context)
+        val authRepository: AuthRepository = AppwriteAuthRepository()
+        val accessRepository: AccessRepository = AppwriteAccessRepository()
+        val membershipRepository: MembershipRepository = AppwriteMembershipRepository()
         @Suppress("UNCHECKED_CAST")
         return AuthViewModel(authRepository, accessRepository, membershipRepository) as T
     }
@@ -51,32 +51,25 @@ private class AuthViewModelFactory : ViewModelProvider.Factory {
 
 @Composable
 fun AuthenticationGate(
-    viewModel: AuthViewModel = viewModel(factory = AuthViewModelFactory()),
     content: @Composable (onLogout: () -> Unit, profile: UserProfileData?, onLoadProfile: () -> Unit, member: Member?) -> Unit
 ) {
+    val context = LocalContext.current.applicationContext
+    val viewModel: AuthViewModel = viewModel(factory = remember(context) { AuthViewModelFactory(context) })
     val state by viewModel.uiState.collectAsState()
     val isLoggingIn by viewModel.isLoggingIn.collectAsState()
     val loginError by viewModel.loginError.collectAsState()
     val profile by viewModel.profile.collectAsState()
     val member by viewModel.member.collectAsState()
 
-    DisposableEffect(Unit) {
-        val auth = FirebaseAuth.getInstance()
-        val listener = FirebaseAuth.AuthStateListener {
-            viewModel.checkAccess()
-        }
-        auth.addAuthStateListener(listener)
-        onDispose {
-            auth.removeAuthStateListener(listener)
-        }
-    }
-
     AuthenticationGateContent(
         state = state,
         isLoggingIn = isLoggingIn,
         loginError = loginError,
-        onGoogleSignIn = { activity ->
-            viewModel.signInWithGoogle(activity)
+        onLogin = { email, password ->
+            viewModel.signInWithEmail(email, password)
+        },
+        onVerifyConnection = {
+            AppwriteHealth.ping()
         },
         onRetry = {
             viewModel.checkAccess()
@@ -98,7 +91,8 @@ fun AuthenticationGateContent(
     state: AppAccessState,
     isLoggingIn: Boolean,
     loginError: String?,
-    onGoogleSignIn: (Activity) -> Unit,
+    onLogin: (email: String, password: String) -> Unit,
+    onVerifyConnection: suspend () -> Result<Long>,
     onRetry: () -> Unit,
     onLogout: () -> Unit,
     profile: UserProfileData?,
@@ -119,7 +113,8 @@ fun AuthenticationGateContent(
             LoginScreen(
                 isLoggingIn = isLoggingIn,
                 errorMessage = loginError,
-                onGoogleSignIn = onGoogleSignIn
+                onLogin = onLogin,
+                onVerifyConnection = onVerifyConnection
             )
         }
         is AppAccessState.Pending -> {

@@ -1,6 +1,5 @@
 package com.moneycounter.ui
 
-import android.app.Activity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.moneycounter.access.AccessRepository
@@ -45,32 +44,43 @@ class AuthViewModel(
     }
 
     fun loadProfile() {
-        val user = authRepository.currentUser()
-        if (user == null) {
-            profileJob?.cancel()
-            profileJob = null
-            _profile.value = null
-            return
-        }
-        if (profileJob?.isActive == true) return
-        profileJob = viewModelScope.launch {
-            accessRepository.observeUserProfile(user.uid).collect { profile ->
-                _profile.value = profile
+        viewModelScope.launch {
+            val user = try {
+                authRepository.currentUser()
+            } catch (e: Exception) {
+                null
+            }
+            if (user == null) {
+                profileJob?.cancel()
+                profileJob = null
+                _profile.value = null
+                return@launch
+            }
+            if (profileJob?.isActive == true) return@launch
+            profileJob = launch {
+                accessRepository.observeUserProfile(user.uid).collect { profile ->
+                    _profile.value = profile
+                }
             }
         }
     }
 
     fun checkAccess() {
-        val user = authRepository.currentUser()
-        if (user == null) {
-            _uiState.value = AppAccessState.SignedOut
-            memberJob?.cancel()
-            memberJob = null
-            _member.value = null
-            return
-        }
-        _uiState.value = AppAccessState.Loading
         viewModelScope.launch {
+            val user = try {
+                authRepository.currentUser()
+            } catch (e: Exception) {
+                _uiState.value = AppAccessState.Error(e.localizedMessage ?: "Error de conexión")
+                return@launch
+            }
+            if (user == null) {
+                _uiState.value = AppAccessState.SignedOut
+                memberJob?.cancel()
+                memberJob = null
+                _member.value = null
+                return@launch
+            }
+            _uiState.value = AppAccessState.Loading
             try {
                 val accessStatus = accessRepository.ensureUserDocument(user)
                 observeMember(user.uid)
@@ -90,11 +100,11 @@ class AuthViewModel(
         }
     }
 
-    fun signInWithGoogle(activity: Activity) {
+    fun signInWithEmail(email: String, password: String) {
         _isLoggingIn.value = true
         _loginError.value = null
         viewModelScope.launch {
-            val result = authRepository.signInWithGoogle(activity)
+            val result = authRepository.signInWithEmail(email, password)
             _isLoggingIn.value = false
             result.fold(
                 onSuccess = {

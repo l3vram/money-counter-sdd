@@ -24,3 +24,6 @@ gradle/gradle-daemon-jvm.properties
 .opencode/
 .flow/
 
+# Local secrets in editor/MCP config — contains Appwrite API key
+opencode.json
+

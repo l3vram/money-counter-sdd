@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.moneycounter.access.UserProfileData
+import com.moneycounter.appwrite.Appwrite
 import com.moneycounter.domain.Member
 import com.moneycounter.ui.AuthenticationGate
 import com.moneycounter.ui.screens.CierresScreen
@@ -61,6 +62,7 @@ import kotlin.math.min
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Appwrite.init(applicationContext)
         enableEdgeToEdge()
         setContent {
             MoneyCounterTheme {

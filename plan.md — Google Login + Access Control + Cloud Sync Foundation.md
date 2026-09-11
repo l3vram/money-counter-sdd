@@ -455,7 +455,7 @@ Texto recomendado:
 ```text
 Acceso no habilitado
 
-Tu cuenta de Google está autenticada, pero todavía no tiene
+Tu cuenta de está autenticada, pero todavía no tiene
 acceso a la aplicación.
 
 Contacta al administrador para solicitar acceso.

@@ -101,7 +101,7 @@
 | Item | Qué | Detalle |
 |------|-----|---------|
 | Avatar `LuisoAvatar` (Components.kt) | Con `photoUrl` de Google pinta la foto pero le superpone la inicial (ver `Components.kt`) | si hay foto mostrar SOLO la foto; si no hay, la inicial |
-| Login Google en Cuba | Google Sign-In no funciona en Cuba (embargo: endpoints de identidad bloqueados) — no es bug de código | decidir: modo sin cuenta (guest/offline), email+password, o ambos |
+| Login Google en Cuba | Google Sign-In no funcionaba en Cuba (embargo: endpoints identidad bloqueados) | **RESUELTO por Appwrite email+password** (fase migración) |
 | `LuisoButton` 40dp vs 48dp | Touch target bajo el mínimo a11y del design kit | subir a 48dp |
 | Permission matrix sin conectar | `Role.canDecreaseStock()`/`canManageAccounts()`/`canViewAllSellersDashboard()` no se usan fuera de `Role.kt` | conectar al UI cuando llegue Roles |
 | ELIMINAR en lote del Historial | El modo selección volvió con GENERAR RESUMEN pero sin batch-delete | opcional: `deleteMovements(ids)` + persistir journal |
@@ -111,9 +111,23 @@
 | Cantidades en el Historial | En el listado de movimientos mostrar la cantidad junto al producto, p. ej. `Arroz 20 Lb` (hoy la fila solo muestra el nombre del primer producto) | `MovementRow` en ReportsScreen |
 | Firestore repos | `FirestorePaths`/`FirestoreMappers` existen pero no hay repositorios reales (todo es `Json*`) | parte de fase 3, sub-plan 2 |
 
+### Migración Firebase → Appwrite.io (en curso, rama `feature/appwrite`)
+| Paso | Qué | Estado |
+|------|-----|--------|
+| SDK | `io.appwrite:sdk-for-android:25.2.0` (27.2.0 exige compileSdk 37/AGP 9.1 → se usó 25.2.0 + compileSdk 36) | ✅ DONE |
+| Cliente | `Appwrite.init` (endpoint `https://fra.cloud.appwrite.io/v1`, project `6aa332f40001072d0747`) + `AppwriteHealth.ping()` (botón "Verificar conexión" en login) | ✅ DONE — verificado en emulador: "Conectado a Appwrite en 741 ms" |
+| Auth | `AppwriteAuthRepository` email+password con auto-registro (`createEmailPasswordSession` → `user_not_found` → `account.create` → retry) | ✅ DONE |
+| Access | `AppwriteAccessRepository` → tabla `users` (row id = uid; access PENDING/APPROVED/BLOCKED + perfil) | ✅ DONE |
+| Membership | `AppwriteMembershipRepository` → tabla `members` (row id = uid; orgId/role/branchIds) | ✅ DONE |
+| Cola de tablas | … | ⏳ PENDIENTE → Crear en consola Appwrite: **Database id `main`** con **tabla `users`** y **tabla `members`** (los createRow de la app crean los documentos; el admin pone `access=APPROVED`/`PENDING` y crea `members/{uid}` con `role`/`orgId`) |
+| Plataforma Android | … | ⏳ PENDIENTE → Console > Settings > Add Platform > Android: package `com.moneycounter` + SHA-256 del `~/.android/debug.keystore` (debugCanonical) |
+| Borrar legado | `FirebaseAuthRepository`/`FirestoreAccessRepository`/`FirestoreMembershipRepository` borrados; google-services plugin y deps Firebase fuera de Gradle | ✅ DONE |
+| Verificación local | 242 tests verde + `assembleDebug` OK + emulador (login + ping) | ✅ DONE |
+
 ## 3. Riesgos / decisiones retiradas (registro)
 
 - **Modo selección + GENERAR RESUMEN** (reports-currency 008/009/012): re-restaurado sobre el modelo `Movement` en `feature/reportes-seleccionables` (`uniteMovements` + modo selección en Historial + `UnifiedReportScreen` + export PDF/CSV). ELIMINAR en lote sigue pendiente.
+- **Migrar Firebase → Appwrite.io** (rama `feature/appwrite`): auth identity (login/access/membership) → Appwrite Cloud fra (`email+password`, PENDING→APPROVED igual al modelo de `users/{uid}`/`members/{uid}`)). Los datos operativos (journal JSON local) siguen offline-first.
 - **Migrar todo JSON a Firestore**: rechazado — viola offline-first; solo entidades compartidas (stock, catálogo) van al cloud, en Phase 3.
 - **Superuser CRUD dentro del APK**: rechazado por el owner — se usa un web admin serverless separado.
 - **Nota de crédito/débito**: deferido (devoluciones/ajustes post-venta).

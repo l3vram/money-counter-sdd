@@ -1,7 +1,5 @@
 package com.moneycounter.auth
 
-import android.app.Activity
-
 /**
  * Repository that abstracts the authentication actions.
  * Implementations should be pure Kotlin without DI frameworks.
@@ -9,20 +7,24 @@ import android.app.Activity
 interface AuthRepository {
 
     /**
-     * Returns the currently signed‑in user, or **null** if no user is authenticated.
+     * Resolves the currently signed‑in user, or **null** when no session is
+     * active (or the stored session is no longer valid).
      */
-    fun currentUser(): AuthUser?
+    suspend fun currentUser(): AuthUser?
 
     /**
-     * Signs the user in with Google using the **Credential Manager**.
+     * Signs the user in with email + password.
      *
-     * @param activity the calling `Activity` – required by the Credential Manager UI.
+     * When the account does not exist yet it is created on the fly
+     * (auto-registration); the access flow then puts it under
+     * [com.moneycounter.access.AccessStatus.PENDING] until an admin approves it.
+     *
      * @return a [Result] that contains an [AuthUser] on success or an error on failure.
      */
-    suspend fun signInWithGoogle(activity: Activity): Result<AuthUser>
+    suspend fun signInWithEmail(email: String, password: String): Result<AuthUser>
 
     /**
-     * Signs the current user out from Firebase.
+     * Signs the current user out.
      */
-    fun signOut()
+    suspend fun signOut()
 }

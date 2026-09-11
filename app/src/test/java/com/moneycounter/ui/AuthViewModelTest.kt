@@ -1,6 +1,5 @@
 package com.moneycounter.ui
 
-import android.app.Activity
 import com.moneycounter.access.AccessRepository
 import com.moneycounter.access.AccessStatus
 import com.moneycounter.access.AppAccessState
@@ -29,9 +28,9 @@ class FakeAuthRepository(
     var user: AuthUser? = null,
     var signInResult: Result<AuthUser> = Result.success(AuthUser("uid1", "test@example.com"))
 ) : AuthRepository {
-    override fun currentUser(): AuthUser? = user
+    override suspend fun currentUser(): AuthUser? = user
 
-    override suspend fun signInWithGoogle(activity: Activity): Result<AuthUser> {
+    override suspend fun signInWithEmail(email: String, password: String): Result<AuthUser> {
         val res = signInResult
         if (res.isSuccess) {
             user = res.getOrNull()
@@ -39,7 +38,7 @@ class FakeAuthRepository(
         return res
     }
 
-    override fun signOut() {
+    override suspend fun signOut() {
         user = null
     }
 }
