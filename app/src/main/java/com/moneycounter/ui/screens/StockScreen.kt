@@ -49,6 +49,7 @@ import com.moneycounter.domain.Movement
 import com.moneycounter.domain.MovementType
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductPrice
+import com.moneycounter.domain.mayEditStock
 import com.moneycounter.domain.mayRegisterWriteoff
 import com.moneycounter.ui.components.LuisoButton
 import com.moneycounter.ui.components.LuisoCard
@@ -71,6 +72,7 @@ fun StockScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val canRegisterWriteoff = member?.role.mayRegisterWriteoff()
+    val canEditStock = member?.role.mayEditStock()
     var showAddProductDialog by remember { mutableStateOf(false) }
     var showAddStockDialog by remember { mutableStateOf<Product?>(null) }
     var showDeleteProductDialog by remember { mutableStateOf<Product?>(null) }
@@ -120,7 +122,8 @@ fun StockScreen(
                             showAddStockDialog = product
                             addStockError = null
                         },
-                        onDelete = { showDeleteProductDialog = product }
+                        onDelete = { showDeleteProductDialog = product },
+                        canDelete = canEditStock
                     )
                 }
             }
@@ -518,7 +521,8 @@ private fun ProductRow(
     symbolOf: (String) -> String = { it },
     currencyCodeOf: (String) -> String = { it },
     onAddStock: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    canDelete: Boolean = true
 ) {
     LuisoCard(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -559,12 +563,14 @@ private fun ProductRow(
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Eliminar",
-                        tint = MaterialTheme.colorScheme.error
-                    )
+                if (canDelete) {
+                    IconButton(onClick = onDelete) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Eliminar",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
         }

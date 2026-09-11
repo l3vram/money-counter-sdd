@@ -77,7 +77,7 @@ fun LuisoButton(
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.height(40.dp),
+        modifier = modifier.height(48.dp),
         shape = RoundedCornerShape(12.dp)
     ) {
         if (leadingIcon != null) {
@@ -427,13 +427,6 @@ fun LuisoAvatar(
                     .clip(CircleShape),
                 contentScale = ContentScale.Crop
             )
-            if (initial.isNotEmpty()) {
-                Text(
-                    text = initial,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
         } else if (initial.isNotEmpty()) {
             Text(
                 text = initial,
