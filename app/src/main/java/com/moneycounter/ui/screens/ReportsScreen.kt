@@ -43,8 +43,12 @@ import com.moneycounter.domain.DefaultCurrencies
 import com.moneycounter.domain.Movement
 import com.moneycounter.domain.MovementDayGroup
 import com.moneycounter.domain.MovementMonthGroup
+import com.moneycounter.domain.MovementProductLine
+import com.moneycounter.domain.MovementType
 import com.moneycounter.domain.groupMovementsByMonthDay
 import com.moneycounter.domain.keyString
+import com.moneycounter.domain.netCashTotal
+import com.moneycounter.domain.receivableTotal
 import com.moneycounter.ui.components.LuisoButton
 import com.moneycounter.ui.components.LuisoNotice
 import com.moneycounter.ui.components.LuisoOutlineButton
@@ -52,6 +56,7 @@ import com.moneycounter.ui.components.LuisoSectionHeader
 import com.moneycounter.ui.components.LuisoTopBar
 import com.moneycounter.ui.components.MovementTypeBadge
 import com.moneycounter.ui.components.formatMoneyBigDecimal
+import com.moneycounter.ui.components.moneySign
 import com.moneycounter.viewmodel.MoneyCounterViewModel
 import java.math.BigDecimal
 import java.text.SimpleDateFormat
@@ -211,7 +216,7 @@ fun ReportsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     LuisoSectionHeader(
-                        text = "HISTORIAL DE MOVIMIENTOS EN $currencyLabel",
+                        text = "MOVIMIENTOS EN $currencyLabel",
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -356,37 +361,49 @@ private fun MovementDayRow(
         val cal = Calendar.getInstance().apply { set(day.key.year, day.key.month - 1, day.key.day, 12, 0, 0) }
         SimpleDateFormat("EEE dd/MM/yyyy", Locale("es")).format(Date(cal.timeInMillis))
     }
-    val dayTotal = day.movements.fold(BigDecimal.ZERO) { acc, m -> acc.add(m.amount) }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 20.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (selectionMode && selectableCount > 0) {
-            Checkbox(checked = allSelected, onCheckedChange = { onToggleAll() })
+    val dayCash = netCashTotal(day.movements)
+    val dayReceivable = receivableTotal(day.movements)
+    val cashPrefix = if (dayCash.signum() < 0) "-" else if (dayCash.signum() > 0) "+" else ""
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (selectionMode && selectableCount > 0) {
+                Checkbox(checked = allSelected, onCheckedChange = { onToggleAll() })
+            }
+            Text(
+                text = dayLabel,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = "TOTAL $cashPrefix" + formatMoneyBigDecimal(dayCash.abs(), symbol),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (dayCash.signum() < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "· ${day.movements.size}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            IconButton(onClick = onToggleExpand, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    imageVector = if (expanded) Icons.Filled.ExpandMore else Icons.Filled.ChevronRight,
+                    contentDescription = if (expanded) "Contraer día" else "Expandir día"
+                )
+            }
         }
-        Text(
-            text = dayLabel,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            text = "TOTAL " + formatMoneyBigDecimal(dayTotal, symbol),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = "· ${day.movements.size}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        IconButton(onClick = onToggleExpand, modifier = Modifier.size(32.dp)) {
-            Icon(
-                imageVector = if (expanded) Icons.Filled.ExpandMore else Icons.Filled.ChevronRight,
-                contentDescription = if (expanded) "Contraer día" else "Expandir día"
+        if (dayReceivable.signum() > 0) {
+            Text(
+                text = "Por cobrar (fiado): ~" + formatMoneyBigDecimal(dayReceivable, symbol),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 20.dp, end = 4.dp, bottom = 4.dp)
             )
         }
     }
@@ -402,9 +419,8 @@ private fun MovementRow(
     onToggle: () -> Unit = {},
     onOpenDetail: () -> Unit
 ) {
-    val subtitle = movement.concept?.takeIf { it.isNotBlank() }
-        ?: movement.products.firstOrNull()?.name
-        ?: ""
+    val concept = movement.concept?.takeIf { it.isNotBlank() }
+    val productSummary = MovementProductSummary(movement.products)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -421,9 +437,16 @@ private fun MovementRow(
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             MovementTypeBadge(type = movement.type)
-            if (subtitle.isNotBlank()) {
+            if (concept != null) {
                 Text(
-                    text = subtitle,
+                    text = concept,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (productSummary.isNotBlank()) {
+                Text(
+                    text = productSummary,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -431,10 +454,14 @@ private fun MovementRow(
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(
-                text = formatMoneyBigDecimal(movement.amount, symbol),
+                text = movement.type.moneySign() + " " + formatMoneyBigDecimal(movement.amount, symbol),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = when (movement.type) {
+                    MovementType.GASTO, MovementType.MERMA -> MaterialTheme.colorScheme.error
+                    MovementType.VENTA_FIADO -> MaterialTheme.colorScheme.onSurfaceVariant
+                    else -> MaterialTheme.colorScheme.onSurface
+                }
             )
             Text(
                 text = formatTime(movement.at),
@@ -461,6 +488,11 @@ private fun Separator() {
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
     )
 }
+
+private fun MovementProductSummary(products: List<MovementProductLine>): String =
+    products.joinToString("  ·  ") { line ->
+        "${line.name} ${line.quantity.stripTrailingZeros().toPlainString()} ${line.unit}"
+    }
 
 sealed interface MovementReportItem {
     val key: String

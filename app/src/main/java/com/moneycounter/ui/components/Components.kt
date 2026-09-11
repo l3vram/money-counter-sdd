@@ -495,3 +495,10 @@ fun MovementTypeBadge(type: MovementType, modifier: Modifier = Modifier) {
         )
     }
 }
+
+/** Cash-flow sign for a movement type: GASTO/MERMA outflows (-), cash inflows (+), VENTA_FIADO is pending credit ("~"). */
+fun MovementType.moneySign(): String = when (this) {
+    MovementType.GASTO, MovementType.MERMA -> "-"
+    MovementType.VENTA_FIADO -> "~"
+    else -> "+"
+}

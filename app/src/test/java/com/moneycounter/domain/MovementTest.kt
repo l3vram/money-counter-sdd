@@ -97,6 +97,46 @@ class MovementTest {
         assertTrue(!MovementType.VENTA_FIADO.hasDenominations())
     }
 
+    @Test
+    fun `cashSign is correct per type`() {
+        assertEquals(1, MovementType.VENTA.cashSign())
+        assertEquals(1, MovementType.COBRO.cashSign())
+        assertEquals(-1, MovementType.GASTO.cashSign())
+        assertEquals(-1, MovementType.MERMA.cashSign())
+        assertNull(MovementType.ALTA.cashSign())
+        assertNull(MovementType.ENTRADA.cashSign())
+        assertNull(MovementType.VENTA_FIADO.cashSign())
+    }
+
+    @Test
+    fun `netCashTotal adds VENTA and COBRO, subtracts GASTO and MERMA, excludes the rest`() {
+        val list = listOf(
+            movement(id = "v", type = MovementType.VENTA, amount = "100.00"),
+            movement(id = "c", type = MovementType.COBRO, amount = "50.00"),
+            movement(id = "g", type = MovementType.GASTO, amount = "30.00"),
+            movement(id = "m", type = MovementType.MERMA, amount = "10.00"),
+            movement(id = "f", type = MovementType.VENTA_FIADO, amount = "999.00"),
+            movement(id = "a", type = MovementType.ALTA, amount = "999.00"),
+            movement(id = "e", type = MovementType.ENTRADA, amount = "999.00")
+        )
+        assertEquals(BigDecimal("110.00").setScale(Money.SCALE), netCashTotal(list))
+    }
+
+    @Test
+    fun `netCashTotal of empty list is zero`() {
+        assertEquals(BigDecimal.ZERO, netCashTotal(emptyList()))
+    }
+
+    @Test
+    fun `receivableTotal sums only VENTA_FIADO`() {
+        val list = listOf(
+            movement(id = "v", type = MovementType.VENTA, amount = "100.00"),
+            movement(id = "f1", type = MovementType.VENTA_FIADO, amount = "40.00"),
+            movement(id = "f2", type = MovementType.VENTA_FIADO, amount = "60.00")
+        )
+        assertEquals(BigDecimal("100.00").setScale(Money.SCALE), receivableTotal(list))
+    }
+
     // ---- MovementJson round trip ----
 
     @Test

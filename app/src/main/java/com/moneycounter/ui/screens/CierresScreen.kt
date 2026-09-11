@@ -43,6 +43,7 @@ import com.moneycounter.domain.Currency
 import com.moneycounter.domain.DefaultCurrencies
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.Movement
+import com.moneycounter.domain.MovementProductLine
 import com.moneycounter.domain.MovementType
 import com.moneycounter.domain.computeClosing
 import com.moneycounter.ui.components.LuisoButton
@@ -54,6 +55,7 @@ import com.moneycounter.ui.components.LuisoSectionHeader
 import com.moneycounter.ui.components.LuisoTopBar
 import com.moneycounter.ui.components.MovementTypeBadge
 import com.moneycounter.ui.components.formatMoneyBigDecimal
+import com.moneycounter.ui.components.moneySign
 import com.moneycounter.util.ExcelExporter
 import com.moneycounter.util.PdfExporter
 import com.moneycounter.viewmodel.MoneyCounterViewModel
@@ -243,9 +245,8 @@ private fun OpenMovementRow(
     selected: Boolean,
     onToggle: () -> Unit
 ) {
-    val subtitle = movement.concept?.takeIf { it.isNotBlank() }
-        ?: movement.products.firstOrNull()?.name
-        ?: ""
+    val concept = movement.concept?.takeIf { it.isNotBlank() }
+    val productSummary = productSummary(movement.products)
     Surface(color = MaterialTheme.colorScheme.surface) {
         Row(
             modifier = Modifier
@@ -259,22 +260,39 @@ private fun OpenMovementRow(
             }
             Column(modifier = Modifier.weight(1f)) {
                 MovementTypeBadge(type = movement.type)
-                if (subtitle.isNotBlank()) {
+                if (concept != null) {
                     Text(
-                        text = subtitle,
+                        text = concept,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (productSummary.isNotBlank()) {
+                    Text(
+                        text = productSummary,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
             Text(
-                text = formatMoneyBigDecimal(movement.amount, symbol),
+                text = movement.type.moneySign() + " " + formatMoneyBigDecimal(movement.amount, symbol),
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = when (movement.type) {
+                    MovementType.GASTO, MovementType.MERMA -> MaterialTheme.colorScheme.error
+                    MovementType.VENTA_FIADO -> MaterialTheme.colorScheme.onSurfaceVariant
+                    else -> MaterialTheme.colorScheme.onSurface
+                }
             )
         }
     }
 }
+
+private fun productSummary(products: List<MovementProductLine>): String =
+    products.joinToString("  ·  ") { line ->
+        "${line.name} ${line.quantity.stripTrailingZeros().toPlainString()} ${line.unit}"
+    }
 
 @Composable
 private fun ClosingPreviewCard(preview: Closing, symbol: String) {
@@ -293,7 +311,14 @@ private fun ClosingPreviewCard(preview: Closing, symbol: String) {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(text = type.name, style = MaterialTheme.typography.bodyMedium)
-                    Text(text = formatMoneyBigDecimal(amount, symbol), style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = type.moneySign() + " " + formatMoneyBigDecimal(amount, symbol),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (type == MovementType.GASTO || type == MovementType.MERMA) FontWeight.Bold else FontWeight.Normal,
+                        color = if (type == MovementType.GASTO || type == MovementType.MERMA) MaterialTheme.colorScheme.error
+                        else if (type == MovementType.VENTA_FIADO) MaterialTheme.colorScheme.onSurfaceVariant
+                        else MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
         }

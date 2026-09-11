@@ -870,6 +870,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                 currencyId = fiado.currencyId,
                 debtorName = fiado.concept.orEmpty(),
                 denominations = items.map { it.toMovementDenomination() },
+                products = fiado.products,
                 amount = fiado.amount,
                 linkId = fiado.id,
                 sellerUid = sellerUid,
@@ -1058,6 +1059,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             denominations: List<MovementDenomination>,
             amount: BigDecimal,
             linkId: String,
+            products: List<MovementProductLine> = emptyList(),
             sellerUid: String = "",
             sellerName: String = ""
         ): Movement = Movement(
@@ -1066,6 +1068,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             type = MovementType.COBRO,
             currencyId = currencyId,
             concept = debtorName,
+            products = products,
             denominations = denominations,
             amount = amount,
             linkId = linkId,
