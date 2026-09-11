@@ -266,7 +266,7 @@ private fun MovementDenominationRow(item: MovementDenomination, symbol: String =
 }
 
 @Composable
-private fun MovementProductLineRow(item: MovementProductLine, symbol: String = "$") {
+fun MovementProductLineRow(item: MovementProductLine, symbol: String = "$") {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,

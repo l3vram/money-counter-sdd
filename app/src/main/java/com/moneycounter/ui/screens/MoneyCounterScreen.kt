@@ -155,19 +155,27 @@ fun MoneyCounterScreen(
             item { Spacer(modifier = Modifier.height(4.dp)) }
 
             item {
-                ProductsSection(
-                    selections = uiState.productSelections,
-                    products = uiState.products,
-                    currencies = uiState.currencies,
-                    selectedCurrencyId = currency.id,
-                    productLineTotal = { viewModel.productLineTotal(it) },
-                    onAddRow = { viewModel.addProductRow() },
-                    onRemoveRow = { index -> viewModel.removeProductRow(index) },
-                    onSelectProduct = { index, productId -> viewModel.updateProductSelection(index, productId) },
-                    onQuantityChange = { index, text -> viewModel.updateProductQuantity(index, text) },
-                    onSelectCurrency = { viewModel.selectCurrency(it) },
-                onNavigateToStock = onNavigateToStock
-            )
+                val collecting = uiState.collectingFiado
+                if (collecting != null) {
+                    FiadoProductsCard(
+                        fiado = collecting,
+                        symbol = currencySymbol
+                    )
+                } else {
+                    ProductsSection(
+                        selections = uiState.productSelections,
+                        products = uiState.products,
+                        currencies = uiState.currencies,
+                        selectedCurrencyId = currency.id,
+                        productLineTotal = { viewModel.productLineTotal(it) },
+                        onAddRow = { viewModel.addProductRow() },
+                        onRemoveRow = { index -> viewModel.removeProductRow(index) },
+                        onSelectProduct = { index, productId -> viewModel.updateProductSelection(index, productId) },
+                        onQuantityChange = { index, text -> viewModel.updateProductQuantity(index, text) },
+                        onSelectCurrency = { viewModel.selectCurrency(it) },
+                    onNavigateToStock = onNavigateToStock
+                )
+                }
             }
 
             item {
@@ -196,21 +204,24 @@ fun MoneyCounterScreen(
             }
 
             item {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    LuisoOutlineButton(
-                        text = "COBRAR / SALDAR CUENTA",
-                        onClick = { showCobrarDialog = true },
-                        modifier = Modifier.weight(1f)
-                    )
-                    TermInfo(
-                        correctTerm = "Cobro / Recibo de cobro",
-                        oldName = "Liquidar deuda",
-                        explanation = "Efectivo que entra y cancela una cuenta por cobrar."
-                    )
+                val hasOpenFiados = viewModel.openFiadoMovements(uiState.selectedCurrencyId).isNotEmpty()
+                if (hasOpenFiados && uiState.collectingFiado == null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        LuisoOutlineButton(
+                            text = "COBRAR / SALDAR CUENTA",
+                            onClick = { showCobrarDialog = true },
+                            modifier = Modifier.weight(1f)
+                        )
+                        TermInfo(
+                            correctTerm = "Cobro / Recibo de cobro",
+                            oldName = "Liquidar deuda",
+                            explanation = "Efectivo que entra y cancela una cuenta por cobrar."
+                        )
+                    }
                 }
             }
 
@@ -778,6 +789,46 @@ private fun CurrencySelector(
 }
 
 @Composable
+private fun FiadoProductsCard(fiado: Movement, symbol: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "PRODUCTOS DE LA DEUDA",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            if (fiado.products.isEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Esta deuda no tiene productos registrados.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Spacer(modifier = Modifier.height(4.dp))
+                fiado.products.forEach { line ->
+                    MovementProductLineRow(item = line, symbol = symbol)
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun SummarySection(
     result: CounterResult,
     targetAmount: BigDecimal?,
@@ -900,7 +951,6 @@ private fun SummarySection(
                             LuisoButton(
                                 text = "REGISTRAR COBRO",
                                 onClick = onRecordCollection,
-                                leadingIcon = Icons.Default.Check,
                                 modifier = Modifier.fillMaxWidth()
                             )
                         } else if (savedCountId != null) {

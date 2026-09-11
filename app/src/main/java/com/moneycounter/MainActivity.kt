@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -97,6 +99,8 @@ fun MoneyCounterApp(
     val showBottomBar =
         currentScreen == "counter" || currentScreen == "stock" || currentScreen == "reports" || currentScreen == "cierres"
 
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+
     val currentDensity = LocalDensity.current
     CompositionLocalProvider(
         LocalDensity provides Density(
@@ -106,7 +110,7 @@ fun MoneyCounterApp(
     ) {
         Scaffold(
             bottomBar = {
-                if (showBottomBar) {
+                if (showBottomBar && !imeVisible) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()

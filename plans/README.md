@@ -89,6 +89,14 @@
 | Nueva pestaña **Cierres** en bottom nav (4 tabs) + botón CIERRES retirado de Historial | ✅ DONE |
 | Copy: "Contador de dinero" → "El Luiso" en Counter + Login | ✅ DONE |
 
+### Iteración 2026-09-11 (rama `feature/cobro-con-productos`)
+| Qué | Estado |
+|-----|--------|
+| Cobro con detalle: al cobrar una deuda se muestran los PRODUCTOS y cantidades en la vista del contador (`FiadoProductsCard`, solo lectura) | ✅ DONE 242 tests verde |
+| Botón cobrar: solo se ve cuando existen deudas abiertas por cobrar (se oculta si no hay fiados pendientes) | ✅ DONE |
+| Fix teclado: `windowSoftInputMode` `adjustPan` → `adjustResize` (elimina hueco vacío entre campo y teclado al escribir cantidades/denominaciones) | ✅ DONE |
+| Fix espacio residual teclado: ocultar bottom nav mientras el IME está visible → el contenido llega hasta el borde del teclado | ✅ DONE |
+
 ## 2. Pendiente
 
 ### Diseños no ejecutables (requieren planning pass)
@@ -107,7 +115,6 @@
 | ELIMINAR en lote del Historial | El modo selección volvió con GENERAR RESUMEN pero sin batch-delete | opcional: `deleteMovements(ids)` + persistir journal |
 | Señales +/- en reportes y cierres | Gasto/Merma deben verse como salida (`-`) y Venta/Cobro/Alta/Entrada como entrada (`+`) para identificarlas de un vistazo | aplicar a Historial + Cierres (y resumen) |
 | Stock: solo OWNER borra | Un seller nunca puede borrar/eliminar nada del stock; solo el owner | gating en StockScreen (relacionado a `canEditStock`) |
-| Cobro/fiado con detalle | Al saldar cuenta (COBRO de un fiado) mostrar además del total a cobrar los PRODUCTOS y cantidades de la deuda | en la ventana de contador, modo collecting |
 | Cantidades en el Historial | En el listado de movimientos mostrar la cantidad junto al producto, p. ej. `Arroz 20 Lb` (hoy la fila solo muestra el nombre del primer producto) | `MovementRow` en ReportsScreen |
 | Firestore repos | `FirestorePaths`/`FirestoreMappers` existen pero no hay repositorios reales (todo es `Json*`) | parte de fase 3, sub-plan 2 |
 
@@ -131,4 +138,4 @@
 - **Migrar todo JSON a Firestore**: rechazado — viola offline-first; solo entidades compartidas (stock, catálogo) van al cloud, en Phase 3.
 - **Superuser CRUD dentro del APK**: rechazado por el owner — se usa un web admin serverless separado.
 - **Nota de crédito/débito**: deferido (devoluciones/ajustes post-venta).
-- **Cobro parcial (fiado en cuotas)**: deferido — COBRO salda completo.
+- **Cobro parcial (fiado en cuotas)**: deferido — **fiado por partes** planificado en `014-cobro-fiado-por-partes.md` (dirección preferida: Variante 3 — cerrar la deuda y reabrir una nueva con lo pendiente, pudiendo modificar cantidades/eliminar productos). Hoy: COBRO salda completo y los productos de la deuda se muestran en solo lectura.
