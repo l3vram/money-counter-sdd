@@ -32,6 +32,8 @@ data class Closing(
      */
     val netCash: BigDecimal,
     val stockSnapshot: List<ClosingStockLine>,
+    val organizationId: String = "",
+    val branchId: String = "",
     val sellerUid: String = "",
     val sellerName: String = ""
 ) {

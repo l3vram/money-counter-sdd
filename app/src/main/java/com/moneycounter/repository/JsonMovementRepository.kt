@@ -77,7 +77,7 @@ class JsonMovementRepository(private val context: Context) : MovementRepository 
 
 object MovementJson {
 
-    private const val VERSION = 1
+    private const val VERSION = 2
 
     fun toJson(movements: List<Movement>): String {
         val root = JSONObject()
@@ -94,6 +94,8 @@ object MovementJson {
             item.put("amount", m.amount.toPlainString())
             item.put("linkId", m.linkId ?: JSONObject.NULL)
             item.put("closingId", m.closingId ?: JSONObject.NULL)
+            item.put("organizationId", m.organizationId)
+            item.put("branchId", m.branchId)
             item.put("sellerUid", m.sellerUid)
             item.put("sellerName", m.sellerName)
 
@@ -130,7 +132,7 @@ object MovementJson {
         if (json.isBlank()) return emptyList()
         val root = runCatching { JSONObject(json) }.getOrElse { return emptyList() }
         val version = root.optInt("version", 1)
-        if (version != VERSION) return emptyList()
+        if (version != 1 && version != VERSION) return emptyList()
 
         val array = root.optJSONArray("movements") ?: return emptyList()
         val result = mutableListOf<Movement>()
@@ -207,6 +209,8 @@ object MovementJson {
                     amount = amount.setScale(Money.SCALE),
                     linkId = linkId,
                     closingId = closingId,
+                    organizationId = entry.optString("organizationId", ""),
+                    branchId = entry.optString("branchId", ""),
                     sellerUid = entry.optString("sellerUid", ""),
                     sellerName = entry.optString("sellerName", "")
                 )
@@ -217,4 +221,15 @@ object MovementJson {
 
         return result.sortedByDescending { it.at }
     }
+
+    /** Migration path for v1/early-v2 data: fills blank tenant fields only.
+     *  Existing stamps are never overwritten. */
+    fun stampTenant(movements: List<Movement>, organizationId: String, branchId: String): List<Movement> =
+        movements.map { m ->
+            if (m.organizationId.isNotBlank() && m.branchId.isNotBlank()) m
+            else m.copy(
+                organizationId = m.organizationId.ifBlank { organizationId },
+                branchId = m.branchId.ifBlank { branchId }
+            )
+        }
 }

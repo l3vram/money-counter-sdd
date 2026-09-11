@@ -16,6 +16,8 @@ class ClosingJsonTest {
         totalsByType: Map<MovementType, BigDecimal> = MovementType.entries.associateWith { BigDecimal("0.00") },
         netCash: String = "150.00",
         stockSnapshot: List<ClosingStockLine> = listOf(ClosingStockLine("Arroz", "Lb", BigDecimal("10.00"))),
+        organizationId: String = "",
+        branchId: String = "",
         sellerUid: String = "",
         sellerName: String = ""
     ) = Closing(
@@ -26,6 +28,8 @@ class ClosingJsonTest {
         totalsByType = totalsByType,
         netCash = BigDecimal(netCash),
         stockSnapshot = stockSnapshot,
+        organizationId = organizationId,
+        branchId = branchId,
         sellerUid = sellerUid,
         sellerName = sellerName
     )
@@ -92,5 +96,60 @@ class ClosingJsonTest {
         assertEquals(2, loaded.size)
         assertEquals("b", loaded[0].id)
         assertEquals("a", loaded[1].id)
+    }
+
+    // ---- plan 020: tenant-fields migration ----
+
+    @Test
+    fun `v1 json without tenant keys loads and yields blank tenant fields`() {
+        val json = """
+            {
+              "version": 1,
+              "closings": [
+                {"id": "legacy-1", "at": 1, "currencyId": "cup", "movementIds": [], "totalsByType": {}, "netCash": "0.00", "stockSnapshot": []}
+              ]
+            }
+        """.trimIndent()
+
+        val loaded = ClosingJson.fromJson(json)
+        assertEquals(1, loaded.size)
+        assertEquals("legacy-1", loaded[0].id)
+        assertEquals("", loaded[0].organizationId)
+        assertEquals("", loaded[0].branchId)
+    }
+
+    @Test
+    fun `v2 round trip preserves tenant fields`() {
+        val original = closing(organizationId = "org-9", branchId = "br-9")
+        val loaded = ClosingJson.fromJson(ClosingJson.toJson(listOf(original)))
+        assertEquals(1, loaded.size)
+        assertEquals("org-9", loaded[0].organizationId)
+        assertEquals("br-9", loaded[0].branchId)
+    }
+
+    @Test
+    fun `stampTenant fills only blanks and never overwrites existing stamps`() {
+        val stamped = closing(id = "kept", organizationId = "org-1", branchId = "br-1")
+        val orgBlank = closing(id = "org-blank", organizationId = "", branchId = "br-2")
+        val branchBlank = closing(id = "branch-blank", organizationId = "org-3", branchId = "")
+
+        val result = ClosingJson.stampTenant(
+            listOf(stamped, orgBlank, branchBlank),
+            "org-x",
+            "br-x"
+        ).associateBy { it.id }
+
+        assertEquals("org-1", result.getValue("kept").organizationId)
+        assertEquals("br-1", result.getValue("kept").branchId)
+        assertEquals("org-x", result.getValue("org-blank").organizationId)
+        assertEquals("br-2", result.getValue("org-blank").branchId)
+        assertEquals("org-3", result.getValue("branch-blank").organizationId)
+        assertEquals("br-x", result.getValue("branch-blank").branchId)
+    }
+
+    @Test
+    fun `version 3 is rejected after the v1-v2 compatibility layer`() {
+        val json = """{"version": 3, "closings": []}"""
+        assertTrue(ClosingJson.fromJson(json).isEmpty())
     }
 }

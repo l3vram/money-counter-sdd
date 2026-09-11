@@ -80,7 +80,7 @@ fun ReportsScreen(
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     val filterCurrency = uiState.currencies.firstOrNull { it.id == filterCurrencyId }
-    val filtered = uiState.movements.filter { it.currencyId == filterCurrencyId }
+    val filtered = uiState.visibleMovements.filter { it.currencyId == filterCurrencyId }
     val groups = remember(filtered, ascending) { groupMovementsByMonthDay(filtered, ascending) }
 
     val now = remember { Calendar.getInstance() }

@@ -55,7 +55,7 @@ fun MovementDetailScreen(
     onNavigateBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val movement = uiState.movements.firstOrNull { it.id == movementId }
+    val movement = uiState.visibleMovements.firstOrNull { it.id == movementId }
 
     Scaffold(
         topBar = {

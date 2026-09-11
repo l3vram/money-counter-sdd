@@ -299,4 +299,53 @@ class MoneyCounterViewModelPureTest {
         assertEquals(Money.ZERO, MoneyCounterViewModel.stockInDelta(BigDecimal("5.00"), BigDecimal("5.00")))
         assertEquals(Money.ZERO, MoneyCounterViewModel.stockInDelta(BigDecimal("5.00"), BigDecimal("2.00")))
     }
+
+    // ---- plan 020: tenant propagation in builders ----
+
+    @Test
+    fun `buildVentaMovement propagates organizationId and branchId`() {
+        val m = MoneyCounterViewModel.buildVentaMovement(
+            id = "sc1",
+            at = 1000L,
+            currencyId = "cup",
+            products = listOf(productLine()),
+            denominations = listOf(denom()),
+            amount = BigDecimal("4.00"),
+            organizationId = "org-1",
+            branchId = "br-1"
+        )
+        assertEquals("org-1", m.organizationId)
+        assertEquals("br-1", m.branchId)
+    }
+
+    @Test
+    fun `buildFiadoMovement defaults tenant to blanks`() {
+        val m = MoneyCounterViewModel.buildFiadoMovement(
+            id = "r1",
+            at = 1000L,
+            currencyId = "cup",
+            debtorName = "Juan",
+            products = listOf(productLine()),
+            amount = BigDecimal("4.00")
+        )
+        assertEquals("", m.organizationId)
+        assertEquals("", m.branchId)
+    }
+
+    @Test
+    fun `buildCobroMovement propagates organizationId and branchId`() {
+        val m = MoneyCounterViewModel.buildCobroMovement(
+            id = "p1",
+            at = 2000L,
+            currencyId = "cup",
+            debtorName = "Juan",
+            denominations = listOf(denom()),
+            amount = BigDecimal("4.00"),
+            linkId = "r1",
+            organizationId = "org-2",
+            branchId = "br-2"
+        )
+        assertEquals("org-2", m.organizationId)
+        assertEquals("br-2", m.branchId)
+    }
 }

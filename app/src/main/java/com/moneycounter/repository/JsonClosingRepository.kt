@@ -45,7 +45,7 @@ class JsonClosingRepository(private val context: Context) : ClosingRepository {
 
 object ClosingJson {
 
-    private const val VERSION = 1
+    private const val VERSION = 2
 
     fun toJson(closings: List<Closing>): String {
         val root = JSONObject()
@@ -57,6 +57,8 @@ object ClosingJson {
             item.put("id", c.id)
             item.put("at", c.at)
             item.put("currencyId", c.currencyId)
+            item.put("organizationId", c.organizationId)
+            item.put("branchId", c.branchId)
 
             val movementIdsArray = JSONArray()
             for (mid in c.movementIds) movementIdsArray.put(mid)
@@ -93,7 +95,7 @@ object ClosingJson {
         if (json.isBlank()) return emptyList()
         val root = runCatching { JSONObject(json) }.getOrElse { return emptyList() }
         val version = root.optInt("version", 1)
-        if (version != VERSION) return emptyList()
+        if (version != 1 && version != VERSION) return emptyList()
 
         val array = root.optJSONArray("closings") ?: return emptyList()
         val result = mutableListOf<Closing>()
@@ -152,6 +154,8 @@ object ClosingJson {
                     totalsByType = totalsByType,
                     netCash = netCash.setScale(Money.SCALE),
                     stockSnapshot = stockSnapshot,
+                    organizationId = entry.optString("organizationId", ""),
+                    branchId = entry.optString("branchId", ""),
                     sellerUid = entry.optString("sellerUid", ""),
                     sellerName = entry.optString("sellerName", "")
                 )
@@ -162,4 +166,15 @@ object ClosingJson {
 
         return result.sortedByDescending { it.at }
     }
+
+    /** Migration path for v1/early-v2 data: fills blank tenant fields only.
+     *  Existing stamps are never overwritten. */
+    fun stampTenant(closings: List<Closing>, organizationId: String, branchId: String): List<Closing> =
+        closings.map { c ->
+            if (c.organizationId.isNotBlank() && c.branchId.isNotBlank()) c
+            else c.copy(
+                organizationId = c.organizationId.ifBlank { organizationId },
+                branchId = c.branchId.ifBlank { branchId }
+            )
+        }
 }

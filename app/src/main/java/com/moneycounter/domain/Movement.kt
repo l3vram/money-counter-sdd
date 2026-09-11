@@ -35,6 +35,8 @@ data class Movement(
     val amount: BigDecimal,
     val linkId: String? = null,
     val closingId: String? = null,
+    val organizationId: String = "",
+    val branchId: String = "",
     val sellerUid: String = "",
     val sellerName: String = ""
 ) {
@@ -76,4 +78,34 @@ fun netCashTotal(movements: List<Movement>): BigDecimal = movements.fold(BigDeci
 /** Total outstanding credit (VENTA_FIADO) in a list of movements. */
 fun receivableTotal(movements: List<Movement>): BigDecimal = movements.fold(BigDecimal.ZERO) { acc, m ->
     if (m.type == MovementType.VENTA_FIADO) acc.add(m.amount) else acc
+}
+
+/**
+ * Role-scoped view of the journal (plan 020). Blank-tolerant: a movement with a
+ * blank org/branch/sellerUid is visible to everyone, preserving legacy records.
+ * - SELLER: own branch + own uid.
+ * - ADMIN: own branch.
+ * - OWNER: own org.
+ * - null (single-user, no member doc yet): everything.
+ * - SUPERUSER: empty (no operational view; platform only).
+ */
+fun visibleForRole(
+    movements: List<Movement>,
+    role: Role?,
+    orgId: String,
+    branchId: String,
+    uid: String
+): List<Movement> = when (role) {
+    Role.SELLER -> movements.filter {
+        (it.branchId.isBlank() || it.branchId == branchId) &&
+            (it.sellerUid.isBlank() || it.sellerUid == uid)
+    }
+    Role.ADMIN -> movements.filter {
+        it.branchId.isBlank() || it.branchId == branchId
+    }
+    Role.OWNER -> movements.filter {
+        it.organizationId.isBlank() || it.organizationId == orgId
+    }
+    Role.SUPERUSER -> emptyList()
+    null -> movements
 }

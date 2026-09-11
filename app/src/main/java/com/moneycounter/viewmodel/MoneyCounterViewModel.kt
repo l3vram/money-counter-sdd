@@ -28,9 +28,11 @@ import com.moneycounter.domain.ProductSelection
 import com.moneycounter.domain.Role
 import com.moneycounter.domain.SavedCount
 import com.moneycounter.domain.forRole
+import com.moneycounter.domain.visibleForRole
 import com.moneycounter.domain.SavedCountItem
 import com.moneycounter.domain.SavedProductItem
 import com.moneycounter.repository.ClosingRepository
+import com.moneycounter.repository.ClosingJson
 import com.moneycounter.repository.CurrencyRepository
 import com.moneycounter.repository.CurrencySettings
 import com.moneycounter.repository.DenominationRepository
@@ -41,6 +43,7 @@ import com.moneycounter.repository.JsonMovementRepository
 import com.moneycounter.repository.JsonTenantRepository
 import com.moneycounter.repository.JsonProductRepository
 import com.moneycounter.repository.JsonUnitRepository
+import com.moneycounter.repository.MovementJson
 import com.moneycounter.repository.MovementRepository
 import com.moneycounter.repository.ProductRepository
 import com.moneycounter.repository.TenantRepository
@@ -71,6 +74,7 @@ data class MoneyCounterUiState(
     val productSelections: List<ProductSelection> = listOf(ProductSelection()),
     val units: List<MeasurementUnit> = emptyList(),
     val movements: List<Movement> = emptyList(),
+    val visibleMovements: List<Movement> = emptyList(),
     val closings: List<Closing> = emptyList(),
     val collectingFiado: Movement? = null,
     val lastFiadoId: String? = null,
@@ -105,6 +109,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     private var memberOrgId: String? = null
     private var currentOrgId: String = ""
     private var currentBranchId: String = ""
+    private var currentRole: Role? = null
 
     /** Security boundary: every mutation below must consult this before acting. */
     private var permissionService: PermissionService = DefaultPermissionService
@@ -125,6 +130,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         loadMovements()
         loadClosings()
         resolveTenantContext()
+        refreshTenantScope()
     }
 
     /** Author identity stamped on movements/counts/closings created by this user. */
@@ -139,12 +145,14 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         sellerUid = uid.orEmpty()
         sellerName = name.orEmpty()
         memberOrgId = cloudOrgId?.takeIf { it.isNotBlank() }
+        currentRole = role
         permissionService = DefaultPermissionService.forRole(role)
         uid?.takeIf { it.isNotBlank() }?.let { cleanUid ->
             context = AppContext(cleanUid, role = role)
         }
         refreshPermissions()
         resolveTenantContext()
+        refreshTenantScope()
     }
 
     private fun resolveTenantContext() {
@@ -502,6 +510,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                         subtotal = unitPrice.multiply(stock).setScale(Money.SCALE)
                     ),
                     amount = unitPrice.multiply(stock).setScale(Money.SCALE),
+                    organizationId = currentOrgId,
+                    branchId = currentBranchId,
                     sellerUid = sellerUid,
                     sellerName = sellerName
                 )
@@ -543,6 +553,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                         subtotal = unitPrice.multiply(delta).setScale(Money.SCALE)
                     ),
                     amount = unitPrice.multiply(delta).setScale(Money.SCALE),
+                    organizationId = currentOrgId,
+                    branchId = currentBranchId,
                     sellerUid = sellerUid,
                     sellerName = sellerName
                 )
@@ -595,6 +607,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                     subtotal = unitPrice.multiply(qty).setScale(Money.SCALE)
                 ),
                 amount = unitPrice.multiply(qty).setScale(Money.SCALE),
+                organizationId = currentOrgId,
+                branchId = currentBranchId,
                 sellerUid = sellerUid,
                 sellerName = sellerName
             )
@@ -694,6 +708,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                     )
                 ),
                 amount = lossValue,
+                organizationId = currentOrgId,
+                branchId = currentBranchId,
                 sellerUid = sellerUid,
                 sellerName = sellerName
             )
@@ -718,6 +734,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                 currencyId = effectiveCurrencyId,
                 concept = cleanConcept,
                 amount = amount,
+                organizationId = currentOrgId,
+                branchId = currentBranchId,
                 sellerUid = sellerUid,
                 sellerName = sellerName
             )
@@ -782,6 +800,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                 products = savedProducts.map { it.toMovementLine() },
                 denominations = items.map { it.toMovementDenomination() },
                 amount = target,
+                organizationId = currentOrgId,
+                branchId = currentBranchId,
                 sellerUid = sellerUid,
                 sellerName = sellerName
             )
@@ -838,6 +858,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                 debtorName = trimmedName,
                 products = savedProducts.map { it.toMovementLine() },
                 amount = target,
+                organizationId = currentOrgId,
+                branchId = currentBranchId,
                 sellerUid = sellerUid,
                 sellerName = sellerName
             )
@@ -850,6 +872,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch {
             val movements = movementRepository.load()
             _uiState.update { it.copy(movements = movements) }
+            refreshTenantScope()
         }
     }
 
@@ -857,8 +880,45 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
      *  Called alongside every legacy write so no event can silently vanish
      *  from the journal even while legacy stores remain the read model. */
     private fun recordMovement(m: Movement) {
-        _uiState.update { it.copy(movements = listOf(m) + it.movements) }
+        val stamped = MovementJson.stampTenant(listOf(m), currentOrgId, currentBranchId).first()
+        _uiState.update { it.copy(movements = listOf(stamped) + it.movements) }
         persistMovements()
+        recomputeScopedMovements()
+    }
+
+    /** Legacy migration (plan 020): fills blank org/branch on every loaded/in-memory
+     *  movement and closing from the current context, persisting only when something
+     *  changed, then re-derives the role-scoped journal. Idempotent — stampTenant
+     *  only fills blanks, so repeated calls never rewrite existing stamps. */
+    private fun refreshTenantScope() {
+        val state = _uiState.value
+        val stampedMovements = MovementJson.stampTenant(state.movements, currentOrgId, currentBranchId)
+        val stampedClosings = ClosingJson.stampTenant(state.closings, currentOrgId, currentBranchId)
+        val movementsChanged = stampedMovements != state.movements
+        val closingsChanged = stampedClosings != state.closings
+        if (movementsChanged || closingsChanged) {
+            _uiState.update { it.copy(movements = stampedMovements, closings = stampedClosings) }
+            if (movementsChanged) persistMovements()
+            if (closingsChanged) persistClosings()
+        }
+        recomputeScopedMovements()
+    }
+
+    /** Role-scoped view of the journal ([MoneyCounterUiState.visibleMovements]) from
+     *  the current session context. See [com.moneycounter.domain.visibleForRole]. */
+    private fun recomputeScopedMovements() {
+        val state = _uiState.value
+        _uiState.update {
+            it.copy(
+                visibleMovements = visibleForRole(
+                    movements = state.movements,
+                    role = currentRole,
+                    orgId = currentOrgId,
+                    branchId = currentBranchId,
+                    uid = sellerUid
+                )
+            )
+        }
     }
 
     private fun persistMovements() {
@@ -870,6 +930,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch {
             val closings = closingRepository.load()
             _uiState.update { it.copy(closings = closings) }
+            refreshTenantScope()
         }
     }
 
@@ -881,12 +942,12 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     /** OPEN (not yet closed) movements for [currencyId], newest first — the pool a
      *  cierre can select from. See [openMovementsPure] for the underlying filter. */
     fun openMovements(currencyId: String): List<Movement> =
-        openMovementsPure(_uiState.value.movements, currencyId)
+        openMovementsPure(_uiState.value.visibleMovements, currencyId)
 
     /** OPEN fiado (VENTA_FIADO) movements for [currencyId] — the pool the cobro
      *  popup and collecting mode select from. See [openFiadoMovementsPure]. */
     fun openFiadoMovements(currencyId: String): List<Movement> =
-        openFiadoMovementsPure(_uiState.value.movements, currencyId)
+        openFiadoMovementsPure(_uiState.value.visibleMovements, currencyId)
 
     /** Creates a Closing over exactly the OPEN movements named by [movementIds]
      *  (already-closed or unknown ids are silently dropped from the selection).
@@ -911,17 +972,22 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             currencyId = currencyId,
             sellerUid = sellerUid,
             sellerName = sellerName
-        )
+        ).copy(organizationId = currentOrgId, branchId = currentBranchId)
 
         val stampedIds = selected.map { it.id }.toSet()
-        val newMovements = state.movements.map {
-            if (it.id in stampedIds) it.copy(closingId = closing.id) else it
-        }
+        val newMovements = MovementJson.stampTenant(
+            state.movements.map {
+                if (it.id in stampedIds) it.copy(closingId = closing.id) else it
+            },
+            currentOrgId,
+            currentBranchId
+        )
         _uiState.update {
             it.copy(movements = newMovements, closings = listOf(closing) + it.closings)
         }
         persistMovements()
         persistClosings()
+        recomputeScopedMovements()
         return closing.id
     }
 
@@ -986,6 +1052,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                 products = fiado.products,
                 amount = fiado.amount,
                 linkId = fiado.id,
+                organizationId = currentOrgId,
+                branchId = currentBranchId,
                 sellerUid = sellerUid,
                 sellerName = sellerName
             )
@@ -1108,6 +1176,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             products: List<MovementProductLine>,
             denominations: List<MovementDenomination>,
             amount: BigDecimal,
+            organizationId: String = "",
+            branchId: String = "",
             sellerUid: String = "",
             sellerName: String = ""
         ): Movement = Movement(
@@ -1118,6 +1188,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             products = products,
             denominations = denominations,
             amount = amount,
+            organizationId = organizationId,
+            branchId = branchId,
             sellerUid = sellerUid,
             sellerName = sellerName
         )
@@ -1129,6 +1201,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             debtorName: String,
             products: List<MovementProductLine>,
             amount: BigDecimal,
+            organizationId: String = "",
+            branchId: String = "",
             sellerUid: String = "",
             sellerName: String = ""
         ): Movement = Movement(
@@ -1139,6 +1213,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             concept = debtorName,
             products = products,
             amount = amount,
+            organizationId = organizationId,
+            branchId = branchId,
             sellerUid = sellerUid,
             sellerName = sellerName
         )
@@ -1150,6 +1226,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             reason: String?,
             products: List<MovementProductLine>,
             amount: BigDecimal,
+            organizationId: String = "",
+            branchId: String = "",
             sellerUid: String = "",
             sellerName: String = ""
         ): Movement = Movement(
@@ -1160,6 +1238,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             concept = reason,
             products = products,
             amount = amount,
+            organizationId = organizationId,
+            branchId = branchId,
             sellerUid = sellerUid,
             sellerName = sellerName
         )
@@ -1173,6 +1253,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             amount: BigDecimal,
             linkId: String,
             products: List<MovementProductLine> = emptyList(),
+            organizationId: String = "",
+            branchId: String = "",
             sellerUid: String = "",
             sellerName: String = ""
         ): Movement = Movement(
@@ -1185,6 +1267,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             denominations = denominations,
             amount = amount,
             linkId = linkId,
+            organizationId = organizationId,
+            branchId = branchId,
             sellerUid = sellerUid,
             sellerName = sellerName
         )
@@ -1196,6 +1280,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             currencyId: String,
             concept: String,
             amount: BigDecimal,
+            organizationId: String = "",
+            branchId: String = "",
             sellerUid: String = "",
             sellerName: String = ""
         ): Movement = Movement(
@@ -1205,6 +1291,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             currencyId = currencyId,
             concept = concept,
             amount = amount,
+            organizationId = organizationId,
+            branchId = branchId,
             sellerUid = sellerUid,
             sellerName = sellerName
         )
@@ -1217,6 +1305,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             currencyId: String,
             productLine: MovementProductLine,
             amount: BigDecimal,
+            organizationId: String = "",
+            branchId: String = "",
             sellerUid: String = "",
             sellerName: String = ""
         ): Movement = Movement(
@@ -1226,6 +1316,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             currencyId = currencyId,
             products = listOf(productLine),
             amount = amount,
+            organizationId = organizationId,
+            branchId = branchId,
             sellerUid = sellerUid,
             sellerName = sellerName
         )

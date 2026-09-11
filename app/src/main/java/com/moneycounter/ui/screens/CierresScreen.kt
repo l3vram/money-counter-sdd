@@ -84,7 +84,7 @@ fun CierresScreen(
 
     val currency = uiState.currencies.firstOrNull { it.id == filterCurrencyId }
     val symbol = currency?.symbol ?: "$"
-    val open = remember(uiState.movements, filterCurrencyId) {
+    val open = remember(uiState.visibleMovements, filterCurrencyId) {
         viewModel.openMovements(filterCurrencyId)
     }
     val pastClosings = uiState.closings.filter { it.currencyId == filterCurrencyId }
