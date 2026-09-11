@@ -143,18 +143,22 @@ class MovementMigrationTest {
 
     @Test
     fun `Payment maps to COBRO with linkId equal to receivableId, id preserved`() {
-        val p = payment()
-        val result = MovementMigration.fromLegacy(emptyList(), emptyList(), listOf(p), emptyList())
+        val r = receivable(id = "r1")
+        val p = payment(id = "p1", receivableId = "r1")
+        val result = MovementMigration.fromLegacy(emptyList(), listOf(r), listOf(p), emptyList())
 
-        assertEquals(1, result.size)
-        val m = result[0]
+        assertEquals(2, result.size)
+        val m = result.first { it.type == MovementType.COBRO }
         assertEquals(p.id, m.id)
         assertEquals(p.at, m.at)
-        assertEquals(MovementType.COBRO, m.type)
         assertEquals(p.debtorName, m.concept)
         assertEquals(p.amount, m.amount)
         assertEquals(p.receivableId, m.linkId)
         assertTrue(m.denominations.isEmpty())
+        assertEquals(1, m.products.size)
+        assertEquals("Arroz", m.products[0].name)
+        assertEquals(BigDecimal("2.00").setScale(Money.SCALE), m.products[0].quantity)
+        assertEquals(BigDecimal("5.00").setScale(Money.SCALE), m.products[0].subtotal)
     }
 
     @Test

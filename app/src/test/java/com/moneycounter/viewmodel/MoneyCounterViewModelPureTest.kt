@@ -216,12 +216,14 @@ class MoneyCounterViewModelPureTest {
             currencyId = fiado.currencyId,
             debtorName = fiado.concept.orEmpty(),
             denominations = counted,
+            products = fiado.products,
             amount = fiado.amount,
             linkId = fiado.id
         )
         assertEquals(MovementType.COBRO, movement.type)
         assertEquals(fiado.amount, movement.amount)
         assertTrue(movement.denominations.isNotEmpty())
+        assertEquals(fiado.products, movement.products)
         assertEquals(fiado.id, movement.linkId)
 
         // once collected, the fiado is no longer OPEN

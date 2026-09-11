@@ -56,3 +56,24 @@ fun MovementType.hasDenominations(): Boolean = when (this) {
     MovementType.VENTA, MovementType.COBRO -> true
     else -> false
 }
+
+/** Cash-flow delta for a movement type: +1 cash in, -1 cash out, null = does not touch cash. */
+fun MovementType.cashSign(): Int? = when (this) {
+    MovementType.VENTA, MovementType.COBRO -> 1
+    MovementType.GASTO, MovementType.MERMA -> -1
+    else -> null
+}
+
+/**
+ * Net cash total of movements: VENTA + COBRO minus GASTO + MERMA.
+ * Fiados, altas and entradas do not touch cash and are excluded (see [receivableTotal]).
+ */
+fun netCashTotal(movements: List<Movement>): BigDecimal = movements.fold(BigDecimal.ZERO) { acc, m ->
+    val sign = m.type.cashSign()
+    if (sign == null) acc else acc.add(m.amount.multiply(BigDecimal.valueOf(sign.toLong())))
+}
+
+/** Total outstanding credit (VENTA_FIADO) in a list of movements. */
+fun receivableTotal(movements: List<Movement>): BigDecimal = movements.fold(BigDecimal.ZERO) { acc, m ->
+    if (m.type == MovementType.VENTA_FIADO) acc.add(m.amount) else acc
+}

@@ -42,12 +42,16 @@ object MovementMigration {
         }
 
         val fromPayments = payments.map { p ->
+            val receivableProducts = receivables
+                .firstOrNull { it.id == p.receivableId }
+                ?.products?.map { it.toMovementLine() }
             Movement(
                 id = p.id,
                 at = p.at,
                 type = MovementType.COBRO,
                 currencyId = p.currencyId,
                 concept = p.debtorName,
+                products = receivableProducts.orEmpty(),
                 amount = p.amount,
                 linkId = p.receivableId
             )

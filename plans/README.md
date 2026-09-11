@@ -97,6 +97,17 @@
 | Fix teclado: `windowSoftInputMode` `adjustPan` → `adjustResize` (elimina hueco vacío entre campo y teclado al escribir cantidades/denominaciones) | ✅ DONE |
 | Fix espacio residual teclado: ocultar bottom nav mientras el IME está visible → el contenido llega hasta el borde del teclado | ✅ DONE |
 
+### Iteración 2026-09-11 (rama `feature/historial-productos-signos`)
+| Qué | Estado |
+|-----|--------|
+| COBRO lleva productos: `recordCollection` pasa `fiado.products` a `buildCobroMovement`; migración legada lleva productos del receivable linkado | ✅ DONE 242 tests verde |
+| Historial: filas muestran concepto + productos con cantidad (`Arroz 20 Lb · Frijol 5 Lb`) en Historial y Cierres | ✅ DONE |
+| Señales +/− por tipo en Historial y Cierres (preview por tipo): GASTO/MERMA `-` en rojo, fiado `~` apagado, resto `+` | ✅ DONE |
+| **TOTAL del día sign-aware** (corrección fiado): `netCashTotal` = VENTA+COBRO−GASTO−MERMA; fiado/alta/entrada fuera; línea aparte `Por cobrar (fiado): ~X` | ✅ DONE 246 tests verde |
+
+> Nota iteración: el TOTAL del día ya NO muestra el fiado como efectivo en caja (antes sumaba todo
+> con signo positivo). El fiado sale excluido del neto y se lista aparte como **por cobrar**.
+
 ## 2. Pendiente
 
 ### Diseños no ejecutables (requieren planning pass)
@@ -112,10 +123,10 @@
 | Login Google en Cuba | Google Sign-In no funcionaba en Cuba (embargo: endpoints identidad bloqueados) | **RESUELTO por Appwrite email+password** (fase migración) |
 | `LuisoButton` 40dp vs 48dp | Touch target bajo el mínimo a11y del design kit | subir a 48dp |
 | Permission matrix sin conectar | `Role.canDecreaseStock()`/`canManageAccounts()`/`canViewAllSellersDashboard()` no se usan fuera de `Role.kt` | conectar al UI cuando llegue Roles |
-| ELIMINAR en lote del Historial | El modo selección volvió con GENERAR RESUMEN pero sin batch-delete | opcional: `deleteMovements(ids)` + persistir journal |
-| Señales +/- en reportes y cierres | Gasto/Merma deben verse como salida (`-`) y Venta/Cobro/Alta/Entrada como entrada (`+`) para identificarlas de un vistazo | aplicar a Historial + Cierres (y resumen) |
-| Stock: solo OWNER borra | Un seller nunca puede borrar/eliminar nada del stock; solo el owner | gating en StockScreen (relacionado a `canEditStock`) |
-| Cantidades en el Historial | En el listado de movimientos mostrar la cantidad junto al producto, p. ej. `Arroz 20 Lb` (hoy la fila solo muestra el nombre del primer producto) | `MovementRow` en ReportsScreen |
+| Cantidades en el Historial | En el listado de movimientos mostrar la cantidad junto al producto, p. ej. `Arroz 20 Lb` (hoy la fila solo muestra el nombre del primer producto) | ✅ DONE **`feature/historial-productos-signos`** — `MovementProductSummary` en ReportsScreen + CierresScreen |
+| Señales +/- en reportes y cierres | Gasto/Merma deben verse como salida (`-`) y Venta/Cobro/Alta/Entrada como entrada (`+`) para identificarlas de un vistazo | ✅ DONE **`feature/historial-productos-signos`** — `MovementType.moneySign()` en Components.kt + Historial/Cierres (GASTO/MERMA en rojo) |
+| Stock: solo OWNER borra | Un seller nunca puede borrar/eliminar nada del stock; solo el owner | gating en StockScreen (relacionado a `canEditStock`) — **PENDIENTE** |
+| ELIMINAR en lote del Historial | ~~El modo selección volvió con GENERAR RESUMEN pero sin batch-delete~~ | **CANCELADO por el dueño: el historial nunca se borra** |
 | Firestore repos | `FirestorePaths`/`FirestoreMappers` existen pero no hay repositorios reales (todo es `Json*`) | parte de fase 3, sub-plan 2 |
 
 ### Migración Firebase → Appwrite.io (en curso, rama `feature/appwrite`)
