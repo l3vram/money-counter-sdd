@@ -12,7 +12,7 @@ import java.math.BigDecimal
 
 object ProductJson {
 
-    private const val VERSION = 4
+    private const val VERSION = 5
 
     fun toJson(products: List<Product>): String {
         val root = JSONObject()
@@ -25,6 +25,7 @@ object ProductJson {
             item.put("name", product.name)
             item.put("unit", product.unit)
             item.put("stock", product.stock.toPlainString())
+            item.put("organizationId", product.organizationId)
             val prices = JSONObject()
             for ((currencyId, price) in product.prices) {
                 val priceObj = JSONObject()
@@ -43,7 +44,7 @@ object ProductJson {
         if (json.isBlank()) return emptyList()
         val root = runCatching { JSONObject(json) }.getOrElse { return emptyList() }
         val version = root.optInt("version", 1)
-        if (version != VERSION && version != 1 && version != 2 && version != 3) return emptyList()
+        if (version != VERSION && version != 1 && version != 2 && version != 3 && version != 4) return emptyList()
 
         val array = root.optJSONArray("products") ?: return emptyList()
         val products = mutableListOf<Product>()
@@ -56,6 +57,7 @@ object ProductJson {
             val unit = item.optString("unit", "")
             val stock = runCatching { BigDecimal(item.optString("stock", "0")).setScale(Money.SCALE) }
                 .getOrDefault(Money.ZERO)
+            val organizationId = item.optString("organizationId", "")
 
             if (id.isBlank() || name.isBlank() || unit.isBlank()) continue
             if (!seenIds.add(id)) continue
@@ -74,7 +76,7 @@ object ProductJson {
                     if (unitPrice.signum() < 0 || surcharge.signum() < 0) continue
                     prices[currencyId] = ProductPrice(unitPrice, surcharge)
                 }
-                products.add(Product(id, name, unit, stock, prices))
+                products.add(Product(id, name, unit, stock, prices, organizationId))
             } else {
                 val unitPriceStr = item.optString("unitPrice", "")
                 val surchargeStr = item.optString("surcharge", "0")

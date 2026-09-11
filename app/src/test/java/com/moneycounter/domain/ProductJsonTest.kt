@@ -53,7 +53,7 @@ class ProductJsonTest {
     fun `unsupported version returns empty list`() {
         val json = """
             {
-              "version": 5,
+              "version": 6,
               "products": [
                 {"id": "p1", "name": "Arroz", "unit": "Lb", "unitPrice": "25.00", "surcharge": "0.00", "stock": "10.00"}
               ]
@@ -84,5 +84,41 @@ class ProductJsonTest {
     @Test
     fun `blank input returns empty list`() {
         assertTrue(ProductJson.fromJson("").isEmpty())
+    }
+
+    @Test
+    fun `v4 json without organizationId reads with blank org`() {
+        val json = """
+            {
+              "version": 4,
+              "products": [
+                {"id": "p1", "name": "Arroz", "unit": "Lb", "stock": "10.00", "prices": {"cup": {"unitPrice": "25.00", "surcharge": "0.00"}}}
+              ]
+            }
+        """.trimIndent()
+
+        val loaded = ProductJson.fromJson(json)
+
+        assertEquals(1, loaded.size)
+        assertEquals("", loaded[0].organizationId)
+        assertEquals(BigDecimal("10.00"), loaded[0].stock)
+    }
+
+    @Test
+    fun `v5 round trip preserves organizationId`() {
+        val product = Product(
+            id = "p1",
+            name = "Arroz",
+            unit = "Lb",
+            stock = BigDecimal("40.00"),
+            prices = mapOf(DefaultCurrencies.CUP.id to ProductPrice(BigDecimal("25.00"), BigDecimal("2.00"))),
+            organizationId = "org-1"
+        )
+
+        val loaded = ProductJson.fromJson(ProductJson.toJson(listOf(product)))
+
+        assertEquals(1, loaded.size)
+        assertEquals("org-1", loaded[0].organizationId)
+        assertEquals(BigDecimal("40.00"), loaded[0].stock)
     }
 }

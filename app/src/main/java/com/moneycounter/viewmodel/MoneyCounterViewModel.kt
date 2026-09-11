@@ -31,6 +31,10 @@ import com.moneycounter.domain.forRole
 import com.moneycounter.domain.visibleForRole
 import com.moneycounter.domain.SavedCountItem
 import com.moneycounter.domain.SavedProductItem
+import com.moneycounter.domain.StockItem
+import com.moneycounter.domain.backfillStock
+import com.moneycounter.domain.resolveBranchStock
+import com.moneycounter.domain.withOrgId
 import com.moneycounter.repository.ClosingRepository
 import com.moneycounter.repository.ClosingJson
 import com.moneycounter.repository.CurrencyRepository
@@ -42,10 +46,12 @@ import com.moneycounter.repository.JsonDenominationRepository
 import com.moneycounter.repository.JsonMovementRepository
 import com.moneycounter.repository.JsonTenantRepository
 import com.moneycounter.repository.JsonProductRepository
+import com.moneycounter.repository.JsonStockRepository
 import com.moneycounter.repository.JsonUnitRepository
 import com.moneycounter.repository.MovementJson
 import com.moneycounter.repository.MovementRepository
 import com.moneycounter.repository.ProductRepository
+import com.moneycounter.repository.StockRepository
 import com.moneycounter.repository.TenantRepository
 import com.moneycounter.repository.UnitRepository
 import com.moneycounter.repository.branchBelongsToOrg
@@ -71,6 +77,7 @@ data class MoneyCounterUiState(
     val currencies: List<Currency> = DefaultCurrencies.get(),
     val selectedCurrencyId: String = DefaultCurrencies.CUP.id,
     val products: List<Product> = emptyList(),
+    val stockItems: List<StockItem> = emptyList(),
     val productSelections: List<ProductSelection> = listOf(ProductSelection()),
     val units: List<MeasurementUnit> = emptyList(),
     val movements: List<Movement> = emptyList(),
@@ -100,6 +107,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     private val repository: DenominationRepository = JsonDenominationRepository(application)
     private val currencyRepository: CurrencyRepository = JsonCurrencyRepository(application)
     private val productRepository: ProductRepository = JsonProductRepository(application)
+    private val stockRepository: StockRepository = JsonStockRepository(application)
     private val unitRepository: UnitRepository = JsonUnitRepository(application)
     private val movementRepository: MovementRepository = JsonMovementRepository(application)
     private val closingRepository: ClosingRepository = JsonClosingRepository(application)
@@ -169,6 +177,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             )
         }
         context = context?.copy(organizationId = orgId, branchId = branch.id)
+        loadStock()
     }
 
     fun selectBranch(branchId: String): Boolean {
@@ -177,6 +186,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         currentBranchId = branchId
         _uiState.update { it.copy(selectedBranchId = branchId) }
         context = context?.copy(branchId = branchId)
+        loadStock()
         return true
     }
 
@@ -233,11 +243,36 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
 
     private fun loadProducts() {
         viewModelScope.launch {
-            val products = productRepository.load()
+            val products = productRepository.load().map { it.withOrgId(currentOrgId) }
             _uiState.update { it.copy(products = products) }
             recalculate()
         }
     }
+
+    /** Loads every branch-scoped stock row and idempotently backfills rows for the
+     *  current (org, branch) from `Product.stock` — only rows that are missing.
+     *  Persists only when backfill created rows. See [backfillStock]. */
+    private fun loadStock() {
+        viewModelScope.launch {
+            val items = stockRepository.load()
+            val state = _uiState.value
+            val backfilled = backfillStock(items, state.products, currentOrgId, currentBranchId)
+            if (backfilled != items) stockRepository.saveAll(backfilled)
+            updateStockState(backfilled)
+        }
+    }
+
+    /** Syncs the branch-scoped stock rows into the UI state. `Product.stock` remains
+     *  the compatibility copy for now — this recomputes nothing in products; the
+     *  merged read ([branchStock]) resolves per call. */
+    private fun updateStockState(items: List<StockItem>) {
+        _uiState.update { it.copy(stockItems = items) }
+    }
+
+    /** Merged read (master sections 19-26): the [StockItem] quantity for the current
+     *  (org, branch) if a row exists, else the `Product.stock` compatibility copy. */
+    fun branchStock(productId: String): BigDecimal =
+        resolveBranchStock(_uiState.value.stockItems, _uiState.value.products, currentOrgId, currentBranchId, productId)
 
     private fun loadUnits() {
         viewModelScope.launch {

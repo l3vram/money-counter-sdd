@@ -7,7 +7,8 @@ data class Product(
     val name: String,
     val unit: String,
     val stock: BigDecimal = Money.ZERO,
-    val prices: Map<String, ProductPrice> = emptyMap()
+    val prices: Map<String, ProductPrice> = emptyMap(),
+    val organizationId: String = ""
 ) {
     init {
         require(id.isNotBlank()) { "Product ID must not be blank" }
@@ -25,3 +26,9 @@ data class Product(
 
     fun hasPriceIn(currencyId: String): Boolean = prices.containsKey(currencyId)
 }
+
+/** Returns this product with [organizationId] filled in — only when currently blank
+ *  (compatibility product rows predating the org stamp keep their org filled once). */
+fun Product.withOrgId(orgId: String): Product =
+    if (orgId.isBlank() || organizationId.isNotBlank()) this
+    else copy(organizationId = orgId)
