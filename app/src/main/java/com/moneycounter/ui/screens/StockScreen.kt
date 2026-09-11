@@ -49,8 +49,6 @@ import com.moneycounter.domain.Movement
 import com.moneycounter.domain.MovementType
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductPrice
-import com.moneycounter.domain.mayEditStock
-import com.moneycounter.domain.mayRegisterWriteoff
 import com.moneycounter.ui.components.LuisoButton
 import com.moneycounter.ui.components.LuisoCard
 import com.moneycounter.ui.components.LuisoNotice
@@ -71,8 +69,10 @@ fun StockScreen(
     member: Member? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val canRegisterWriteoff = member?.role.mayRegisterWriteoff()
-    val canEditStock = member?.role.mayEditStock()
+    val canRegisterWriteoff = uiState.canRegisterWriteoff
+    val canEditStock = uiState.canEditStock
+    val canAddStock = uiState.canAddStock
+    val canCreateProduct = uiState.canCreateProduct
     var showAddProductDialog by remember { mutableStateOf(false) }
     var showAddStockDialog by remember { mutableStateOf<Product?>(null) }
     var showDeleteProductDialog by remember { mutableStateOf<Product?>(null) }
@@ -123,21 +123,24 @@ fun StockScreen(
                             addStockError = null
                         },
                         onDelete = { showDeleteProductDialog = product },
-                        canDelete = canEditStock
+                        canDelete = canEditStock,
+                        canAddStock = canAddStock
                     )
                 }
             }
 
-            item {
-                LuisoButton(
-                    text = "AGREGAR PRODUCTO",
-                    onClick = {
-                        showAddProductDialog = true
-                        errorMessage = null
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    leadingIcon = Icons.Default.Add
-                )
+            if (canCreateProduct) {
+                item {
+                    LuisoButton(
+                        text = "AGREGAR PRODUCTO",
+                        onClick = {
+                            showAddProductDialog = true
+                            errorMessage = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = Icons.Default.Add
+                    )
+                }
             }
 
             item {
@@ -522,7 +525,8 @@ private fun ProductRow(
     currencyCodeOf: (String) -> String = { it },
     onAddStock: () -> Unit,
     onDelete: () -> Unit,
-    canDelete: Boolean = true
+    canDelete: Boolean = true,
+    canAddStock: Boolean = true
 ) {
     LuisoCard(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -556,12 +560,14 @@ private fun ProductRow(
             }
 
             Row {
-                IconButton(onClick = onAddStock) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = "Dar entrada",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                if (canAddStock) {
+                    IconButton(onClick = onAddStock) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "Dar entrada",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
                 if (canDelete) {
                     IconButton(onClick = onDelete) {

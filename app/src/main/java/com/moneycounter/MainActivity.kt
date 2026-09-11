@@ -90,7 +90,7 @@ fun MoneyCounterApp(
 ) {
     val viewModel: MoneyCounterViewModel = viewModel()
     LaunchedEffect(profile?.uid) {
-        viewModel.setSeller(profile?.uid, profile?.displayName)
+        viewModel.setSellerContext(profile?.uid, profile?.displayName, member?.role)
     }
     var currentScreen by remember { mutableStateOf("counter") }
     var selectedHistoryId by remember { mutableStateOf<String?>(null) }

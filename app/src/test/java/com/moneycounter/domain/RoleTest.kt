@@ -8,11 +8,23 @@ class RoleTest {
     @Test
     fun `SELLER permission matrix`() {
         val role = Role.SELLER
-        assertTrue(role.canRegisterSale())
-        assertTrue(role.canAddStock())
-        assertTrue(role.canRegisterWriteoff())
-        assertFalse(role.canEditStock())
+        assertTrue(role.canSell())
         assertTrue(role.canRegisterCreditSaleAndCollect())
+        assertTrue(role.canViewInventory())
+        assertTrue(role.canViewHistory())
+        assertTrue(role.canCreateSellerClosing())
+        assertFalse(role.canRegisterExpense())
+        assertFalse(role.canAddStock())
+        assertFalse(role.canEditStock())
+        assertFalse(role.canRegisterWriteoff())
+        assertFalse(role.canCreateProduct())
+        assertFalse(role.canEditProduct())
+        assertFalse(role.canDeleteProduct())
+        assertFalse(role.canViewBranchHistory())
+        assertFalse(role.canViewOrganizationHistory())
+        assertFalse(role.canCreateBranchClosing())
+        assertFalse(role.canViewReports())
+        assertFalse(role.canManageCatalog())
         assertFalse(role.canViewAllSellersDashboard())
         assertFalse(role.canManageAccounts())
     }
@@ -20,23 +32,71 @@ class RoleTest {
     @Test
     fun `OWNER permission matrix`() {
         val role = Role.OWNER
-        assertTrue(role.canRegisterSale())
-        assertTrue(role.canAddStock())
-        assertTrue(role.canRegisterWriteoff())
-        assertTrue(role.canEditStock())
+        assertTrue(role.canSell())
         assertTrue(role.canRegisterCreditSaleAndCollect())
+        assertTrue(role.canRegisterExpense())
+        assertTrue(role.canAddStock())
+        assertTrue(role.canEditStock())
+        assertTrue(role.canRegisterWriteoff())
+        assertTrue(role.canCreateProduct())
+        assertTrue(role.canEditProduct())
+        assertTrue(role.canDeleteProduct())
+        assertTrue(role.canViewInventory())
+        assertTrue(role.canViewHistory())
+        assertTrue(role.canViewBranchHistory())
+        assertTrue(role.canViewOrganizationHistory())
+        assertTrue(role.canCreateSellerClosing())
+        assertTrue(role.canCreateBranchClosing())
+        assertTrue(role.canViewReports())
+        assertTrue(role.canManageCatalog())
         assertTrue(role.canViewAllSellersDashboard())
+        assertFalse(role.canManageAccounts())
+    }
+
+    @Test
+    fun `ADMIN permission matrix`() {
+        val role = Role.ADMIN
+        assertTrue(role.canSell())
+        assertTrue(role.canRegisterCreditSaleAndCollect())
+        assertTrue(role.canRegisterExpense())
+        assertTrue(role.canAddStock())
+        assertTrue(role.canEditStock())
+        assertTrue(role.canRegisterWriteoff())
+        assertTrue(role.canCreateProduct())
+        assertTrue(role.canEditProduct())
+        assertTrue(role.canDeleteProduct())
+        assertTrue(role.canViewInventory())
+        assertTrue(role.canViewHistory())
+        assertTrue(role.canViewBranchHistory())
+        assertTrue(role.canCreateSellerClosing())
+        assertTrue(role.canCreateBranchClosing())
+        assertTrue(role.canViewReports())
+        assertTrue(role.canManageCatalog())
+        assertFalse(role.canViewOrganizationHistory())
+        assertFalse(role.canViewAllSellersDashboard())
         assertFalse(role.canManageAccounts())
     }
 
     @Test
     fun `SUPERUSER permission matrix`() {
         val role = Role.SUPERUSER
-        assertFalse(role.canRegisterSale())
-        assertFalse(role.canAddStock())
-        assertFalse(role.canRegisterWriteoff())
-        assertFalse(role.canEditStock())
+        assertFalse(role.canSell())
         assertFalse(role.canRegisterCreditSaleAndCollect())
+        assertFalse(role.canRegisterExpense())
+        assertFalse(role.canAddStock())
+        assertFalse(role.canEditStock())
+        assertFalse(role.canRegisterWriteoff())
+        assertFalse(role.canCreateProduct())
+        assertFalse(role.canEditProduct())
+        assertFalse(role.canDeleteProduct())
+        assertFalse(role.canViewInventory())
+        assertFalse(role.canViewHistory())
+        assertFalse(role.canViewBranchHistory())
+        assertFalse(role.canViewOrganizationHistory())
+        assertFalse(role.canCreateSellerClosing())
+        assertFalse(role.canCreateBranchClosing())
+        assertFalse(role.canViewReports())
+        assertFalse(role.canManageCatalog())
         assertFalse(role.canViewAllSellersDashboard())
         assertTrue(role.canManageAccounts())
     }
@@ -56,26 +116,59 @@ class RoleTest {
     fun `null role keeps single-user privileges`() {
         assertTrue((null as Role?).mayRegisterWriteoff())
         assertTrue((null as Role?).mayEditStock())
+        assertTrue((null as Role?).mayAddStock())
+        assertTrue((null as Role?).mayRegisterExpense())
+        assertTrue((null as Role?).mayCreateSellerClosing())
+        assertTrue((null as Role?).mayCreateBranchClosing())
+        assertTrue((null as Role?).mayManageCatalog())
+        assertTrue((null as Role?).mayViewBranchHistory())
         assertFalse((null as Role?).mayViewOwnerDashboard())
     }
 
     @Test
     fun `mayRegisterWriteoff gating`() {
         assertTrue(Role.OWNER.mayRegisterWriteoff())
-        assertTrue(Role.SELLER.mayRegisterWriteoff())
+        assertTrue(Role.ADMIN.mayRegisterWriteoff())
+        assertFalse(Role.SELLER.mayRegisterWriteoff())
         assertFalse(Role.SUPERUSER.mayRegisterWriteoff())
     }
 
     @Test
     fun `mayEditStock gating`() {
         assertTrue(Role.OWNER.mayEditStock())
+        assertTrue(Role.ADMIN.mayEditStock())
         assertFalse(Role.SELLER.mayEditStock())
         assertFalse(Role.SUPERUSER.mayEditStock())
     }
 
     @Test
+    fun `mayAddStock gating`() {
+        assertTrue(Role.OWNER.mayAddStock())
+        assertTrue(Role.ADMIN.mayAddStock())
+        assertFalse(Role.SELLER.mayAddStock())
+        assertFalse(Role.SUPERUSER.mayAddStock())
+    }
+
+    @Test
+    fun `mayRegisterExpense gating`() {
+        assertTrue(Role.OWNER.mayRegisterExpense())
+        assertTrue(Role.ADMIN.mayRegisterExpense())
+        assertFalse(Role.SELLER.mayRegisterExpense())
+        assertFalse(Role.SUPERUSER.mayRegisterExpense())
+    }
+
+    @Test
+    fun `mayManageCatalog gating`() {
+        assertTrue(Role.OWNER.mayManageCatalog())
+        assertTrue(Role.ADMIN.mayManageCatalog())
+        assertFalse(Role.SELLER.mayManageCatalog())
+        assertFalse(Role.SUPERUSER.mayManageCatalog())
+    }
+
+    @Test
     fun `mayViewOwnerDashboard gating`() {
         assertTrue(Role.OWNER.mayViewOwnerDashboard())
+        assertFalse(Role.ADMIN.mayViewOwnerDashboard())
         assertFalse(Role.SELLER.mayViewOwnerDashboard())
         assertFalse(Role.SUPERUSER.mayViewOwnerDashboard())
     }

@@ -201,12 +201,14 @@ fun ReportsScreen(
                 }
             }
 
-            item {
-                LuisoButton(
-                    text = "REGISTRAR GASTO",
-                    onClick = onNavigateToGasto,
-                    modifier = Modifier.fillMaxWidth()
-                )
+            if (uiState.canRegisterExpense) {
+                item {
+                    LuisoButton(
+                        text = "REGISTRAR GASTO",
+                        onClick = onNavigateToGasto,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
 
             item {

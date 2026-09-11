@@ -3,6 +3,7 @@ package com.moneycounter.domain
 enum class Role {
     SELLER,
     OWNER,
+    ADMIN,
     SUPERUSER;
 
     companion object {
@@ -13,33 +14,96 @@ enum class Role {
     }
 }
 
-/** Permission matrix extensions **/
-
-fun Role.canRegisterSale(): Boolean = when (this) {
-    Role.SELLER, Role.OWNER -> true
+/**
+ * Definitive permission matrix (plan 018). Contract:
+ * - SELLER: vende, cobra fiado, cierra su caja, ve inventario y su historial — read-only en inventario.
+ * - OWNER: todo operativo + catálogo + reportes + historial de sucursal/org + dashboard de vendedores.
+ * - ADMIN: como OWNER salvo historial de organización y dashboard de vendedores.
+ * - SUPERUSER: solo gestión de cuentas (bloqueado de las operaciones).
+ */
+fun Role.canSell(): Boolean = when (this) {
+    Role.SELLER, Role.OWNER, Role.ADMIN -> true
     Role.SUPERUSER -> false
+}
+
+fun Role.canRegisterCreditSaleAndCollect(): Boolean = when (this) {
+    Role.SELLER, Role.OWNER, Role.ADMIN -> true
+    Role.SUPERUSER -> false
+}
+
+fun Role.canRegisterExpense(): Boolean = when (this) {
+    Role.OWNER, Role.ADMIN -> true
+    else -> false
 }
 
 fun Role.canAddStock(): Boolean = when (this) {
-    Role.SELLER, Role.OWNER -> true
-    Role.SUPERUSER -> false
+    Role.OWNER, Role.ADMIN -> true
+    else -> false
 }
 
-/** Registrar una baja por merma (writeoff): el SELLER sí puede documentar bajas de inventario. */
-fun Role.canRegisterWriteoff(): Boolean = when (this) {
-    Role.SELLER, Role.OWNER -> true
-    Role.SUPERUSER -> false
-}
-
-/** Editar/ajustar el stock de un producto directamente: solo el OWNER. */
 fun Role.canEditStock(): Boolean = when (this) {
+    Role.OWNER, Role.ADMIN -> true
+    else -> false
+}
+
+fun Role.canRegisterWriteoff(): Boolean = when (this) {
+    Role.OWNER, Role.ADMIN -> true
+    else -> false
+}
+
+fun Role.canCreateProduct(): Boolean = when (this) {
+    Role.OWNER, Role.ADMIN -> true
+    else -> false
+}
+
+fun Role.canEditProduct(): Boolean = when (this) {
+    Role.OWNER, Role.ADMIN -> true
+    else -> false
+}
+
+fun Role.canDeleteProduct(): Boolean = when (this) {
+    Role.OWNER, Role.ADMIN -> true
+    else -> false
+}
+
+fun Role.canViewInventory(): Boolean = when (this) {
+    Role.SELLER, Role.OWNER, Role.ADMIN -> true
+    Role.SUPERUSER -> false
+}
+
+fun Role.canViewHistory(): Boolean = when (this) {
+    Role.SELLER, Role.OWNER, Role.ADMIN -> true
+    Role.SUPERUSER -> false
+}
+
+fun Role.canViewBranchHistory(): Boolean = when (this) {
+    Role.OWNER, Role.ADMIN -> true
+    else -> false
+}
+
+fun Role.canViewOrganizationHistory(): Boolean = when (this) {
     Role.OWNER -> true
     else -> false
 }
 
-fun Role.canRegisterCreditSaleAndCollect(): Boolean = when (this) {
-    Role.SELLER, Role.OWNER -> true
+fun Role.canCreateSellerClosing(): Boolean = when (this) {
+    Role.SELLER, Role.OWNER, Role.ADMIN -> true
     Role.SUPERUSER -> false
+}
+
+fun Role.canCreateBranchClosing(): Boolean = when (this) {
+    Role.OWNER, Role.ADMIN -> true
+    else -> false
+}
+
+fun Role.canViewReports(): Boolean = when (this) {
+    Role.OWNER, Role.ADMIN -> true
+    else -> false
+}
+
+fun Role.canManageCatalog(): Boolean = when (this) {
+    Role.OWNER, Role.ADMIN -> true
+    else -> false
 }
 
 fun Role.canViewAllSellersDashboard(): Boolean = when (this) {
@@ -59,5 +123,17 @@ fun Role.canManageAccounts(): Boolean = when (this) {
 fun Role?.mayRegisterWriteoff(): Boolean = this?.canRegisterWriteoff() ?: true
 
 fun Role?.mayEditStock(): Boolean = this?.canEditStock() ?: true
+
+fun Role?.mayAddStock(): Boolean = this?.canAddStock() ?: true
+
+fun Role?.mayRegisterExpense(): Boolean = this?.canRegisterExpense() ?: true
+
+fun Role?.mayCreateSellerClosing(): Boolean = this?.canCreateSellerClosing() ?: true
+
+fun Role?.mayCreateBranchClosing(): Boolean = this?.canCreateBranchClosing() ?: true
+
+fun Role?.mayManageCatalog(): Boolean = this?.canManageCatalog() ?: true
+
+fun Role?.mayViewBranchHistory(): Boolean = this?.canViewBranchHistory() ?: true
 
 fun Role?.mayViewOwnerDashboard(): Boolean = this?.canViewAllSellersDashboard() ?: false

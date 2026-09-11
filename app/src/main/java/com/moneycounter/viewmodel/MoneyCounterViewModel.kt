@@ -3,12 +3,15 @@ package com.moneycounter.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.moneycounter.domain.AppContext
 import com.moneycounter.domain.Closing
 import com.moneycounter.domain.CounterResult
 import com.moneycounter.domain.CounterStatus
 import com.moneycounter.domain.Currency
 import com.moneycounter.domain.DefaultCurrencies
+import com.moneycounter.domain.DefaultPermissionService
 import com.moneycounter.domain.Denomination
+import com.moneycounter.domain.PermissionService
 import com.moneycounter.domain.MeasurementUnit
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.MoneyCounterCalculator
@@ -20,7 +23,9 @@ import com.moneycounter.domain.MovementType
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductPrice
 import com.moneycounter.domain.ProductSelection
+import com.moneycounter.domain.Role
 import com.moneycounter.domain.SavedCount
+import com.moneycounter.domain.forRole
 import com.moneycounter.domain.SavedCountItem
 import com.moneycounter.domain.SavedProductItem
 import com.moneycounter.repository.ClosingRepository
@@ -62,7 +67,19 @@ data class MoneyCounterUiState(
     val movements: List<Movement> = emptyList(),
     val closings: List<Closing> = emptyList(),
     val collectingFiado: Movement? = null,
-    val lastFiadoId: String? = null
+    val lastFiadoId: String? = null,
+    val canAddStock: Boolean = true,
+    val canRegisterWriteoff: Boolean = true,
+    val canEditStock: Boolean = true,
+    val canCreateProduct: Boolean = true,
+    val canEditProduct: Boolean = true,
+    val canDeleteProduct: Boolean = true,
+    val canRegisterExpense: Boolean = true,
+    val canViewReports: Boolean = true,
+    val canCreateSellerClosing: Boolean = true,
+    val canCreateBranchClosing: Boolean = true,
+    val canManageCatalog: Boolean = true,
+    val canViewAllSellersDashboard: Boolean = false
 )
 
 class MoneyCounterViewModel(application: Application) : AndroidViewModel(application) {
@@ -73,6 +90,14 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     private val unitRepository: UnitRepository = JsonUnitRepository(application)
     private val movementRepository: MovementRepository = JsonMovementRepository(application)
     private val closingRepository: ClosingRepository = JsonClosingRepository(application)
+
+    /** Security boundary: every mutation below must consult this before acting. */
+    private var permissionService: PermissionService = DefaultPermissionService
+
+    /** Session context (plan 018 seed for plan 019). Null until a non-blank uid is known. */
+    private var context: AppContext? = null
+    val appContext: AppContext?
+        get() = context
 
     private val _uiState = MutableStateFlow(MoneyCounterUiState())
     val uiState: StateFlow<MoneyCounterUiState> = _uiState.asStateFlow()
@@ -91,8 +116,36 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     private var sellerName: String = ""
 
     fun setSeller(uid: String?, name: String?) {
+        setSellerContext(uid, name, null)
+    }
+
+    fun setSellerContext(uid: String?, name: String?, role: Role?) {
         sellerUid = uid.orEmpty()
         sellerName = name.orEmpty()
+        permissionService = DefaultPermissionService.forRole(role)
+        uid?.takeIf { it.isNotBlank() }?.let { cleanUid ->
+            context = AppContext(cleanUid, role = role)
+        }
+        refreshPermissions()
+    }
+
+    private fun refreshPermissions() {
+        _uiState.update {
+            it.copy(
+                canAddStock = permissionService.canAddStock(),
+                canRegisterWriteoff = permissionService.canRegisterWriteoff(),
+                canEditStock = permissionService.canEditStock(),
+                canCreateProduct = permissionService.canCreateProduct(),
+                canEditProduct = permissionService.canEditProduct(),
+                canDeleteProduct = permissionService.canDeleteProduct(),
+                canRegisterExpense = permissionService.canRegisterExpense(),
+                canViewReports = permissionService.canViewReports(),
+                canCreateSellerClosing = permissionService.canCreateSellerClosing(),
+                canCreateBranchClosing = permissionService.canCreateBranchClosing(),
+                canManageCatalog = permissionService.canManageCatalog(),
+                canViewAllSellersDashboard = permissionService.canViewAllSellersDashboard()
+            )
+        }
     }
 
     val selectedCurrency: Currency
@@ -143,6 +196,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun addUnit(name: String): Boolean {
+        if (!permissionService.canManageCatalog()) return false
         val cleanName = name.trim()
         if (cleanName.isEmpty()) return false
         val state = _uiState.value
@@ -156,6 +210,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun editUnit(id: String, name: String): Boolean {
+        if (!permissionService.canManageCatalog()) return false
         val cleanName = name.trim()
         if (cleanName.isEmpty()) return false
         val state = _uiState.value
@@ -175,6 +230,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun deleteUnit(id: String): Boolean {
+        if (!permissionService.canManageCatalog()) return false
         val state = _uiState.value
         if (state.units.size <= 1) return false
 
@@ -232,6 +288,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun addDenomination(value: Long): Boolean {
+        if (!permissionService.canManageCatalog()) return false
         if (value <= 0) return false
         val state = _uiState.value
         if (state.denominations.any { it.value == value }) return false
@@ -247,6 +304,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun editDenomination(id: String, newValue: Long): Boolean {
+        if (!permissionService.canManageCatalog()) return false
         if (newValue <= 0) return false
         val state = _uiState.value
         if (state.hasActiveCount) return false
@@ -261,6 +319,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun deleteDenomination(id: String): Boolean {
+        if (!permissionService.canManageCatalog()) return false
         val state = _uiState.value
         if (state.hasActiveCount) return false
 
@@ -274,6 +333,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun moveDenominationUp(id: String) {
+        if (!permissionService.canManageCatalog()) return
         val state = _uiState.value
         val index = state.denominations.indexOfFirst { it.id == id }
         if (index <= 0) return
@@ -287,6 +347,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun moveDenominationDown(id: String) {
+        if (!permissionService.canManageCatalog()) return
         val state = _uiState.value
         val index = state.denominations.indexOfFirst { it.id == id }
         if (index < 0 || index >= state.denominations.size - 1) return
@@ -321,6 +382,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun addCurrency(code: String, name: String, symbol: String): Boolean {
+        if (!permissionService.canManageCatalog()) return false
         val cleanCode = code.trim().uppercase()
         val cleanName = name.trim()
         val cleanSymbol = symbol.trim()
@@ -337,6 +399,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun editCurrency(id: String, code: String, name: String, symbol: String): Boolean {
+        if (!permissionService.canManageCatalog()) return false
         val cleanCode = code.trim().uppercase()
         val cleanName = name.trim()
         val cleanSymbol = symbol.trim()
@@ -355,6 +418,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun deleteCurrency(id: String): Boolean {
+        if (!permissionService.canManageCatalog()) return false
         val state = _uiState.value
         if (state.currencies.size <= 1) return false
         if (state.selectedCurrencyId == id) return false
@@ -366,6 +430,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun addProduct(name: String, unit: String, stock: BigDecimal, prices: Map<String, ProductPrice>): Boolean {
+        if (!permissionService.canCreateProduct()) return false
         val cleanName = name.trim()
         val cleanUnit = unit.trim()
         if (cleanName.isEmpty() || cleanUnit.isEmpty()) return false
@@ -403,6 +468,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun editProduct(id: String, name: String, unit: String, stock: BigDecimal, prices: Map<String, ProductPrice>): Boolean {
+        if (!permissionService.canEditProduct()) return false
         val cleanName = name.trim()
         val cleanUnit = unit.trim()
         if (cleanName.isEmpty() || cleanUnit.isEmpty()) return false
@@ -443,6 +509,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun deleteProduct(id: String): Boolean {
+        if (!permissionService.canDeleteProduct()) return false
         val state = _uiState.value
         val newProducts = state.products.filterNot { it.id == id }
         val newSelections = state.productSelections.map {
@@ -459,6 +526,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     /** Add stock to an existing product (seller "Alta"): increases stock by [quantityText],
      *  records an ALTA movement. Returns false on invalid input. */
     fun addStock(productId: String, quantityText: String): Boolean {
+        if (!permissionService.canAddStock()) return false
         val qty = ProductSelection.parseQuantity(quantityText)
         if (qty.signum() <= 0) return false
         val state = _uiState.value
@@ -555,6 +623,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     /** Registers a "baja por merma": reduces stock and records a valued loss.
      *  Moves NO cash. Returns false on invalid product/quantity/missing price. */
     fun registerWriteoff(productId: String, quantityText: String, reason: String?): Boolean {
+        if (!permissionService.canRegisterWriteoff()) return false
         val state = _uiState.value
         val product = state.products.firstOrNull { it.id == productId } ?: return false
         val quantity = ProductSelection.parseQuantity(quantityText)
@@ -592,6 +661,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     /** Registers a "gasto" (operating expense): cash out, no stock, no denominations.
      *  Requires a non-blank concept and a positive amount. Returns false on invalid input. */
     fun recordExpense(concept: String, amountText: String, currencyId: String? = null): Boolean {
+        if (!permissionService.canRegisterExpense()) return false
         val cleanConcept = concept.trim()
         if (cleanConcept.isEmpty()) return false
         val amount = ProductSelection.parseQuantity(amountText)
