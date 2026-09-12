@@ -113,25 +113,41 @@ como medida puntual hasta que Git quede conectado:
 | Recurso | Deployment | Estado |
 |---|---|---|
 | Function `admin` | `6aa5c4098cf09f8e0956` | `ready`, **activa** — el fix del permiso de `members` ya está en producción |
-| Site `admin-web` | `6aa5c40fcf23d03f5bc7` | `ready`, activa en el recurso; la propagación a edge tardó (ver abajo) |
+| Site `admin-web` | `6aa5c40fcf23d03f5bc7` | `ready` y activa, sirviendo en `6aa5c4103a466b90b992.appwrite.network` (ver abajo: la URL vieja NO se actualiza) |
 
 Fuente: release `webadmin-deploy-2026-09-12b` en `l3vram/money-counter-sdd`, assets
 `admin-web.tar.gz` (24.643 B) y `admin-function.tar.gz` (4.781 B). Los `sourceSize` que
 reportó Appwrite coinciden byte a byte, así que no hubo corrupción. Build del sitio en verde
 (`npm run typecheck` y `npm run build` locales también).
 
-**Ojo con el caché de edge:** durante varios minutos el sitio siguió sirviendo el deployment
-viejo (`6aa4cb0a3ae416106f82`) aunque el recurso ya apuntaba al nuevo. Se diagnostica con el
-header **`x-appwrite-deployment-id`** de la respuesta, que dice qué deployment está sirviendo
-realmente; `x-edge-rule-cache: hit` confirma que es caché. Un query string de cache-busting
-**no** lo sortea. Si tras el deploy la página parece vieja, mirá ese header antes de sospechar
-del build. Verificación útil de que el bundle servido es el nuevo:
+### ⚠️ Las URLs `.appwrite.network` están clavadas a un deployment
 
-```
-curl -s <site>/assets/<bundle>.js | grep -o 'executions`,{method:"POST",headers:{.\{130\}'
-```
+Esto costó un diagnóstico equivocado, así que queda escrito. Tras activar el deployment nuevo,
+`https://6aa4cb0a8f6a4c30a83f.appwrite.network` seguía sirviendo el build viejo. **No era
+caché de edge** (esa fue la primera hipótesis, y era falsa): Appwrite crea **una URL por
+deployment**, y esa URL es la del deployment de las 03:46. Se ve en `proxy_list_rules`: la
+regla de ese dominio tiene `deploymentId: 6aa4cb0a3ae416106f82` fijo. Va a mostrar el build
+viejo para siempre.
 
-El viejo dice `Authorization:\`Bearer ${n}\``; el nuevo, `"X-Appwrite-Project"`.
+| URL | Sirve |
+|---|---|
+| `6aa4cb0a8f6a4c30a83f.appwrite.network` | deployment viejo — **la de todos los docs anteriores, ya no sirve** |
+| **`6aa5c4103a466b90b992.appwrite.network`** | **deployment nuevo, con los fixes — usar esta hoy** |
+| `adm.elluiso.com` | sigue al deployment activo (ya se movió solo al nuevo), pero **sin DNS** |
+
+Se diagnostica con el header **`x-appwrite-deployment-id`** de la respuesta, que dice qué
+deployment está sirviendo realmente.
+
+**Consecuencia para CORS:** cada URL nueva necesita su plataforma Web, o Appwrite responde el
+mismo `Invalid Origin` del §6. Se registraron tres: la URL del deployment nuevo,
+`adm.elluiso.com` y `localhost` (esta última destraba el desarrollo local del panel).
+
+**La URL estable es `adm.elluiso.com`**, cuya regla ya sigue al deployment activo. Le falta
+DNS: la verificación de Appwrite falla con *"missing CNAME record"*, y de hecho **`elluiso.com`
+no resuelve nada todavía** (ni el apex), así que no es sólo el CNAME. El valor exacto del CNAME
+lo muestra la consola en la pestaña Domains del sitio. Mientras tanto, cada deploy va a generar
+una URL nueva que hay que registrar como plataforma — razón de más para terminar el dominio
+propio.
 
 ## 6. Cambios de código hechos (ya desplegados — ver §6bis)
 
@@ -175,8 +191,7 @@ el mensaje de "registrá tu cliente" era una pista falsa.
 `Functions.createExecution()` del SDK en vez del `fetch` a mano; se dejó el `fetch` para no
 ampliar el cambio.
 
-Sigue pendiente, menor: **falta registrar `localhost`** como plataforma Web para poder
-desarrollar el panel en local.
+`localhost` ya quedó registrado como plataforma Web para desarrollar el panel en local.
 
 ---
 
@@ -218,7 +233,7 @@ se cablean los dos recursos por MCP (`installationId`, `providerRepositoryId`,
 `orgs`, `branches` y `signups` están **vacías**: no hay nada que sembrar a mano, la org y las
 sucursales las crea `approveSignup` al aprobar un DUEÑO. El camino es el flujo real:
 
-1. Luis entra al panel → `whoami` devuelve `role: "SUPERUSER"` en vez de 403, y carga su
+1. Luis entra al panel (**https://6aa5c4103a466b90b992.appwrite.network**) → `whoami` devuelve `role: "SUPERUSER"` en vez de 403, y carga su
    WhatsApp desde Configuración (la fila `settings/app` existe con el campo vacío).
 2. Con la Function desplegada, desde la app se registra una cuenta nueva como **DUEÑO** con
    negocio y sucursales → crea el `signup` en PENDING.
@@ -246,7 +261,7 @@ vacía.
 | Database | `main` |
 | Tablas | `users`, `members`, `signups`, `orgs`, `branches`, `settings` |
 | Function | `admin` — node-18, entrypoint `src/index.js`, deployment `6aa4c515687c4d9d7361` (ready), `execute: ["users"]`, scopes `tables.*`/`rows.*`/`users.*` |
-| Site | `admin-web` → https://6aa4cb0a8f6a4c30a83f.appwrite.network (HTTP 200) |
+| Site | `admin-web` → deployment activo en https://6aa5c4103a466b90b992.appwrite.network · estable pendiente `adm.elluiso.com` (sin DNS) |
 | Repo | `github.com/l3vram/money-counter-sdd` |
 | SUPERUSER | `luisricoblanco2014@gmail.com`, uid `6aa352520004960be987` |
 | MCP Appwrite | `.mcp.json`, `https://mcp.appwrite.io/`, OAuth con scope **muy amplio** (`project:all`, `organization:all`) — aceptado conscientemente |
