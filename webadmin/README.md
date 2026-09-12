@@ -15,6 +15,25 @@ webadmin/
     └── src/index.js     # API de acciones con guard SUPERUSER
 ```
 
+## Deploy LIVE (2026-09-12)
+
+| Recurso | Valor |
+|---|---|
+| Site `admin-web` | https://6aa4cb0a8f6a4c30a83f.appwrite.network (deployment `6aa4cb0a3ae416106f82`, build runtime node-22, salida `dist`) |
+| Function `admin` | deployment `6aa4c515687c4d9d7361` (node-18.0), entrypoint `src/index.js` |
+| Plataforma Web | `web-admin-site` con hostname del site (sin ella el login web falla por CORS/401) |
+| Vars del site | `VITE_APPWRITE_ENDPOINT`, `VITE_APPWRITE_PROJECT_ID`, `VITE_ADMIN_FUNCTION_ID=admin` (secretas; horneadas en el build) |
+| Fuente del deploy | GitHub release `webadmin-deploy-2026-09-12` → asset `admin-web.tar.gz` (sha256 `60165618…`) |
+
+Re-deploy del site: empaquetar desde `webadmin/app`
+(`tar --exclude=node_modules --exclude=dist --exclude='.git' -czf admin-web.tar.gz .`),
+subir el tarball a una URL pública alcanzable por los build servers de Appwrite (asset de
+release GitHub funciona; hosts de archivos pequeños tipo catbox/x0.at/0x0 bloquean
+datacenters; base64 inline vía MCP arriesga corrupción) y crear deployment:
+`sites_create_deployment {site_id:"admin-web", code:{url, filename:"site.tar.gz",
+mime_type:"application/gzip"}, install_command:"npm install", build_command:"npm run build",
+output_directory:"dist", activate:true}`.
+
 ## Requisitos provisionados por el orquestador (NO ejecutar aquí)
 
 1. **Function** en Appwrite: runtime Node, entrypoint `src/index.js`, dependencia
@@ -28,6 +47,8 @@ webadmin/
 3. **CORS / Web platform**: el dominio del Site (y `localhost` en desarrollo) deben estar
    registrados como plataforma Web del proyecto, o el SDK no podrá abrir sesión ni el SPA
    llamar a `fra.cloud.appwrite.io` desde el navegador (bloqueo CORS).
+   ✅ Registrada `web-admin-site` (hostname del site) el 2026-09-12. Falta añadir `localhost`
+   para desarrollo local.
 4. **Superusuario**: debe existir una fila `members/{userId}` con `role == "SUPERUSER"`; la
    función rechaza (403) cualquier otra sesión.
 

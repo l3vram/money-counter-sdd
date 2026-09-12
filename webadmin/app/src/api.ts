@@ -97,6 +97,15 @@ export function clearAuth(): void {
 
 export async function login(email: string, password: string): Promise<UserInfo> {
   clearAuth();
+  // Appwrite refuses to create a session while one is active ("Creation of a session is
+  // prohibited when a session is active"). A previous attempt that authenticated but then
+  // failed `whoami` — the 403 before the SUPERUSER row existed — leaves exactly that
+  // dangling session, locking the user out of the login form. Drop it first.
+  try {
+    await account.deleteSession('current');
+  } catch (e) {
+    // No session to drop: that is the normal path.
+  }
   await account.createEmailPasswordSession(email, password);
   return whoami();
 }

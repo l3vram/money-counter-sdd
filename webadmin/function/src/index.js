@@ -127,11 +127,15 @@ async function approveSignup(tablesDB, params) {
     }
   }
 
+  // `members` has rowSecurity enabled and no table-level read, so the row must
+  // carry its own read grant: the Android app polls `members/{uid}` as the signed-in
+  // user. Without this the read 404s, and a 404 is how the app spells "no membership".
   await tablesDB.upsertRow({
     databaseId: DATABASE_ID,
     tableId: TABLE_MEMBERS,
     rowId: signupId,
     data: { orgId, role: signup.role, branchIds },
+    permissions: [sdk.Permission.read(sdk.Role.user(signupId))],
   });
   await tablesDB.updateRow({
     databaseId: DATABASE_ID,

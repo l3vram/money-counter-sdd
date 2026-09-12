@@ -1,11 +1,103 @@
 # El Luiso — Status Maestro de Planes
 
-> Unificado el 2026-09-10 contra `main @ 89d2081`. Todos los planes históricos de los runs
-> anteriores fueron verificados contra el código real, consolidados aquí y eliminados (`git rm`).
-> Build: `./gradlew compileDebugKotlin` + `./gradlew test` → **BUILD SUCCESSFUL, 225 tests, 0 failures**.
-> La vista histórica de cada plan vive en `git log`, no hay documentación duplicada.
+> **Si retomás el trabajo, leé primero `docs/ESTADO-Y-PASOS.md`**: qué estamos haciendo,
+> las decisiones tomadas, los cambios ya aplicados en Appwrite y el orden de los pasos.
 
-## 1. Completado (todo merged a `main`)
+> **Rama activa**: `feature/multi-tenant` — commit `cfd8809`.
+> Rama desviada de `main @ 1069419`. Regresión verde: **424 tests, 0 fallos** (2026-09-12).
+>
+> Fecha: 2026-09-12 | Runs: `2026-09-11-multi-tenant-foundation` (017-024) · onboarding (025-029)
+
+---
+
+## Multi-Tenant Foundation (plans 017–024)
+
+### Execution order & status
+
+| # | Plan | Título | Effort | Deps | Status |
+|---|------|--------|--------|------|--------|
+| 017 | `017-branch-baseline` | Baseline verde en feature/multi-tenant | S | — | ✅ DONE |
+| 018 | `018-permission-service` | PermissionService + rol ADMIN + SELLER read-only (defensa en profundidad) | M | 017 | ✅ DONE (4d9edac) |
+| 019 | `019-tenant-context-bootstrap` | Contexto de tenant — org/branch bootstrap local + resolución de contexto | M | 018 | ✅ DONE (428502b) |
+| 020 | `020-ledger-scoping` | Scoping de ledger — Movement/Closing con orgId/branchId + filtros historial por rol | L | 019 | ✅ DONE (1d646e2) |
+| 021 | `021-stock-model` | Modelo StockItem + StockRepository + backfill (compat con Product.stock) | L | 020 | ✅ DONE (340f07e) |
+| 022 | `022-stock-dual-write` | Escrituras de stock duales — venta/alta/entrada/merma/ajuste sincronizan Product.stock + StockItem | M | 021 | ✅ DONE (plan/022 @ dceba36, 339 tests) |
+| 023 | `023-closing-scope` | Cierres por rol — ClosingScope SELLER/BRANCH + creación gateada | M | 022 | ✅ DONE (4b13d17) |
+| 024 | `024-isolation-tests` | Aislamiento de tenants — tests cross-tenant/cross-branch/escalada | M | 023 | ✅ DONE (2c3665a) |
+
+**Waves** (sequential — heavy overlap en MoneyCounterViewModel.kt + Screens):
+```
+W1: [017]
+W2: [018]
+W3: [019]
+W4: [020]
+W5: [021]
+W6: [022]
+W7: [023]
+W8: [024]
+```
+
+**Alcance definido (decisión 2026-09-11):** Fundación de tenants (FASE 1–4/6/7 del plan maestro). 
+**Deferido:** Owner Dashboard (FASE 8–9), sync manager real (FASE 13), performance/pagination (FASE 14).
+
+## Onboarding de cuentas + Web Admin (plans 025–029)
+
+Base: `feature/multi-tenant @ 2c3665a` (375 tests). GATE A aprobado 2026-09-12.
+Decisiones del dueño: rol elegido en el registro · DUEÑO captura negocio+sucursales · pass temporal generada (visible + en el WhatsApp al superuser) · Web admin React+TS+Vite en Appwrite Sites + Function (SUPERUSER-only), alineado con `el_luiso_role_plans/SUPERUSER-PLAN.md`.
+
+| # | Plan | Título | Deps | Status |
+|---|------|--------|------|--------|
+| 025 | `025-signup-flow` | Registro con rol + datos de negocio + pass temporal + signups + WhatsApp | — | ✅ DONE (f83d0dc) |
+| 026 | `026-forced-password-change` | Cambio forzado de contraseña en el primer login | 025 | ✅ DONE (4f27e36) |
+| 027 | `027-web-admin-sites` | Web admin React+TS+Vite en Appwrite Sites + Function SUPERUSER | — (paralelo 026) | ✅ DONE (a41e8ca, merge 9dce7d3) |
+| 028 | `028-post-approval-sync` | Sync post-aprobación — poblar config local org/branches cloud | 026 + 027 | ✅ DONE (cfd8809) |
+| 029 | `029-qa-regression-docs` | QA E2E + regresión + docs + README | 028 | ✅ DONE (2026-09-12; verificado abajo) |
+
+**Infra Appwrite LIVE (2026-09-12):** tablas `signups` (id=uid, role, businessName, branches[], mustChangePassword, status), `orgs` (name, whatsappNumber, status), `branches` (orgId, name, status), `settings` (row `app`, superuserWhatsapp), `users` (access PENDING/APPROVED), `members` (orgId, role, branchIds). Function `admin` (node-18, deployment `6aa4c515687c4d9d7361` ready, smoke whoami→403 OK). Site `admin-web`: **https://6aa4cb0a8f6a4c30a83f.appwrite.network** (deployment `6aa4cb0a3ae416106f82`; endpoint/proyecto/function-id horneados). Plataforma Web `web-admin-site` con el hostname del site. Pendiente del dueño: fila `members/{uid}` con role SUPERUSER (tabla vacía) + `settings.superuserWhatsapp`.
+
+**Verificación 029 (2026-09-12):** `testDebugUnitTest` 424 tests / 0 fallos · `compileDebugKotlin`+`assembleDebug` OK (APK 18.6 MB) · caja intacta (025-028 no tocan Money/Movement/MoneyCounterViewModel) · web admin HTTP 200 + guard function 403 · script de release: `docs/onboarding-e2e.md`.
+
+---
+
+## Permisos offline + preparación de inventario compartido (plans 030–031)
+
+Base: `feature/multi-tenant @ cfd8809` (424 tests). Auditoría 2026-09-12. **GATE A pendiente.**
+
+Hallazgo que origina 030: el rol de sesión se resuelve por red y *cualquier* fallo — incluida la falta de conectividad — degrada a "sin membresía", que en `DefaultPermissionService` significa **todos los permisos**. Siendo la app offline-first, un SELLER sin señal opera con poderes de OWNER. Evidencia: `AppwriteMembershipRepository.kt:32-36` (catch que emite `null`), `MainActivity.kt:91-94` (`LaunchedEffect` keyeado sólo por uid, nunca re-lee el rol), `PermissionService.kt:33-52` (Default concede todo). Los 424 tests pasan porque nadie cubre este cableado.
+
+| # | Plan | Título | Priority | Effort | Deps | Status |
+|---|------|--------|----------|--------|------|--------|
+| 030 | `030-role-fail-closed` | Rol cacheado localmente + no degradar por error de red + re-cableado | P1 | M | — | ✅ DONE en `plan/030` (`ff98b3f`, 444 tests) — **Gate B pendiente** |
+| 033 | `033-no-membership-no-access` | Sin membresía no se entra (fail-closed) + cerrar tablas de tenant | **P0** | M | 030 | TODO |
+| 032 | `032-suspend-repositories` | Interfaces de repositorio `suspend` (habilita impl cloud) | P1 | M | 030 | TODO |
+| 031 | `031-repo-cleanup` | Rescatar prosa del glosario y podar worktrees/ramas obsoletos | P3 | S | — | TODO |
+
+**Waves**:
+```
+W1: [030]        seguridad — bloquea todo lo demás
+W2: [033]        seguridad — cierra el fail-open permanente; la mitad de base YA está aplicada
+W3: [032, 031]   032 refactor estructural · 031 limpieza (archivos disjuntos)
+```
+
+**Decisión del dueño (2026-09-12):** fail-closed mediante **rol cacheado localmente** — offline se usa el último rol conocido en vez de conceder todo; las instalaciones legacy sin rol cacheado conservan el comportamiento actual (`DefaultPermissionService` permisivo). No se endurece `DefaultPermissionService` en este plan.
+
+**Decisión del dueño (2026-09-12, revierte lo anterior) → plan 033:** no hay instalaciones legacy que proteger, así que `DefaultPermissionService` **sí** se endurece: sin membresía usable no se entra a la app — **ni como SELLER** — hasta que el SUPERUSER asigne negocio, sucursal y rol. Además el SUPERUSER sigue siendo una fila `members` (los labels de Auth fueron considerados y rechazados); Luis usa otra cuenta para probar roles de negocio.
+
+**Cambios en Appwrite ya aplicados (2026-09-12, fuera de plan):** `members/{uid de Luis}` con `role SUPERUSER` + `orgId "platform"`; tabla `members` pasada a `$permissions: []` + `rowSecurity: true` (antes `read("users")`, o sea que cualquier usuario autenticado leía el rol y el orgId de cualquier otro). `webadmin/function/src/index.js` ajustado para escribir la fila con `read("user:<uid>")` — **commiteado, sin desplegar**. Hasta desplegarlo, aprobar un registro crea una fila que la app no puede leer. `users`, `orgs` y `branches` siguen con `read("users")`: los cierra el plan 033.
+
+### Diseño en paralelo (no ejecutable)
+
+`advisor-plans/008-shared-inventory-DESIGN.md` — arquitectura de F2, **decidida por el dueño el 2026-09-12**: stock server-authoritative (es el recurso en contención); movimientos y cierres local-first con subida diferida (son por usuario; la copia en server existe para el OWNER).
+
+**Idea central:** el movimiento es la unidad de verdad y el portador del delta de stock; el servidor lo aplica atómica e idempotentemente, y **ningún cliente escribe jamás una cantidad de stock**. Encaja con el código existente: `MovementType.affectsStockSign()` ya codifica la dirección por tipo, los ids son `UUID.randomUUID()` (clave de idempotencia lista) y `recordMovement()` (`MoneyCounterViewModel.kt:971`) es el embudo único de escritura.
+
+**Mecanismo:** Function `applyMovement` = autorizar (rol + `branchIds`, la frontera de seguridad real, §42) → insert idempotente en `movements/{movement.id}` con `stockApplied=false` → deltas atómicos sobre `stock/{branchId}_{productId}` → marcar `stockApplied=true`. Una caída entre pasos deja el movimiento sin aplicar y el reintento lo completa: no se pierde ni se aplica dos veces. Reconciliador programado como red de seguridad.
+
+Orden de desarrollo (§6 del diseño): 1 permisos · 2 repos `suspend` · 3 schema+Function · 4 stock server-read · 5 outbox · 6 cierres · 7 pull OWNER+paginación · 8 selector de sucursal · 9 retirar `Product.stock`. Los pasos 1 y 2 son los planes 030 y 032. Quedan 3 preguntas abiertas (§8) y 2 verificaciones técnicas pendientes (§7).
+
+---
+
+## Historial completado (merged a `main`)
 
 ### Core del contador
 | Plan | Qué | Estado |
@@ -17,143 +109,72 @@
 |------|-----|--------|
 | 001 | `SavedCount` + `JsonSavedCountRepository` (JSON v1→v3) | ✅ DONE |
 | 002 | `saveCount()` + botón GUARDAR EN HISTORIAL | ✅ DONE |
-| 003 | Lista/detalle/PDF — **evolucionó**: la lista es hoy `ReportsScreen` (movimientos) y el detalle es `MovementDetailScreen`; `HistoryScreen`/`HistoryDetailScreen` eliminados como dead code | ✅ DONE (reemplazado) |
+| 003 | Lista/detalle/PDF — `ReportsScreen`/`MovementDetailScreen` (screens legacy eliminadas como dead code) | ✅ DONE |
 
 ### El Luiso Redesign (design system + reskin 8 planes)
-| Plan | Qué | Estado | Notas |
-|------|-----|--------|-------|
-| 001 | Design tokens + `Theme.kt` | ✅ DONE | |
-| 002 | Component kit (LuisoButton/Card/TopBar/Notice/TextField/SectionHeader/StatCard) | ✅ DONE | `LuisoEmptyState`/`LuisoCircle` no existen — reemplazados por `LuisoNotice` |
-| 003 | Rename app a El Luiso + monograma | ✅ DONE | |
-| 004 | Counter reskin | ✅ DONE | |
-| 005 | Stock reskin | ✅ DONE | |
-| 006 | Reports reskin | ✅ DONE | |
-| 007 | Settings reskin | ✅ DONE | |
-| 008 | Copy + empty states + verificación | ✅ DONE | |
+| Plan | Qué | Estado |
+|------|-----|--------|
+| 001–008 | Design tokens, component kit, rename app, counter/stock/reports/settings reskin, copy | ✅ DONE |
 
 ### Stock / Inventory (5 planes)
 | Plan | Qué | Estado |
 |------|-----|--------|
-| 001 | `Product.stock` + products.json v2 | ✅ DONE |
-| 002 | Tab Stock + bottom nav + PRODUCTOS fuera de Ajustes | ✅ DONE |
-| 003 | Main screen muestra stock + warning sobre-stock | ✅ DONE |
-| 004 | Deducción de stock al guardar venta | ✅ DONE |
-| 005 | Reporte de existencias + PDF/CSV | ✅ DONE |
+| 001–005 | Product.stock, stock tab, warning sobre-stock, deducción, reporte existencias | ✅ DONE |
 
 ### Reports & Multi-currency (7 planes)
-| Plan | Qué | Estado | Notas |
-|------|-----|--------|-------|
-| 006 | `currencyId` en Product + SavedCount, JSON v3 | ✅ DONE | superado por `Product.prices` map (v4) |
-| 007 | Currency en UI: dialog stock + filtro counter + quitar History icon | ✅ DONE | |
-| 008 | Reportes 3ra pestaña + grouping + filtro | ✅ DONE | la selección/GENERAR RESUMEN fue retirada por Phase 2b (reemplazada por Cierres) |
-| 009 | Reporte unificado merge + PDF/CSV | ✅ DONE | `UnifiedReportScreen` eliminado en 013; helpers sobreviven pero hoy son dead code |
-| 010 | Redesign lista (sort Asc/Desc, day totals) + fix USD | ✅ DONE | |
-| 011 | Compact nav 64-72dp + fontScale cap 1.2 + lista minimal | ✅ DONE | delete (ELIMINAR) fue retirado junto al modo selección |
-| 012 | Fix selection action bar | ✅ OBSOLETO | el modo selección ya no existe |
+| Plan | Qué | Estado |
+|------|-----|--------|
+| 006–012 | Multi-currency, reports, refactor compact nav, selection fixes | ✅ DONE |
 
 ### Product Multi-currency prices (5 planes)
 | Plan | Qué | Estado |
 |------|-----|--------|
-| 001 | `Product.prices: Map<currencyId, ProductPrice>` + JSON v4 + auto-merge | ✅ DONE |
-| 002 | `productsWithPrice` + counter badge multi-moneda | ✅ DONE |
-| 003 | Dialog stock por-moneda `ProductPrice` | ✅ DONE |
-| 004 | Selector de moneda en reporte de existencias | ✅ DONE |
-| 005 | Currency visible en reports | ✅ DONE |
+| 001–005 | prices map, counter badge, dialog stock, selector currency | ✅ DONE |
 
-### Accounting Ops — Fase 2 (+ Phase 2b, 13 planes)
+### Accounting Ops — Fase 2 (13 planes)
 | Plan | Qué | Estado |
 |------|-----|--------|
-| 001 | User profile view + avatar top-bar + logout + CTA productos→stock | ✅ DONE |
-| 002 | Glossario terminológico + `TermInfo` ℹ️ | ✅ DONE |
-| 003 | Baja por merma (`InventoryWriteoff` + valorizada) | ✅ DONE |
-| 004 | Venta a crédito / fiado (`Receivable`) | ✅ DONE |
-| 005 | Cobro (`Payment`, settle deuda) | ✅ DONE |
-| 008 | Movement journal + repo + migración desde stores legados | ✅ DONE |
-| 009 | Fix fiado (siempre visible, sin COMPLETED) + rutear todo al journal | ✅ DONE |
-| 010 | Historial de movimientos (badges por tipo) | ✅ DONE |
-| 011 | Gastos + Alta/Entrada stock-in | ✅ DONE |
-| 012 | Cierres ("Cerrar el día" + manual, netCash, closingId, PDF/CSV) | ✅ DONE |
-| 013 | Cleanup journal-only (borra UnifiedReportScreen + HistoryDetailScreen, −1305 líneas) | ✅ DONE |
+| 001–013 | Profile, glossario, merma, fiado, cobro, movement journal, historial, gastos/altas, cierres, cleanup journal | ✅ DONE |
 
 ### Phase 3 — Fundación multi-tenant (2 slices)
 | Plan | Qué | Estado |
 |------|-----|--------|
-| slice-01 | Dominio `Role` (SELLER/OWNER/SUPERUSER + permission matrix) + `Organization`/`Branch`/`Member` | ✅ DONE @ `0a4455e` |
-| slice-02 | `FirestorePaths` + `FirestoreMappers` + `firestore.rules` multi-tenant (emulator 27/27) | ✅ DONE @ `0a4455e` |
+| slice-01/02 | Dominio Role/Org/Branch/Member + FirestorePaths/mappers/rules multi-tenant | ✅ DONE |
 
-### Iteración funcional 2026-09-10 (merged `89d2081`)
+### Iteración 2026-09-10
 | Qué | Estado |
 |-----|--------|
-| Alta de stock (+) para vendedor: `AddStockDialog` + `addStock()` en VM, registra ALTA en journal | ✅ DONE |
-| Gastos multi-moneda: selector de moneda en `GastosScreen` + `recordExpense(currencyId)` | ✅ DONE |
-| Nueva pestaña **Cierres** en bottom nav (4 tabs) + botón CIERRES retirado de Historial | ✅ DONE |
-| Copy: "Contador de dinero" → "El Luiso" en Counter + Login | ✅ DONE |
+| Alta de stock para vendedor, gastos multi-moneda, tab Cierres, copy El Luiso | ✅ DONE |
 
-### Iteración 2026-09-11 (rama `feature/cobro-con-productos`)
+### Iteración 2026-09-11 (feature/cobro-con-productos)
 | Qué | Estado |
 |-----|--------|
-| Cobro con detalle: al cobrar una deuda se muestran los PRODUCTOS y cantidades en la vista del contador (`FiadoProductsCard`, solo lectura) | ✅ DONE 242 tests verde |
-| Botón cobrar: solo se ve cuando existen deudas abiertas por cobrar (se oculta si no hay fiados pendientes) | ✅ DONE |
-| Fix teclado: `windowSoftInputMode` `adjustPan` → `adjustResize` (elimina hueco vacío entre campo y teclado al escribir cantidades/denominaciones) | ✅ DONE |
-| Fix espacio residual teclado: ocultar bottom nav mientras el IME está visible → el contenido llega hasta el borde del teclado | ✅ DONE |
+| Cobro con productos, fix teclado | ✅ DONE 242 tests |
 
-### Iteración 2026-09-11 (rama `feature/historial-productos-signos`)
+### Iteración 2026-09-11 (feature/historial-productos-signos)
 | Qué | Estado |
 |-----|--------|
-| COBRO lleva productos: `recordCollection` pasa `fiado.products` a `buildCobroMovement`; migración legada lleva productos del receivable linkado | ✅ DONE 242 tests verde |
-| Historial: filas muestran concepto + productos con cantidad (`Arroz 20 Lb · Frijol 5 Lb`) en Historial y Cierres | ✅ DONE |
-| Señales +/− por tipo en Historial y Cierres (preview por tipo): GASTO/MERMA `-` en rojo, fiado `~` apagado, resto `+` | ✅ DONE |
-| **TOTAL del día sign-aware** (corrección fiado): `netCashTotal` = VENTA+COBRO−GASTO−MERMA; fiado/alta/entrada fuera; línea aparte `Por cobrar (fiado): ~X` | ✅ DONE 246 tests verde |
+| COBRO lleva productos, historial con concepto+productos, señales +/−, TOTAL sign-aware | ✅ DONE 246 tests |
 
-### Iteración 2026-09-11 (rama `feature/pendientes-menores`)
+### Iteración 2026-09-11 (feature/pendientes-menores)
 | Qué | Estado |
 |-----|--------|
-| Stock: solo OWNER puede eliminar productos (`canEditStock` gating en StockScreen) | ✅ DONE |
-| Avatar `LuisoAvatar` con photoUrl: sin inicial superpuesta (muestra SOLO foto) | ✅ DONE |
-| `LuisoButton` 48dp (touch target a11y mínimo) | ✅ DONE 246 tests verde |
+| Stock solo OWNER borra, avatar photoUrl, LuisoButton 48dp | ✅ DONE 246 tests |
 
-> Nota iteración: el TOTAL del día ya NO muestra el fiado como efectivo en caja (antes sumaba todo
-> con signo positivo). El fiado sale excluido del neto y se lista aparte como **por cobrar**.
+---
 
-## 2. Pendiente
+## Pendiente (no formateado como plan aún)
 
-### Diseños no ejecutables (requieren planning pass)
 | Doc | Qué | Estado |
 |-----|-----|--------|
-| `006-roles-shared-firestore-DESIGN.md` | Roles + shared Firestore + web admin. Solo el sub-plan 1 (domain + rules) está hecho | DESIGN → planificar |
+| `006-roles-shared-firestore-DESIGN.md` | Roles + shared Firestore + web admin. Solo domain+rules hecho | DESIGN → planificar |
 | `007-multi-branch-scaling-DESIGN.md` | Multi-business/branch a escala | DESIGN → deferido |
 
-### Deuda técnica / mejoras
-| Item | Qué | Detalle |
-|------|-----|---------|
-| `LuisoAvatar` (Components.kt) | Con `photoUrl` de Google superponía la inicial sobre la foto | ✅ DONE **`feature/pendientes-menores`** — si hay foto se muestra SOLO la foto; si no, la inicial; si no hay inicial, icono Person |
-| Login Google en Cuba | Google Sign-In no funcionaba en Cuba (embargo: endpoints identidad bloqueados) | **RESUELTO por Appwrite email+password** (fase migración) |
-| `LuisoButton` 40dp vs 48dp | Touch target bajo el mínimo a11y del design kit | ✅ DONE **`feature/pendientes-menores`** — subido a 48dp |
-| Permission matrix sin conectar | `Role.canDecreaseStock()`/`canManageAccounts()`/`canViewAllSellersDashboard()` no se usan fuera de `Role.kt` | conectar al UI cuando llegue Roles |
-| Cantidades en el Historial | En el listado de movimientos mostrar la cantidad junto al producto, p. ej. `Arroz 20 Lb` (hoy la fila solo muestra el nombre del primer producto) | ✅ DONE **`feature/historial-productos-signos`** — `MovementProductSummary` en ReportsScreen + CierresScreen |
-| Señales +/- en reportes y cierres | Gasto/Merma deben verse como salida (`-`) y Venta/Cobro/Alta/Entrada como entrada (`+`) para identificarlas de un vistazo | ✅ DONE **`feature/historial-productos-signos`** — `MovementType.moneySign()` en Components.kt + Historial/Cierres (GASTO/MERMA en rojo) |
-| Stock: solo OWNER borra | Un seller nunca puede borrar/eliminar nada del stock; solo el owner | ✅ DONE **`feature/pendientes-menores`** — `canEditStock` gating: el botón Eliminar del ProductRow solo se renderiza si `mayEditStock()` |
-| ELIMINAR en lote del Historial | ~~El modo selección volvió con GENERAR RESUMEN pero sin batch-delete~~ | **CANCELADO por el dueño: el historial nunca se borra** |
-| Firestore repos | `FirestorePaths`/`FirestoreMappers` existen pero no hay repositorios reales (todo es `Json*`) | parte de fase 3, sub-plan 2 |
+## Decisiones registradas / riesgos
 
-### Migración Firebase → Appwrite.io (en curso, rama `feature/appwrite`)
-| Paso | Qué | Estado |
-|------|-----|--------|
-| SDK | `io.appwrite:sdk-for-android:25.2.0` (27.2.0 exige compileSdk 37/AGP 9.1 → se usó 25.2.0 + compileSdk 36) | ✅ DONE |
-| Cliente | `Appwrite.init` (endpoint `https://fra.cloud.appwrite.io/v1`, project `6aa332f40001072d0747`) + `AppwriteHealth.ping()` (botón "Verificar conexión" en login) | ✅ DONE — verificado en emulador: "Conectado a Appwrite en 741 ms" |
-| Auth | `AppwriteAuthRepository` email+password con auto-registro (`createEmailPasswordSession` → `user_not_found` → `account.create` → retry) | ✅ DONE |
-| Access | `AppwriteAccessRepository` → tabla `users` (row id = uid; access PENDING/APPROVED/BLOCKED + perfil) | ✅ DONE |
-| Membership | `AppwriteMembershipRepository` → tabla `members` (row id = uid; orgId/role/branchIds) | ✅ DONE |
-| Cola de tablas | … | ⏳ PENDIENTE → Crear en consola Appwrite: **Database id `main`** con **tabla `users`** y **tabla `members`** (los createRow de la app crean los documentos; el admin pone `access=APPROVED`/`PENDING` y crea `members/{uid}` con `role`/`orgId`) |
-| Plataforma Android | … | ⏳ PENDIENTE → Console > Settings > Add Platform > Android: package `com.moneycounter` + SHA-256 del `~/.android/debug.keystore` (debugCanonical) |
-| Borrar legado | `FirebaseAuthRepository`/`FirestoreAccessRepository`/`FirestoreMembershipRepository` borrados; google-services plugin y deps Firebase fuera de Gradle | ✅ DONE |
-| Verificación local | 242 tests verde + `assembleDebug` OK + emulador (login + ping) | ✅ DONE |
-
-## 3. Riesgos / decisiones retiradas (registro)
-
-- **Modo selección + GENERAR RESUMEN** (reports-currency 008/009/012): re-restaurado sobre el modelo `Movement` en `feature/reportes-seleccionables` (`uniteMovements` + modo selección en Historial + `UnifiedReportScreen` + export PDF/CSV). ELIMINAR en lote sigue pendiente.
-- **Migrar Firebase → Appwrite.io** (rama `feature/appwrite`): auth identity (login/access/membership) → Appwrite Cloud fra (`email+password`, PENDING→APPROVED igual al modelo de `users/{uid}`/`members/{uid}`)). Los datos operativos (journal JSON local) siguen offline-first.
-- **Migrar todo JSON a Firestore**: rechazado — viola offline-first; solo entidades compartidas (stock, catálogo) van al cloud, en Phase 3.
-- **Superuser CRUD dentro del APK**: rechazado por el owner — se usa un web admin serverless separado.
-- **Nota de crédito/débito**: deferido (devoluciones/ajustes post-venta).
-- **Cobro parcial (fiado por partes)**: **NO SE HACE** (decisión del dueño, 2026-09-11). `014-cobro-fiado-por-partes.md` queda solo como referencia. Hoy: COBRO salda completo y los productos de la deuda se muestran en solo lectura.
+- **Modo selección + GENERAR RESUMEN** — ELIMINADO definitivamente.
+- **Migrar Firebase → Appwrite.io** — hecha (auth/access/membership; datos operativos siguen offline-first).
+- **Migrar JSON completo a Firestore** — rechazado (violates offline-first).
+- **Superuser CRUD dentro del APK** — rechazado; se usa web admin separado.
+- **Cobro parcial (fiado por partes)** — NO se hace (decisión dueño 2026-09-11).
+- **SELLER alta+merma — COMPORTAMIENTO CAMBIA en plan 018**: SELLER pierde Alta y Baja por Merma (ahora OWNER/ADMIN). Confirmado por el dueño el 2026-09-11.
