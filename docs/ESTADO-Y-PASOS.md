@@ -105,7 +105,35 @@ crea una fila ilegible → 404 → permisos totales para ese usuario.
 
 ---
 
-## 6. Cambios de código hechos, sin desplegar
+## 6bis. Deploy del 2026-09-12 (hecho)
+
+Se desplegaron los dos fixes por el camino del tarball (release de GitHub como asset),
+como medida puntual hasta que Git quede conectado:
+
+| Recurso | Deployment | Estado |
+|---|---|---|
+| Function `admin` | `6aa5c4098cf09f8e0956` | `ready`, **activa** — el fix del permiso de `members` ya está en producción |
+| Site `admin-web` | `6aa5c40fcf23d03f5bc7` | `ready`, activa en el recurso; la propagación a edge tardó (ver abajo) |
+
+Fuente: release `webadmin-deploy-2026-09-12b` en `l3vram/money-counter-sdd`, assets
+`admin-web.tar.gz` (24.643 B) y `admin-function.tar.gz` (4.781 B). Los `sourceSize` que
+reportó Appwrite coinciden byte a byte, así que no hubo corrupción. Build del sitio en verde
+(`npm run typecheck` y `npm run build` locales también).
+
+**Ojo con el caché de edge:** durante varios minutos el sitio siguió sirviendo el deployment
+viejo (`6aa4cb0a3ae416106f82`) aunque el recurso ya apuntaba al nuevo. Se diagnostica con el
+header **`x-appwrite-deployment-id`** de la respuesta, que dice qué deployment está sirviendo
+realmente; `x-edge-rule-cache: hit` confirma que es caché. Un query string de cache-busting
+**no** lo sortea. Si tras el deploy la página parece vieja, mirá ese header antes de sospechar
+del build. Verificación útil de que el bundle servido es el nuevo:
+
+```
+curl -s <site>/assets/<bundle>.js | grep -o 'executions`,{method:"POST",headers:{.\{130\}'
+```
+
+El viejo dice `Authorization:\`Bearer ${n}\``; el nuevo, `"X-Appwrite-Project"`.
+
+## 6. Cambios de código hechos (ya desplegados — ver §6bis)
 
 | Archivo | Cambio | Estado |
 |---|---|---|
@@ -173,10 +201,10 @@ se cablean los dos recursos por MCP (`installationId`, `providerRepositoryId`,
 
 | # | Paso | Bloquea / por qué |
 |---|---|---|
-| 1 | **Mergear el webadmin a `main`** | El deploy apunta a `main`; sin esto el auto-deploy no trae nada |
+| ~~1~~ | ~~Mergear el webadmin a `main`~~ | ✅ hecho: `origin/main` en `bcdfa45` (incluye planes 017–030 + webadmin) |
 | 2 | **Conectar la GitHub App** (paso manual del dueño) y cablear Function + Site | Sin esto sigue el tarball a mano |
-| 3 | **Desplegar la Function** con el fix del permiso | Sin esto, aprobar a alguien le da permisos totales (§5) |
-| 4 | **Desplegar el sitio** con los dos fixes de `api.ts` | Sin esto el panel no puede llamar a la Function (el `Failed to fetch` ya está diagnosticado y arreglado en el código) |
+| ~~3~~ | ~~Desplegar la Function~~ | ✅ hecho: deployment `6aa5c4098cf09f8e0956` activo |
+| ~~4~~ | ~~Desplegar el sitio~~ | ✅ hecho: deployment `6aa5c40fcf23d03f5bc7` activo |
 | 5 | **Gate B del plan 030**: probar el APK debug y mergear | 033 y 032 salen de esa rama; cada plan apilado encima es un rebase peor |
 | 6 | **Plan 033** (P0) — fail-closed + cerrar `users`/`orgs`/`branches` | La mitad de base ya está aplicada; el código tiene que alcanzarla |
 | 7 | **Plan 032** — interfaces de repositorio `suspend` | Habilita cualquier implementación de red (paso 2 del diseño F2) |
