@@ -2,6 +2,7 @@ package com.moneycounter.repository
 
 import android.content.Context
 import com.moneycounter.domain.Closing
+import com.moneycounter.domain.ClosingScope
 import com.moneycounter.domain.ClosingStockLine
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.MovementType
@@ -45,7 +46,7 @@ class JsonClosingRepository(private val context: Context) : ClosingRepository {
 
 object ClosingJson {
 
-    private const val VERSION = 2
+    private const val VERSION = 3
 
     fun toJson(closings: List<Closing>): String {
         val root = JSONObject()
@@ -59,6 +60,7 @@ object ClosingJson {
             item.put("currencyId", c.currencyId)
             item.put("organizationId", c.organizationId)
             item.put("branchId", c.branchId)
+            item.put("scope", c.scope.name)
 
             val movementIdsArray = JSONArray()
             for (mid in c.movementIds) movementIdsArray.put(mid)
@@ -95,7 +97,7 @@ object ClosingJson {
         if (json.isBlank()) return emptyList()
         val root = runCatching { JSONObject(json) }.getOrElse { return emptyList() }
         val version = root.optInt("version", 1)
-        if (version != 1 && version != VERSION) return emptyList()
+        if (version < 1 || version > VERSION) return emptyList()
 
         val array = root.optJSONArray("closings") ?: return emptyList()
         val result = mutableListOf<Closing>()
@@ -156,6 +158,7 @@ object ClosingJson {
                     stockSnapshot = stockSnapshot,
                     organizationId = entry.optString("organizationId", ""),
                     branchId = entry.optString("branchId", ""),
+                    scope = ClosingJson.scopeOrDefault(entry.optString("scope", "")),
                     sellerUid = entry.optString("sellerUid", ""),
                     sellerName = entry.optString("sellerName", "")
                 )
@@ -166,6 +169,12 @@ object ClosingJson {
 
         return result.sortedByDescending { it.at }
     }
+
+    /** Resolves persisted scope for any version. Blank/missing scope = legacy data
+     *  (v1/v2 closings predate the scope concept) → SELLER, so old closing records
+     *  never silently surface as branch-wide records they never were. */
+    private fun scopeOrDefault(raw: String): ClosingScope =
+        runCatching { ClosingScope.valueOf(raw) }.getOrNull() ?: ClosingScope.SELLER
 
     /** Migration path for v1/early-v2 data: fills blank tenant fields only.
      *  Existing stamps are never overwritten. */

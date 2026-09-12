@@ -2,6 +2,11 @@ package com.moneycounter.domain
 
 import java.math.BigDecimal
 
+/** Who a [Closing] belongs to (plan 023): a single seller's own open movements
+ *  (SELLER) or all open movements of the branch (BRANCH). A SELLER may only ever
+ *  create SELLER closings; the VM scopes internally before calling computeClosing. */
+enum class ClosingScope { SELLER, BRANCH }
+
 /** One line of remaining stock captured at the moment a [Closing] was made. */
 data class ClosingStockLine(
     val name: String,
@@ -34,6 +39,7 @@ data class Closing(
     val stockSnapshot: List<ClosingStockLine>,
     val organizationId: String = "",
     val branchId: String = "",
+    val scope: ClosingScope = ClosingScope.BRANCH,
     val sellerUid: String = "",
     val sellerName: String = ""
 ) {

@@ -19,7 +19,8 @@ fun computeClosing(
     products: List<Product>,
     currencyId: String,
     sellerUid: String = "",
-    sellerName: String = ""
+    sellerName: String = "",
+    scope: ClosingScope = ClosingScope.BRANCH
 ): Closing {
     val totalsByType: Map<MovementType, BigDecimal> = MovementType.entries.associateWith { type ->
         movements.filter { it.type == type }
@@ -44,6 +45,7 @@ fun computeClosing(
         totalsByType = totalsByType,
         netCash = netCash,
         stockSnapshot = stockSnapshot,
+        scope = scope,
         sellerUid = sellerUid,
         sellerName = sellerName
     )

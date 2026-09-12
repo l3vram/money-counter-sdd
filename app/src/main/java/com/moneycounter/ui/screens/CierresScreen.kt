@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.moneycounter.domain.Closing
+import com.moneycounter.domain.ClosingScope
 import com.moneycounter.domain.Currency
 import com.moneycounter.domain.DefaultCurrencies
 import com.moneycounter.domain.Money
@@ -87,7 +88,20 @@ fun CierresScreen(
     val open = remember(uiState.visibleMovements, filterCurrencyId) {
         viewModel.openMovements(filterCurrencyId)
     }
-    val pastClosings = uiState.closings.filter { it.currencyId == filterCurrencyId }
+    val visibleClosings = remember(
+        uiState.closings,
+        viewModel.role,
+        viewModel.sessionOrganizationId,
+        viewModel.sessionBranchId
+    ) {
+        MoneyCounterViewModel.closingsVisibleForRole(
+            closings = uiState.closings,
+            role = viewModel.role,
+            organizationId = viewModel.sessionOrganizationId,
+            branchId = viewModel.sessionBranchId
+        )
+    }
+    val pastClosings = visibleClosings.filter { it.currencyId == filterCurrencyId }
 
     val selectedMovements = if (manualMode) open.filter { it.id in selectedIds } else open
     val preview = remember(selectedMovements, uiState.products, filterCurrencyId) {
@@ -386,6 +400,7 @@ private fun PastClosingRow(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                ClosingScopeBadge(scope = closing.scope)
             }
             Text(
                 text = formatMoneyBigDecimal(closing.netCash, symbol),
@@ -398,6 +413,27 @@ private fun PastClosingRow(
             LuisoOutlineButton(text = "CSV", onClick = onExportCsv)
             LuisoOutlineButton(text = "PDF", onClick = onExportPdf)
         }
+    }
+}
+
+/** Small chip labelling a closing's scope — SELLER ("Cierre de vendedor") vs
+ *  BRANCH ("Cierre de sucursal"). Styled to match the screen's light chips. */
+@Composable
+private fun ClosingScopeBadge(scope: ClosingScope) {
+    Surface(
+        color = if (scope == ClosingScope.BRANCH) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Text(
+            text = if (scope == ClosingScope.BRANCH) "Cierre de sucursal" else "Cierre de vendedor",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+        )
     }
 }
 

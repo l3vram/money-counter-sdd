@@ -19,7 +19,8 @@ class ClosingJsonTest {
         organizationId: String = "",
         branchId: String = "",
         sellerUid: String = "",
-        sellerName: String = ""
+        sellerName: String = "",
+        scope: ClosingScope = ClosingScope.BRANCH
     ) = Closing(
         id = id,
         at = at,
@@ -31,7 +32,8 @@ class ClosingJsonTest {
         organizationId = organizationId,
         branchId = branchId,
         sellerUid = sellerUid,
-        sellerName = sellerName
+        sellerName = sellerName,
+        scope = scope
     )
 
     @Test
@@ -148,8 +150,85 @@ class ClosingJsonTest {
     }
 
     @Test
-    fun `version 3 is rejected after the v1-v2 compatibility layer`() {
-        val json = """{"version": 3, "closings": []}"""
+    fun `version 4 is rejected after the v1-v3 compatibility layer`() {
+        val json = """{"version": 4, "closings": []}"""
         assertTrue(ClosingJson.fromJson(json).isEmpty())
+    }
+
+    // ---- plan 023: scope (v3) ----
+
+    @Test
+    fun `v2 doc without scope reads as SELLER keeping netCash and totals`() {
+        val json = """
+            {
+              "version": 2,
+              "closings": [
+                {"id": "legacy-2", "at": 1, "currencyId": "cup", "movementIds": ["m1"],
+                 "totalsByType": {"VENTA": "100.00", "COBRO": "40.00", "GASTO": "10.00"},
+                 "netCash": "130.00", "stockSnapshot": [],
+                 "organizationId": "org-1", "branchId": "br-9",
+                 "sellerUid": "s1", "sellerName": "Ana"}
+              ]
+            }
+        """.trimIndent()
+
+        val loaded = ClosingJson.fromJson(json)
+        assertEquals(1, loaded.size)
+        assertEquals(ClosingScope.SELLER, loaded[0].scope)
+        assertEquals("130.00", loaded[0].netCash.toPlainString())
+        assertEquals(BigDecimal("100.00"), loaded[0].totalsByType.getValue(MovementType.VENTA))
+        assertEquals(BigDecimal("40.00"), loaded[0].totalsByType.getValue(MovementType.COBRO))
+        assertEquals(BigDecimal("10.00"), loaded[0].totalsByType.getValue(MovementType.GASTO))
+        assertEquals("Ana", loaded[0].sellerName)
+    }
+
+    @Test
+    fun `v1 doc without scope also reads as SELLER`() {
+        val json = """
+            {
+              "version": 1,
+              "closings": [
+                {"id": "legacy-1", "at": 1, "currencyId": "cup", "movementIds": [],
+                 "totalsByType": {}, "netCash": "0.00", "stockSnapshot": []}
+              ]
+            }
+        """.trimIndent()
+
+        val loaded = ClosingJson.fromJson(json)
+        assertEquals(ClosingScope.SELLER, loaded[0].scope)
+    }
+
+    @Test
+    fun `v3 round trip preserves scope`() {
+        val branch = closing(id = "br", scope = ClosingScope.BRANCH)
+        val seller = closing(id = "sl", scope = ClosingScope.SELLER)
+        val loaded = ClosingJson.fromJson(ClosingJson.toJson(listOf(branch, seller)))
+        assertEquals(2, loaded.size)
+        assertEquals(ClosingScope.BRANCH, loaded.first { it.id == "br" }.scope)
+        assertEquals(ClosingScope.SELLER, loaded.first { it.id == "sl" }.scope)
+    }
+
+    @Test
+    fun `v2 to v3 upgrade preserves netCash and totals`() {
+        val json = """
+            {
+              "version": 2,
+              "closings": [
+                {"id": "c1", "at": 1, "currencyId": "cup", "movementIds": ["m1"],
+                 "totalsByType": {"VENTA": "100.00"},
+                 "netCash": "100.00",
+                 "stockSnapshot": [{"name": "Arroz", "unit": "Lb", "quantity": "10.00"}]}
+              ]
+            }
+        """.trimIndent()
+
+        val v2 = ClosingJson.fromJson(json)
+        assertEquals(1, v2.size)
+        val upgraded = ClosingJson.fromJson(ClosingJson.toJson(v2))
+        assertEquals(1, upgraded.size)
+        assertEquals(ClosingScope.SELLER, upgraded[0].scope)
+        assertEquals(v2[0].netCash, upgraded[0].netCash)
+        assertEquals(v2[0].totalsByType, upgraded[0].totalsByType)
+        assertEquals(v2[0].stockSnapshot, upgraded[0].stockSnapshot)
     }
 }

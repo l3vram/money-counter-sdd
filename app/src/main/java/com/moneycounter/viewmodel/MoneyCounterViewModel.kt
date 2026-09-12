@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.moneycounter.domain.AppContext
 import com.moneycounter.domain.Branch
 import com.moneycounter.domain.Closing
+import com.moneycounter.domain.ClosingScope
 import com.moneycounter.domain.CounterResult
 import com.moneycounter.domain.CounterStatus
 import com.moneycounter.domain.Currency
@@ -67,6 +68,13 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.UUID
 
+/** Outcome of [MoneyCounterViewModel.resolveClosingSelection]: the effective
+ *  [ClosingScope] plus the movements a closing may legally cover. */
+data class ClosingSelection(
+    val scope: ClosingScope,
+    val selected: List<Movement>
+)
+
 data class MoneyCounterUiState(
     val targetAmount: BigDecimal? = null,
     val denominations: List<Denomination> = emptyList(),
@@ -124,6 +132,20 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
 
     /** Security boundary: every mutation below must consult this before acting. */
     private var permissionService: PermissionService = DefaultPermissionService
+
+    /** Role of the current session (null = no member doc yet / single-user install).
+     *  Exposed for UI scoping — e.g. CierresScreen filters past closings by role
+     *  via [closingsVisibleForRole]. */
+    val role: Role?
+        get() = currentRole
+
+    /** Current tenant context (mirrors the private fields the VM writes journals with),
+     *  exposed for UI scoping of tenant-aware lists. */
+    val sessionOrganizationId: String
+        get() = currentOrgId
+
+    val sessionBranchId: String
+        get() = currentBranchId
 
     /** Session context (plan 018 seed for plan 019). Null until a non-blank uid is known. */
     private var context: AppContext? = null
@@ -1021,13 +1043,20 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
      *  Stamps those movements' `closingId` with the new Closing's id so they can
      *  never be selected into another close, persists both movements and closings,
      *  and returns the new Closing's id. Returns null (no changes) if, after
-     *  dropping invalid ids, nothing is left to close, or if the remaining
-     *  movements span more than one currency. */
+     *  dropping invalid ids, nothing is left to close, if the remaining
+     *  movements span more than one currency, or if the caller has no permission
+     *  to create a closing over the resolved pool (plan 023: a SELLER's pool is
+     *  their own open movements only, scope SELLER — see [resolveClosingSelection]). */
     fun createClosing(movementIds: List<String>): String? {
         val state = _uiState.value
-        val idSet = movementIds.toSet()
-        val selected = state.movements.filter { it.id in idSet && it.closingId == null }
-        if (selected.isEmpty()) return null
+        val selection = resolveClosingSelection(
+            requestedIds = movementIds.toSet(),
+            visibleMovements = state.visibleMovements,
+            canCreateBranchClosing = state.canCreateBranchClosing,
+            canCreateSellerClosing = state.canCreateSellerClosing,
+            sellerUid = sellerUid
+        ) ?: return null
+        val selected = selection.selected
         val currencyId = selected.first().currencyId
         if (selected.any { it.currencyId != currencyId }) return null
 
@@ -1038,7 +1067,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             products = state.products,
             currencyId = currencyId,
             sellerUid = sellerUid,
-            sellerName = sellerName
+            sellerName = sellerName,
+            scope = selection.scope
         ).copy(organizationId = currentOrgId, branchId = currentBranchId)
 
         val stampedIds = selected.map { it.id }.toSet()
@@ -1592,6 +1622,51 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             return movements.filter {
                 it.currencyId == currencyId && isFiadoOpen(it, cobroLinkIds)
             }
+        }
+
+        // ---- plan 023: closing scope resolution ----
+
+        /** Resolved pool + scope for a closing request. The effective pool is role-gated:
+         *  a caller able to create branch closings closes the requested branch-visible
+         *  movements (scope BRANCH); anyone else closes only their OWN open movements
+         *  (scope SELLER). Returns null when the caller has no permissible scope or
+         *  nothing remains after scoping/dropping closed movements. Defense-in-depth:
+         *  even if the UI asks for a branch-wide close, a seller's effective pool is
+         *  their own movements only. */
+        fun resolveClosingSelection(
+            requestedIds: Set<String>,
+            visibleMovements: List<Movement>,
+            canCreateBranchClosing: Boolean,
+            canCreateSellerClosing: Boolean,
+            sellerUid: String
+        ): ClosingSelection? {
+            if (canCreateBranchClosing) {
+                val selected = visibleMovements.filter { it.id in requestedIds && it.closingId == null }
+                return if (selected.isEmpty()) null
+                else ClosingSelection(scope = ClosingScope.BRANCH, selected = selected)
+            }
+            if (!canCreateSellerClosing) return null
+            val sellerPool = visibleMovements.filter { it.sellerUid.isBlank() || it.sellerUid == sellerUid }
+            val selected = sellerPool.filter { it.id in requestedIds && it.closingId == null }
+            return if (selected.isEmpty()) null
+            else ClosingSelection(scope = ClosingScope.SELLER, selected = selected)
+        }
+
+        /** Role-scoped view of past closings (plan 023), keeping [visibleForRole]
+         *  semantics: blank-tolerant (a closing with blank org/branch matches anyone),
+         *  OWNER → own org, ADMIN/SELLER → own branch, null (single-user install) →
+         *  EVERYTHING, SUPERUSER → empty. */
+        fun closingsVisibleForRole(
+            closings: List<Closing>,
+            role: Role?,
+            organizationId: String,
+            branchId: String
+        ): List<Closing> = when (role) {
+            Role.SELLER -> closings.filter { it.branchId.isBlank() || it.branchId == branchId }
+            Role.ADMIN -> closings.filter { it.branchId.isBlank() || it.branchId == branchId }
+            Role.OWNER -> closings.filter { it.organizationId.isBlank() || it.organizationId == organizationId }
+            Role.SUPERUSER -> emptyList()
+            null -> closings
         }
     }
 }
