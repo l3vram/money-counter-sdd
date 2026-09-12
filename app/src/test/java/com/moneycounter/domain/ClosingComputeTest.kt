@@ -178,7 +178,8 @@ class ClosingComputeTest {
             visibleMovements = listOf(own, other, legacy),
             canCreateBranchClosing = false,
             canCreateSellerClosing = true,
-            sellerUid = "s1"
+            sellerUid = "s1",
+            branchId = "br-1"
         )
         assertEquals(ClosingScope.SELLER, selection?.scope)
         assertEquals(listOf("v1", "v3"), selection?.selected?.map { it.id })
@@ -192,7 +193,8 @@ class ClosingComputeTest {
             visibleMovements = listOf(other),
             canCreateBranchClosing = false,
             canCreateSellerClosing = true,
-            sellerUid = "s1"
+            sellerUid = "s1",
+            branchId = "br-1"
         )
         assertEquals(null, selection)
     }
@@ -206,7 +208,8 @@ class ClosingComputeTest {
             visibleMovements = listOf(open, closed),
             canCreateBranchClosing = false,
             canCreateSellerClosing = true,
-            sellerUid = "s1"
+            sellerUid = "s1",
+            branchId = "br-1"
         )
         assertEquals(ClosingScope.SELLER, selection?.scope)
         assertEquals(listOf("v1"), selection?.selected?.map { it.id })
@@ -214,17 +217,49 @@ class ClosingComputeTest {
 
     @Test
     fun `resolveClosingSelection branch-capable request yields scope BRANCH over requested movements`() {
-        val a = movement("v1", MovementType.VENTA, "100.00", sellerUid = "s1")
-        val b = movement("v2", MovementType.VENTA, "50.00", sellerUid = "s2")
+        val a = movement("v1", MovementType.VENTA, "100.00", sellerUid = "s1", branchId = "br-1")
+        val b = movement("v2", MovementType.VENTA, "50.00", sellerUid = "s2", branchId = "br-1")
         val selection = com.moneycounter.viewmodel.MoneyCounterViewModel.resolveClosingSelection(
             requestedIds = setOf("v1", "v2"),
             visibleMovements = listOf(a, b),
             canCreateBranchClosing = true,
             canCreateSellerClosing = true,
-            sellerUid = "s1"
+            sellerUid = "s1",
+            branchId = "br-1"
         )
         assertEquals(ClosingScope.BRANCH, selection?.scope)
         assertEquals(setOf("v1", "v2"), selection?.selected?.map { it.id }?.toSet())
+    }
+
+    @Test
+    fun `resolveClosingSelection branch-capable caller excludes movements of another branch`() {
+        val current = movement("v1", MovementType.VENTA, "100.00", sellerUid = "s1", branchId = "br-1")
+        val otherBranch = movement("v2", MovementType.VENTA, "50.00", sellerUid = "s2", branchId = "br-2")
+        val legacy = movement("v3", MovementType.VENTA, "25.00")
+        val selection = com.moneycounter.viewmodel.MoneyCounterViewModel.resolveClosingSelection(
+            requestedIds = setOf("v1", "v2", "v3"),
+            visibleMovements = listOf(current, otherBranch, legacy),
+            canCreateBranchClosing = true,
+            canCreateSellerClosing = true,
+            sellerUid = "s1",
+            branchId = "br-1"
+        )
+        assertEquals(ClosingScope.BRANCH, selection?.scope)
+        assertEquals(listOf("v1", "v3"), selection?.selected?.map { it.id })
+    }
+
+    @Test
+    fun `resolveClosingSelection branch-capable caller with only other-branch movements returns null`() {
+        val otherBranch = movement("v2", MovementType.VENTA, "50.00", sellerUid = "s2", branchId = "br-2")
+        val selection = com.moneycounter.viewmodel.MoneyCounterViewModel.resolveClosingSelection(
+            requestedIds = setOf("v2"),
+            visibleMovements = listOf(otherBranch),
+            canCreateBranchClosing = true,
+            canCreateSellerClosing = true,
+            sellerUid = "s1",
+            branchId = "br-1"
+        )
+        assertEquals(null, selection)
     }
 
     @Test
@@ -234,7 +269,8 @@ class ClosingComputeTest {
             visibleMovements = listOf(movement("v1", MovementType.VENTA, "100.00")),
             canCreateBranchClosing = false,
             canCreateSellerClosing = false,
-            sellerUid = "s1"
+            sellerUid = "s1",
+            branchId = "br-1"
         )
         assertEquals(null, selection)
     }
@@ -246,7 +282,8 @@ class ClosingComputeTest {
             visibleMovements = listOf(movement("v1", MovementType.VENTA, "100.00")),
             canCreateBranchClosing = true,
             canCreateSellerClosing = true,
-            sellerUid = "s1"
+            sellerUid = "s1",
+            branchId = "br-1"
         )
         assertEquals(null, selection)
     }

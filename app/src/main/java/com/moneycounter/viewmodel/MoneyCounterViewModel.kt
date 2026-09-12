@@ -1054,7 +1054,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             visibleMovements = state.visibleMovements,
             canCreateBranchClosing = state.canCreateBranchClosing,
             canCreateSellerClosing = state.canCreateSellerClosing,
-            sellerUid = sellerUid
+            sellerUid = sellerUid,
+            branchId = currentBranchId
         ) ?: return null
         val selected = selection.selected
         val currencyId = selected.first().currencyId
@@ -1627,9 +1628,12 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         // ---- plan 023: closing scope resolution ----
 
         /** Resolved pool + scope for a closing request. The effective pool is role-gated:
-         *  a caller able to create branch closings closes the requested branch-visible
-         *  movements (scope BRANCH); anyone else closes only their OWN open movements
-         *  (scope SELLER). Returns null when the caller has no permissible scope or
+         *  a caller able to create branch closings closes the requested movements OF THE
+         *  CURRENT BRANCH (scope BRANCH, blank branchId matches anything — legacy
+         *  convention mirroring [visibleForRole]); anyone else closes only their OWN open
+         *  movements (scope SELLER). A BRANCH closing can never include a movement sealed
+         *  to another branch, even when the caller is an OWNER whose [visibleMovements]
+         *  is organization-wide. Returns null when the caller has no permissible scope or
          *  nothing remains after scoping/dropping closed movements. Defense-in-depth:
          *  even if the UI asks for a branch-wide close, a seller's effective pool is
          *  their own movements only. */
@@ -1638,10 +1642,15 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             visibleMovements: List<Movement>,
             canCreateBranchClosing: Boolean,
             canCreateSellerClosing: Boolean,
-            sellerUid: String
+            sellerUid: String,
+            branchId: String
         ): ClosingSelection? {
             if (canCreateBranchClosing) {
-                val selected = visibleMovements.filter { it.id in requestedIds && it.closingId == null }
+                val selected = visibleMovements.filter {
+                    it.id in requestedIds &&
+                        it.closingId == null &&
+                        (it.branchId.isBlank() || it.branchId == branchId)
+                }
                 return if (selected.isEmpty()) null
                 else ClosingSelection(scope = ClosingScope.BRANCH, selected = selected)
             }
