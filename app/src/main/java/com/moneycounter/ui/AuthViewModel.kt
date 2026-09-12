@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.moneycounter.access.AccessRepository
 import com.moneycounter.access.AccessStatus
 import com.moneycounter.access.AppAccessState
+import com.moneycounter.access.MemberCacheRepository
 import com.moneycounter.access.MembershipRepository
 import com.moneycounter.access.UserProfileData
 import com.moneycounter.access.toAppAccessState
@@ -30,7 +31,8 @@ class AuthViewModel(
     private val membershipRepository: MembershipRepository,
     private val signupRepository: SignupRepository? = null,
     private val tenantRepository: TenantRepository? = null,
-    private val cloudOrgRepository: CloudOrgRepository? = null
+    private val cloudOrgRepository: CloudOrgRepository? = null,
+    private val memberCacheRepository: MemberCacheRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<AppAccessState>(AppAccessState.Loading)
@@ -124,11 +126,28 @@ class AuthViewModel(
         }
     }
 
+    /**
+     * Plan 030: seed the last known membership from the local cache *before* the
+     * first network poll, so an offline start keeps its real role instead of
+     * falling back to "no member" (which grants every permission). The cached
+     * member is only reused when its uid matches the signed-in user — one
+     * account's role must never carry into another's session.
+     */
     private fun observeMember(uid: String) {
         if (memberJob?.isActive == true) return
+        if (_member.value == null) {
+            memberCacheRepository?.load()?.takeIf { it.uid == uid }?.let { _member.value = it }
+        }
         memberJob = viewModelScope.launch {
             membershipRepository.observeMember(uid).collect { member ->
-                _member.value = member
+                if (member != null) {
+                    _member.value = member
+                    memberCacheRepository?.save(member)
+                } else if (memberCacheRepository?.load() == null) {
+                    // The row is genuinely missing and nothing was ever cached:
+                    // a legacy single-user install keeps its current behavior.
+                    _member.value = null
+                }
                 seedCloudTenantIfNeeded(uid, member)
             }
         }
@@ -205,6 +224,8 @@ class AuthViewModel(
         memberJob = null
         _profile.value = null
         _member.value = null
+        // Shared device: never let the next user inherit this session's role.
+        memberCacheRepository?.clear()
         viewModelScope.launch {
             authRepository.signOut()
             _uiState.value = AppAccessState.SignedOut
