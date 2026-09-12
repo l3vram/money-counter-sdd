@@ -33,6 +33,10 @@ class FakeAuthRepository(
     var signInResult: Result<AuthUser> = Result.success(AuthUser("uid1", "test@example.com"))
 ) : AuthRepository {
     var lastSignInPassword: String? = null
+    var changePasswordResult: Result<Unit> = Result.success(Unit)
+    var changePasswordCalls = 0
+    var lastChangeCurrentPassword: String? = null
+    var lastChangeNewPassword: String? = null
 
     override suspend fun currentUser(): AuthUser? = user
 
@@ -43,6 +47,13 @@ class FakeAuthRepository(
             user = res.getOrNull()
         }
         return res
+    }
+
+    override suspend fun changePassword(currentPassword: String, newPassword: String): Result<Unit> {
+        changePasswordCalls++
+        lastChangeCurrentPassword = currentPassword
+        lastChangeNewPassword = newPassword
+        return changePasswordResult
     }
 
     override suspend fun signOut() {
@@ -79,14 +90,24 @@ class FakeMembershipRepository(
 class FakeSignupRepository(
     val requests: MutableList<SignupRequest> = mutableListOf(),
     val superuserNumber: String? = "+5300000000",
-    var shouldFailSubmit: Boolean = false
+    var shouldFailSubmit: Boolean = false,
+    var mustChangePassword: Boolean = false
 ) : SignupRepository {
+    val flagUpdates: MutableList<Pair<String, Boolean>> = mutableListOf()
+
     override suspend fun submit(request: SignupRequest) {
         if (shouldFailSubmit) throw RuntimeException("submit failed")
         requests.add(request)
     }
 
     override suspend fun settingsSuperuserWhatsapp(): String? = superuserNumber
+
+    override suspend fun setMustChangePassword(uid: String, flag: Boolean) {
+        flagUpdates.add(uid to flag)
+        if (!flag) mustChangePassword = false
+    }
+
+    override suspend fun readMustChangePassword(uid: String): Boolean = mustChangePassword
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -379,5 +400,144 @@ class AuthViewModelTest {
 
         assertNotNull(viewModel.signUpError.value)
         assertFalse(viewModel.uiState.value is AppAccessState.SignUpPending)
+    }
+
+    @Test
+    fun checkAccess_approvedWithMustChangePassword_returnsPasswordChangeRequired() = runTest {
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val fakeAuth = FakeAuthRepository(user = testUser)
+        val fakeAccess = FakeAccessRepository(accessStatusToReturn = AccessStatus.APPROVED)
+        val fakeSignup = FakeSignupRepository(mustChangePassword = true)
+
+        val viewModel = AuthViewModel(fakeAuth, fakeAccess, FakeMembershipRepository(), fakeSignup)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state is AppAccessState.PasswordChangeRequired)
+        assertEquals(testUser, (state as AppAccessState.PasswordChangeRequired).user)
+    }
+
+    @Test
+    fun checkAccess_approvedWithClearedFlag_returnsApproved() = runTest {
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val fakeAuth = FakeAuthRepository(user = testUser)
+        val fakeAccess = FakeAccessRepository(accessStatusToReturn = AccessStatus.APPROVED)
+        val fakeSignup = FakeSignupRepository(mustChangePassword = false)
+
+        val viewModel = AuthViewModel(fakeAuth, fakeAccess, FakeMembershipRepository(), fakeSignup)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value is AppAccessState.Approved)
+    }
+
+    @Test
+    fun checkAccess_pendingIgnoresMustChangePasswordFlag() = runTest {
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val fakeAuth = FakeAuthRepository(user = testUser)
+        val fakeAccess = FakeAccessRepository(accessStatusToReturn = AccessStatus.PENDING)
+        val fakeSignup = FakeSignupRepository(mustChangePassword = true)
+
+        val viewModel = AuthViewModel(fakeAuth, fakeAccess, FakeMembershipRepository(), fakeSignup)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value is AppAccessState.Pending)
+    }
+
+    @Test
+    fun changePassword_success_clearsFlagAndTransitionsToApproved() = runTest {
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val fakeAuth = FakeAuthRepository(user = testUser)
+        val fakeAccess = FakeAccessRepository(accessStatusToReturn = AccessStatus.APPROVED)
+        val fakeSignup = FakeSignupRepository(mustChangePassword = true)
+        val viewModel = AuthViewModel(fakeAuth, fakeAccess, FakeMembershipRepository(), fakeSignup)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is AppAccessState.PasswordChangeRequired)
+
+        viewModel.changePassword("temporal123", "nuevaClave123", "nuevaClave123")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value is AppAccessState.Approved)
+        assertEquals("temporal123", fakeAuth.lastChangeCurrentPassword)
+        assertEquals("nuevaClave123", fakeAuth.lastChangeNewPassword)
+        assertEquals(testUser.uid to false, fakeSignup.flagUpdates.last())
+        assertFalse(viewModel.isChangingPassword.value)
+        assertNull(viewModel.changePasswordError.value)
+    }
+
+    @Test
+    fun changePassword_failure_setsErrorAndStaysOnChangeScreen() = runTest {
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val fakeAuth = FakeAuthRepository(user = testUser)
+        fakeAuth.changePasswordResult = Result.failure(Exception("Correo o contraseña incorrectos"))
+        val fakeAccess = FakeAccessRepository(accessStatusToReturn = AccessStatus.APPROVED)
+        val fakeSignup = FakeSignupRepository(mustChangePassword = true)
+        val viewModel = AuthViewModel(fakeAuth, fakeAccess, FakeMembershipRepository(), fakeSignup)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is AppAccessState.PasswordChangeRequired)
+
+        viewModel.changePassword("temporal123", "nuevaClave123", "nuevaClave123")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("Correo o contraseña incorrectos", viewModel.changePasswordError.value)
+        assertTrue(viewModel.uiState.value is AppAccessState.PasswordChangeRequired)
+        assertTrue(fakeSignup.flagUpdates.isEmpty())
+        assertFalse(viewModel.isChangingPassword.value)
+    }
+
+    @Test
+    fun changePassword_mismatchConfirm_rejectedWithoutRepoCall() = runTest {
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val fakeAuth = FakeAuthRepository(user = testUser)
+        val fakeAccess = FakeAccessRepository(accessStatusToReturn = AccessStatus.APPROVED)
+        val fakeSignup = FakeSignupRepository(mustChangePassword = true)
+        val viewModel = AuthViewModel(fakeAuth, fakeAccess, FakeMembershipRepository(), fakeSignup)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is AppAccessState.PasswordChangeRequired)
+
+        viewModel.changePassword("temporal123", "nuevaClave123", "otraClave123")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("Las contraseñas no coinciden.", viewModel.changePasswordError.value)
+        assertEquals(0, fakeAuth.changePasswordCalls)
+        assertTrue(fakeSignup.flagUpdates.isEmpty())
+        assertTrue(viewModel.uiState.value is AppAccessState.PasswordChangeRequired)
+    }
+
+    @Test
+    fun changePassword_newEqualsCurrent_rejectedWithoutRepoCall() = runTest {
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val fakeAuth = FakeAuthRepository(user = testUser)
+        val fakeAccess = FakeAccessRepository(accessStatusToReturn = AccessStatus.APPROVED)
+        val fakeSignup = FakeSignupRepository(mustChangePassword = true)
+        val viewModel = AuthViewModel(fakeAuth, fakeAccess, FakeMembershipRepository(), fakeSignup)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is AppAccessState.PasswordChangeRequired)
+
+        viewModel.changePassword("temporal123", "temporal123", "temporal123")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("La nueva contraseña debe ser diferente de la actual.", viewModel.changePasswordError.value)
+        assertEquals(0, fakeAuth.changePasswordCalls)
+        assertTrue(fakeSignup.flagUpdates.isEmpty())
+        assertTrue(viewModel.uiState.value is AppAccessState.PasswordChangeRequired)
+    }
+
+    @Test
+    fun changePassword_tooShort_rejectedWithoutRepoCall() = runTest {
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val fakeAuth = FakeAuthRepository(user = testUser)
+        val fakeAccess = FakeAccessRepository(accessStatusToReturn = AccessStatus.APPROVED)
+        val fakeSignup = FakeSignupRepository(mustChangePassword = true)
+        val viewModel = AuthViewModel(fakeAuth, fakeAccess, FakeMembershipRepository(), fakeSignup)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is AppAccessState.PasswordChangeRequired)
+
+        viewModel.changePassword("temporal123", "abc", "abc")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertNotNull(viewModel.changePasswordError.value)
+        assertEquals(0, fakeAuth.changePasswordCalls)
+        assertTrue(fakeSignup.flagUpdates.isEmpty())
+        assertTrue(viewModel.uiState.value is AppAccessState.PasswordChangeRequired)
     }
 }

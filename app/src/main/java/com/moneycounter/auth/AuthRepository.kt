@@ -24,6 +24,14 @@ interface AuthRepository {
     suspend fun signInWithEmail(email: String, password: String): Result<AuthUser>
 
     /**
+     * Updates the signed-in user's password. [currentPassword] is validated
+     * against the account before [newPassword] is applied.
+     *
+     * @return a [Result] that succeeds when the password was updated or an error on failure.
+     */
+    suspend fun changePassword(currentPassword: String, newPassword: String): Result<Unit>
+
+    /**
      * Signs the current user out.
      */
     suspend fun signOut()

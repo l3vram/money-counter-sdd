@@ -3,6 +3,7 @@ package com.moneycounter.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.moneycounter.access.AccessRepository
+import com.moneycounter.access.AccessStatus
 import com.moneycounter.access.AppAccessState
 import com.moneycounter.access.MembershipRepository
 import com.moneycounter.access.UserProfileData
@@ -43,6 +44,12 @@ class AuthViewModel(
 
     private val _superuserWhatsapp = MutableStateFlow<String?>(null)
     val superuserWhatsapp: StateFlow<String?> = _superuserWhatsapp.asStateFlow()
+
+    private val _isChangingPassword = MutableStateFlow(false)
+    val isChangingPassword: StateFlow<Boolean> = _isChangingPassword.asStateFlow()
+
+    private val _changePasswordError = MutableStateFlow<String?>(null)
+    val changePasswordError: StateFlow<String?> = _changePasswordError.asStateFlow()
 
     private val _profile = MutableStateFlow<UserProfileData?>(null)
     val profile: StateFlow<UserProfileData?> = _profile.asStateFlow()
@@ -98,7 +105,12 @@ class AuthViewModel(
             try {
                 val accessStatus = accessRepository.ensureUserDocument(user)
                 observeMember(user.uid)
-                _uiState.value = toAppAccessState(user, accessStatus)
+                val mustChangePassword = signupRepository?.readMustChangePassword(user.uid) ?: false
+                _uiState.value = if (accessStatus == AccessStatus.APPROVED && mustChangePassword) {
+                    AppAccessState.PasswordChangeRequired(user)
+                } else {
+                    toAppAccessState(user, accessStatus)
+                }
             } catch (e: Exception) {
                 _uiState.value = AppAccessState.Error(e.localizedMessage ?: "Error de conexión")
             }
@@ -141,6 +153,39 @@ class AuthViewModel(
         viewModelScope.launch {
             authRepository.signOut()
             _uiState.value = AppAccessState.SignedOut
+        }
+    }
+
+    fun changePassword(current: String, new: String, confirm: String) {
+        val state = _uiState.value
+        val user = (state as? AppAccessState.PasswordChangeRequired)?.user ?: return
+        if (new.length < MIN_PASSWORD_LENGTH) {
+            _changePasswordError.value = "La nueva contraseña debe tener al menos $MIN_PASSWORD_LENGTH caracteres."
+            return
+        }
+        if (new != confirm) {
+            _changePasswordError.value = "Las contraseñas no coinciden."
+            return
+        }
+        if (new == current) {
+            _changePasswordError.value = "La nueva contraseña debe ser diferente de la actual."
+            return
+        }
+        _isChangingPassword.value = true
+        _changePasswordError.value = null
+        viewModelScope.launch {
+            val result = authRepository.changePassword(current, new)
+            _isChangingPassword.value = false
+            result.fold(
+                onSuccess = {
+                    runCatching { signupRepository?.setMustChangePassword(user.uid, false) }
+                    _uiState.value = AppAccessState.Approved(user)
+                },
+                onFailure = { error ->
+                    _changePasswordError.value =
+                        error.localizedMessage ?: "Error al cambiar la contraseña"
+                }
+            )
         }
     }
 
@@ -192,5 +237,9 @@ class AuthViewModel(
                 }
             )
         }
+    }
+
+    private companion object {
+        const val MIN_PASSWORD_LENGTH = 8
     }
 }

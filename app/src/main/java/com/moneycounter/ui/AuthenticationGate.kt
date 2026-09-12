@@ -40,6 +40,7 @@ import com.moneycounter.auth.AuthRepository
 import com.moneycounter.domain.Member
 import com.moneycounter.domain.Role
 import com.moneycounter.ui.screens.AccessRequiredScreen
+import com.moneycounter.ui.screens.ChangePasswordScreen
 import com.moneycounter.ui.screens.LoginScreen
 import com.moneycounter.ui.screens.SignUpScreen
 import com.moneycounter.ui.screens.SignUpSuccessScreen
@@ -67,6 +68,8 @@ fun AuthenticationGate(
     val isSigningUp by viewModel.isSigningUp.collectAsState()
     val signUpError by viewModel.signUpError.collectAsState()
     val superuserWhatsapp by viewModel.superuserWhatsapp.collectAsState()
+    val isChangingPassword by viewModel.isChangingPassword.collectAsState()
+    val changePasswordError by viewModel.changePasswordError.collectAsState()
     val profile by viewModel.profile.collectAsState()
     val member by viewModel.member.collectAsState()
 
@@ -95,6 +98,11 @@ fun AuthenticationGate(
         onBackToLogin = {
             viewModel.signOut()
         },
+        onChangePassword = { current, new, confirm ->
+            viewModel.changePassword(current, new, confirm)
+        },
+        isChangingPassword = isChangingPassword,
+        changePasswordError = changePasswordError,
         profile = profile,
         onLoadProfile = {
             viewModel.loadProfile()
@@ -118,6 +126,9 @@ fun AuthenticationGateContent(
     signUpError: String? = null,
     superuserWhatsapp: String? = null,
     onBackToLogin: () -> Unit,
+    onChangePassword: (current: String, new: String, confirm: String) -> Unit,
+    isChangingPassword: Boolean = false,
+    changePasswordError: String? = null,
     profile: UserProfileData?,
     onLoadProfile: () -> Unit,
     member: Member?,
@@ -163,6 +174,13 @@ fun AuthenticationGateContent(
         is AppAccessState.Pending -> {
             AccessRequiredScreen(
                 accessStatus = AccessStatus.PENDING
+            )
+        }
+        is AppAccessState.PasswordChangeRequired -> {
+            ChangePasswordScreen(
+                isChangingPassword = isChangingPassword,
+                errorMessage = changePasswordError,
+                onChangePassword = onChangePassword
             )
         }
         is AppAccessState.Blocked -> {

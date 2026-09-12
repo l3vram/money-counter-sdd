@@ -47,6 +47,16 @@ class AppwriteAuthRepository : AuthRepository {
         }
     }
 
+    override suspend fun changePassword(currentPassword: String, newPassword: String): Result<Unit> {
+        return try {
+            account.updatePassword(password = newPassword, oldPassword = currentPassword)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "changePassword failed", e)
+            Result.failure(Exception(mapAuthError(e)))
+        }
+    }
+
     override suspend fun signOut() {
         runCatching { account.deleteSession("current") }
     }
