@@ -13,6 +13,16 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
+ * Only a genuinely missing row means "this install has no membership" (plan 030).
+ * Every other failure — connectivity, permissions, server error — must leave the
+ * last known member in place: degrading to "no member" hands the session
+ * [com.moneycounter.domain.DefaultPermissionService], i.e. every permission.
+ * A null code means the throwable carried no HTTP status, so it is a transport
+ * failure, not a missing row.
+ */
+fun isMemberRowMissing(code: Int?): Boolean = code == 404
+
+/**
  * Appwrite-backed membership repository. Reads the `members` table where each
  * row is keyed by the user uid (replicating the former Firestore `members/{uid}`).
  */
@@ -30,9 +40,12 @@ class AppwriteMembershipRepository(
                     val row = tables.getRow(databaseId, tableId, uid)
                     trySend(memberFromMap(uid, row.data))
                 } catch (e: Exception) {
-                    // Missing row (404) or permission/connectivity issue:
-                    // degrade to "no member" (single-user privileges) instead of crashing.
-                    trySend(null)
+                    if (isMemberRowMissing((e as? AppwriteException)?.code)) {
+                        // Genuinely no membership row: legacy single-user install.
+                        trySend(null)
+                    }
+                    // Otherwise keep the last known member: a connectivity or server
+                    // failure must never widen this session's permissions.
                 }
                 delay(refreshIntervalMillis)
             }
