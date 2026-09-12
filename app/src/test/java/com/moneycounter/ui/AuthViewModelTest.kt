@@ -9,6 +9,8 @@ import com.moneycounter.auth.AuthRepository
 import com.moneycounter.auth.AuthUser
 import com.moneycounter.domain.Member
 import com.moneycounter.domain.Role
+import com.moneycounter.signup.SignupRepository
+import com.moneycounter.signup.SignupRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -19,6 +21,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -28,9 +32,12 @@ class FakeAuthRepository(
     var user: AuthUser? = null,
     var signInResult: Result<AuthUser> = Result.success(AuthUser("uid1", "test@example.com"))
 ) : AuthRepository {
+    var lastSignInPassword: String? = null
+
     override suspend fun currentUser(): AuthUser? = user
 
     override suspend fun signInWithEmail(email: String, password: String): Result<AuthUser> {
+        lastSignInPassword = password
         val res = signInResult
         if (res.isSuccess) {
             user = res.getOrNull()
@@ -67,6 +74,19 @@ class FakeMembershipRepository(
     var memberFlow: Flow<Member?> = MutableStateFlow(null)
 ) : MembershipRepository {
     override fun observeMember(uid: String): Flow<Member?> = memberFlow
+}
+
+class FakeSignupRepository(
+    val requests: MutableList<SignupRequest> = mutableListOf(),
+    val superuserNumber: String? = "+5300000000",
+    var shouldFailSubmit: Boolean = false
+) : SignupRepository {
+    override suspend fun submit(request: SignupRequest) {
+        if (shouldFailSubmit) throw RuntimeException("submit failed")
+        requests.add(request)
+    }
+
+    override suspend fun settingsSuperuserWhatsapp(): String? = superuserNumber
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -277,5 +297,87 @@ class AuthViewModelTest {
 
         assertNull(viewModel.member.value)
         assertEquals(AppAccessState.SignedOut, viewModel.uiState.value)
+    }
+
+    @Test
+    fun signUp_happyPath_submitsRequestAndPublishesSignUpPending() = runTest {
+        val fakeAuth = FakeAuthRepository(user = AuthUser("uid9", "owner@x.com"))
+        val fakeSignup = FakeSignupRepository()
+        val viewModel = AuthViewModel(fakeAuth, FakeAccessRepository(), FakeMembershipRepository(), fakeSignup)
+
+        viewModel.signUp("owner@x.com", Role.OWNER, "Mi Negocio", listOf("Centro"))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state is AppAccessState.SignUpPending)
+        val tempPassword = (state as AppAccessState.SignUpPending).tempPassword
+        assertTrue(tempPassword.length >= 8)
+        assertEquals(1, fakeSignup.requests.size)
+        assertEquals("owner@x.com", fakeSignup.requests.first().email)
+        assertEquals(Role.OWNER, fakeSignup.requests.first().role)
+        assertEquals("Mi Negocio", fakeSignup.requests.first().businessName)
+        assertEquals(listOf("Centro"), fakeSignup.requests.first().branches)
+        assertEquals("PENDING", fakeSignup.requests.first().status)
+        assertTrue(fakeSignup.requests.first().mustChangePassword)
+        assertEquals(fakeSignup.superuserNumber, viewModel.superuserWhatsapp.value)
+    }
+
+    @Test
+    fun signUp_usesGeneratedTempPasswordForAccountCreation() = runTest {
+        val fakeAuth = FakeAuthRepository(user = AuthUser("uid9", "owner@x.com"))
+        val fakeSignup = FakeSignupRepository()
+        val viewModel = AuthViewModel(fakeAuth, FakeAccessRepository(), FakeMembershipRepository(), fakeSignup)
+
+        viewModel.signUp("owner@x.com", Role.SELLER, null, emptyList())
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val tempPassword = (viewModel.uiState.value as AppAccessState.SignUpPending).tempPassword
+        assertEquals(tempPassword, fakeAuth.lastSignInPassword)
+        assertEquals(emptyList<String>(), fakeSignup.requests.first().branches)
+        assertNull(fakeSignup.requests.first().businessName)
+    }
+
+    @Test
+    fun signUp_failure_setsSignUpErrorWithoutSubmitting() = runTest {
+        val fakeAuth = FakeAuthRepository(
+            user = null,
+            signInResult = Result.failure(Exception("La cuenta ya existe"))
+        )
+        val fakeSignup = FakeSignupRepository()
+        val viewModel = AuthViewModel(fakeAuth, FakeAccessRepository(), FakeMembershipRepository(), fakeSignup)
+
+        viewModel.signUp("owner@x.com", Role.SELLER, null, emptyList())
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("La cuenta ya existe", viewModel.signUpError.value)
+        assertEquals(0, fakeSignup.requests.size)
+        assertFalse(viewModel.uiState.value is AppAccessState.SignUpPending)
+    }
+
+    @Test
+    fun signUp_blankEmail_setsErrorWithoutAnyCalls() = runTest {
+        val fakeAuth = FakeAuthRepository()
+        val fakeSignup = FakeSignupRepository()
+        val viewModel = AuthViewModel(fakeAuth, FakeAccessRepository(), FakeMembershipRepository(), fakeSignup)
+
+        viewModel.signUp("   ", Role.SELLER, null, emptyList())
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertNotNull(viewModel.signUpError.value)
+        assertEquals(0, fakeSignup.requests.size)
+        assertNull(fakeAuth.lastSignInPassword)
+    }
+
+    @Test
+    fun signUp_submitFailure_setsSignUpErrorWithoutPendingState() = runTest {
+        val fakeAuth = FakeAuthRepository(user = AuthUser("uid9", "owner@x.com"))
+        val fakeSignup = FakeSignupRepository(shouldFailSubmit = true)
+        val viewModel = AuthViewModel(fakeAuth, FakeAccessRepository(), FakeMembershipRepository(), fakeSignup)
+
+        viewModel.signUp("owner@x.com", Role.OWNER, "Mi Negocio", listOf("Centro"))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertNotNull(viewModel.signUpError.value)
+        assertFalse(viewModel.uiState.value is AppAccessState.SignUpPending)
     }
 }

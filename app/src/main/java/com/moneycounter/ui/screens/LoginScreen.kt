@@ -50,7 +50,8 @@ fun LoginScreen(
     isLoggingIn: Boolean = false,
     errorMessage: String? = null,
     onLogin: (email: String, password: String) -> Unit,
-    onVerifyConnection: suspend () -> Result<Long>
+    onVerifyConnection: suspend () -> Result<Long>,
+    onNavigateToSignUp: () -> Unit = {}
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -165,6 +166,18 @@ fun LoginScreen(
                         style = MaterialTheme.typography.labelLarge
                     )
                 }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            TextButton(
+                onClick = onNavigateToSignUp,
+                enabled = !isLoggingIn
+            ) {
+                Text(
+                    text = "Crear cuenta",
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))

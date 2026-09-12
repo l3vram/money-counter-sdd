@@ -15,7 +15,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -33,10 +35,14 @@ import com.moneycounter.appwrite.AppwriteAccessRepository
 import com.moneycounter.appwrite.AppwriteAuthRepository
 import com.moneycounter.appwrite.AppwriteHealth
 import com.moneycounter.appwrite.AppwriteMembershipRepository
+import com.moneycounter.appwrite.AppwriteSignupRepository
 import com.moneycounter.auth.AuthRepository
 import com.moneycounter.domain.Member
+import com.moneycounter.domain.Role
 import com.moneycounter.ui.screens.AccessRequiredScreen
 import com.moneycounter.ui.screens.LoginScreen
+import com.moneycounter.ui.screens.SignUpScreen
+import com.moneycounter.ui.screens.SignUpSuccessScreen
 
 private class AuthViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -45,7 +51,7 @@ private class AuthViewModelFactory(private val context: Context) : ViewModelProv
         val accessRepository: AccessRepository = AppwriteAccessRepository()
         val membershipRepository: MembershipRepository = AppwriteMembershipRepository()
         @Suppress("UNCHECKED_CAST")
-        return AuthViewModel(authRepository, accessRepository, membershipRepository) as T
+        return AuthViewModel(authRepository, accessRepository, membershipRepository, AppwriteSignupRepository()) as T
     }
 }
 
@@ -58,6 +64,9 @@ fun AuthenticationGate(
     val state by viewModel.uiState.collectAsState()
     val isLoggingIn by viewModel.isLoggingIn.collectAsState()
     val loginError by viewModel.loginError.collectAsState()
+    val isSigningUp by viewModel.isSigningUp.collectAsState()
+    val signUpError by viewModel.signUpError.collectAsState()
+    val superuserWhatsapp by viewModel.superuserWhatsapp.collectAsState()
     val profile by viewModel.profile.collectAsState()
     val member by viewModel.member.collectAsState()
 
@@ -75,6 +84,15 @@ fun AuthenticationGate(
             viewModel.checkAccess()
         },
         onLogout = {
+            viewModel.signOut()
+        },
+        onSignUp = { email, role, businessName, branches ->
+            viewModel.signUp(email, role, businessName, branches)
+        },
+        isSigningUp = isSigningUp,
+        signUpError = signUpError,
+        superuserWhatsapp = superuserWhatsapp,
+        onBackToLogin = {
             viewModel.signOut()
         },
         profile = profile,
@@ -95,11 +113,18 @@ fun AuthenticationGateContent(
     onVerifyConnection: suspend () -> Result<Long>,
     onRetry: () -> Unit,
     onLogout: () -> Unit,
+    onSignUp: (email: String, role: Role, businessName: String?, branches: List<String>) -> Unit,
+    isSigningUp: Boolean = false,
+    signUpError: String? = null,
+    superuserWhatsapp: String? = null,
+    onBackToLogin: () -> Unit,
     profile: UserProfileData?,
     onLoadProfile: () -> Unit,
     member: Member?,
     content: @Composable (onLogout: () -> Unit, profile: UserProfileData?, onLoadProfile: () -> Unit, member: Member?) -> Unit
 ) {
+    var showSignUp by remember { mutableStateOf(false) }
+
     when (state) {
         is AppAccessState.Loading -> {
             Box(
@@ -110,11 +135,29 @@ fun AuthenticationGateContent(
             }
         }
         is AppAccessState.SignedOut -> {
-            LoginScreen(
-                isLoggingIn = isLoggingIn,
-                errorMessage = loginError,
-                onLogin = onLogin,
-                onVerifyConnection = onVerifyConnection
+            if (showSignUp) {
+                SignUpScreen(
+                    isSigningUp = isSigningUp,
+                    errorMessage = signUpError,
+                    onSignUp = onSignUp,
+                    onBack = { showSignUp = false }
+                )
+            } else {
+                LoginScreen(
+                    isLoggingIn = isLoggingIn,
+                    errorMessage = loginError,
+                    onLogin = onLogin,
+                    onVerifyConnection = onVerifyConnection,
+                    onNavigateToSignUp = { showSignUp = true }
+                )
+            }
+        }
+        is AppAccessState.SignUpPending -> {
+            SignUpSuccessScreen(
+                tempPassword = state.tempPassword,
+                request = state.request,
+                superuserWhatsapp = superuserWhatsapp,
+                onBackToLogin = onBackToLogin
             )
         }
         is AppAccessState.Pending -> {

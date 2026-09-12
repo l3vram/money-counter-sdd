@@ -17,6 +17,9 @@ object Appwrite {
     const val DATABASE_ID = "main"
     const val USERS_TABLE = "users"
     const val MEMBERS_TABLE = "members"
+    const val SIGNUPS_TABLE = "signups"
+    const val SETTINGS_TABLE = "settings"
+    const val SETTINGS_ROW_ID = "app"
 
     lateinit var client: Client
         private set

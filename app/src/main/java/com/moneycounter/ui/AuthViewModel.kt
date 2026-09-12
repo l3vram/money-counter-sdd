@@ -9,6 +9,10 @@ import com.moneycounter.access.UserProfileData
 import com.moneycounter.access.toAppAccessState
 import com.moneycounter.auth.AuthRepository
 import com.moneycounter.domain.Member
+import com.moneycounter.domain.Role
+import com.moneycounter.signup.PasswordGenerator
+import com.moneycounter.signup.SignupRepository
+import com.moneycounter.signup.SignupRequest
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +22,8 @@ import kotlinx.coroutines.launch
 class AuthViewModel(
     private val authRepository: AuthRepository,
     private val accessRepository: AccessRepository,
-    private val membershipRepository: MembershipRepository
+    private val membershipRepository: MembershipRepository,
+    private val signupRepository: SignupRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<AppAccessState>(AppAccessState.Loading)
@@ -29,6 +34,15 @@ class AuthViewModel(
 
     private val _loginError = MutableStateFlow<String?>(null)
     val loginError: StateFlow<String?> = _loginError.asStateFlow()
+
+    private val _isSigningUp = MutableStateFlow(false)
+    val isSigningUp: StateFlow<Boolean> = _isSigningUp.asStateFlow()
+
+    private val _signUpError = MutableStateFlow<String?>(null)
+    val signUpError: StateFlow<String?> = _signUpError.asStateFlow()
+
+    private val _superuserWhatsapp = MutableStateFlow<String?>(null)
+    val superuserWhatsapp: StateFlow<String?> = _superuserWhatsapp.asStateFlow()
 
     private val _profile = MutableStateFlow<UserProfileData?>(null)
     val profile: StateFlow<UserProfileData?> = _profile.asStateFlow()
@@ -132,5 +146,51 @@ class AuthViewModel(
 
     fun clearLoginError() {
         _loginError.value = null
+    }
+
+    fun signUp(email: String, role: Role, businessName: String?, branches: List<String>) {
+        val normalizedEmail = email.trim()
+        if (normalizedEmail.isEmpty()) {
+            _signUpError.value = "Introduce un correo electrónico válido."
+            return
+        }
+        val repository = signupRepository
+        if (repository == null) {
+            _signUpError.value = "El registro no está disponible en este momento."
+            return
+        }
+        _isSigningUp.value = true
+        _signUpError.value = null
+        viewModelScope.launch {
+            val tempPassword = PasswordGenerator.generate()
+            val result = authRepository.signInWithEmail(normalizedEmail, tempPassword)
+            _isSigningUp.value = false
+            result.fold(
+                onSuccess = { user ->
+                    val request = SignupRequest(
+                        uid = user.uid,
+                        email = normalizedEmail,
+                        role = role,
+                        businessName = businessName,
+                        branches = branches,
+                        mustChangePassword = true,
+                        status = "PENDING",
+                        createdAtMs = System.currentTimeMillis()
+                    )
+                    try {
+                        repository.submit(request)
+                        _superuserWhatsapp.value = runCatching {
+                            repository.settingsSuperuserWhatsapp()
+                        }.getOrNull()
+                        _uiState.value = AppAccessState.SignUpPending(tempPassword, request)
+                    } catch (e: Exception) {
+                        _signUpError.value = e.localizedMessage ?: "Error al enviar la solicitud de registro"
+                    }
+                },
+                onFailure = { error ->
+                    _signUpError.value = error.localizedMessage ?: "Error al crear la cuenta"
+                }
+            )
+        }
     }
 }
