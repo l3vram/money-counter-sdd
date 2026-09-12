@@ -1306,7 +1306,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                 if (product.id == productId) product.copy(stock = product.stock.add(quantity).setScale(Money.SCALE)) else product
             }
             val newItems = if (currentRow(items, organizationId, branchId, productId) != null) {
-                increaseStock(items, productId, quantity)
+                increaseStock(items, productId, quantity, organizationId, branchId)
             } else {
                 val stock = newProducts.firstOrNull { it.id == productId }?.stock ?: Money.ZERO
                 items + newBranchItem(productId, stock, organizationId, branchId, now)
@@ -1328,7 +1328,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             val newStock = products.firstOrNull { it.id == productId }?.stock ?: Money.ZERO
             val newItems = when (val row = currentRow(items, organizationId, branchId, productId)) {
                 null -> items + newBranchItem(productId, newStock, organizationId, branchId, now)
-                else -> adjustStock(items, productId, newStock)
+                else -> adjustStock(items, productId, newStock, organizationId, branchId)
             }
             return Pair(products, newItems)
         }

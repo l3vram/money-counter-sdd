@@ -24,12 +24,20 @@ data class StockItem(
 }
 
 /** Increases the matched item's quantity by [amount] (warn-and-allow: the result may
- *  go negative, consistent with `applyStockDeduction`). Unknown [productId] is a
- *  no-op — callers create the row first. Only the touched item gets a bumped
- *  [StockItem.updatedAt]. */
-fun increaseStock(items: List<StockItem>, productId: String, amount: BigDecimal): List<StockItem> =
+ *  go negative, consistent with `applyStockDeduction`). Rows are keyed by
+ *  (organizationId, branchId, productId): only the single row matching ALL three is
+ *  touched, so a branch-A operation never leaks into branch-B rows of the same
+ *  product. No match is a no-op — callers create the row first. Only the touched
+ *  item gets a bumped [StockItem.updatedAt]. */
+fun increaseStock(
+    items: List<StockItem>,
+    productId: String,
+    amount: BigDecimal,
+    organizationId: String,
+    branchId: String
+): List<StockItem> =
     items.map { item ->
-        if (item.productId != productId) item
+        if (item.productId != productId || item.organizationId != organizationId || item.branchId != branchId) item
         else item.copy(
             quantity = item.quantity.add(amount).setScale(Money.SCALE),
             updatedAt = System.currentTimeMillis()
@@ -37,11 +45,19 @@ fun increaseStock(items: List<StockItem>, productId: String, amount: BigDecimal)
     }
 
 /** Decreases the matched item's quantity by [amount] (warn-and-allow: the result may
- *  go negative, consistent with `applyStockDeduction`). Unknown [productId] is a
+ *  go negative, consistent with `applyStockDeduction`). Rows are keyed by
+ *  (organizationId, branchId, productId): only the single row matching ALL three is
+ *  touched; other branch/org rows of the same product never change. No match is a
  *  no-op. Only the touched item gets a bumped [StockItem.updatedAt]. */
-fun decreaseStock(items: List<StockItem>, productId: String, amount: BigDecimal): List<StockItem> =
+fun decreaseStock(
+    items: List<StockItem>,
+    productId: String,
+    amount: BigDecimal,
+    organizationId: String,
+    branchId: String
+): List<StockItem> =
     items.map { item ->
-        if (item.productId != productId) item
+        if (item.productId != productId || item.organizationId != organizationId || item.branchId != branchId) item
         else item.copy(
             quantity = item.quantity.subtract(amount).setScale(Money.SCALE),
             updatedAt = System.currentTimeMillis()
@@ -49,11 +65,19 @@ fun decreaseStock(items: List<StockItem>, productId: String, amount: BigDecimal)
     }
 
 /** Sets the matched item's quantity to the absolute value [absoluteQuantity].
- *  Unknown [productId] is a no-op. Only the touched item gets a bumped
+ *  Rows are keyed by (organizationId, branchId, productId): only the single row
+ *  matching ALL three is touched; other branch/org rows of the same product never
+ *  change. No match is a no-op. Only the touched item gets a bumped
  *  [StockItem.updatedAt]. */
-fun adjustStock(items: List<StockItem>, productId: String, absoluteQuantity: BigDecimal): List<StockItem> =
+fun adjustStock(
+    items: List<StockItem>,
+    productId: String,
+    absoluteQuantity: BigDecimal,
+    organizationId: String,
+    branchId: String
+): List<StockItem> =
     items.map { item ->
-        if (item.productId != productId) item
+        if (item.productId != productId || item.organizationId != organizationId || item.branchId != branchId) item
         else item.copy(
             quantity = absoluteQuantity.setScale(Money.SCALE),
             updatedAt = System.currentTimeMillis()

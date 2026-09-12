@@ -49,7 +49,7 @@ class StockItemTest {
     @Test
     fun `increase adds quantity only to the matched item`() {
         val items = listOf(item(productId = "p1", quantity = "10.00"), item(id = "si-2", productId = "p2"))
-        val result = increaseStock(items, "p1", BigDecimal("2.50"))
+        val result = increaseStock(items, "p1", BigDecimal("2.50"), "org-1", "br-1")
 
         assertEquals(BigDecimal("12.50"), result[0].quantity)
         assertEquals(BigDecimal("10.00"), result[1].quantity)
@@ -58,7 +58,7 @@ class StockItemTest {
     @Test
     fun `decrease subtracts quantity only to the matched item`() {
         val items = listOf(item(productId = "p1", quantity = "10.00"), item(id = "si-2", productId = "p2"))
-        val result = decreaseStock(items, "p1", BigDecimal("3.00"))
+        val result = decreaseStock(items, "p1", BigDecimal("3.00"), "org-1", "br-1")
 
         assertEquals(BigDecimal("7.00"), result[0].quantity)
         assertEquals(BigDecimal("10.00"), result[1].quantity)
@@ -67,7 +67,7 @@ class StockItemTest {
     @Test
     fun `adjust sets absolute quantity on the matched item`() {
         val items = listOf(item(productId = "p1", quantity = "10.00"), item(id = "si-2", productId = "p2"))
-        val result = adjustStock(items, "p1", BigDecimal("42.00"))
+        val result = adjustStock(items, "p1", BigDecimal("42.00"), "org-1", "br-1")
 
         assertEquals(BigDecimal("42.00"), result[0].quantity)
         assertEquals(BigDecimal("10.00"), result[1].quantity)
@@ -76,7 +76,7 @@ class StockItemTest {
     @Test
     fun `increase and decrease bump updatedAt only on the matched item`() {
         val items = listOf(item(productId = "p1", updatedAt = 100L), item(id = "si-2", productId = "p2", updatedAt = 100L))
-        val result = increaseStock(items, "p1", BigDecimal("1.00"))
+        val result = increaseStock(items, "p1", BigDecimal("1.00"), "org-1", "br-1")
 
         assertTrue(result[0].updatedAt > 100L)
         assertEquals(100L, result[1].updatedAt)
@@ -85,21 +85,41 @@ class StockItemTest {
     @Test
     fun `unknown product id is a no-op for increase decrease and adjust`() {
         val items = listOf(item(), item(id = "si-2", productId = "p2"))
-        assertEquals(items, increaseStock(items, "p9", BigDecimal("1.00")))
-        assertEquals(items, decreaseStock(items, "p9", BigDecimal("1.00")))
-        assertEquals(items, adjustStock(items, "p9", BigDecimal("1.00")))
+        assertEquals(items, increaseStock(items, "p9", BigDecimal("1.00"), "org-1", "br-1"))
+        assertEquals(items, decreaseStock(items, "p9", BigDecimal("1.00"), "org-1", "br-1"))
+        assertEquals(items, adjustStock(items, "p9", BigDecimal("1.00"), "org-1", "br-1"))
     }
 
     @Test
     fun `decrease past zero is warn-and-allow negative`() {
-        val result = decreaseStock(listOf(item(quantity = "2.00")), "p1", BigDecimal("5.00"))
+        val result = decreaseStock(listOf(item(quantity = "2.00")), "p1", BigDecimal("5.00"), "org-1", "br-1")
         assertEquals(BigDecimal("-3.00"), result.single().quantity)
     }
 
     @Test
     fun `increase can also push negative only via negative-free path and scales to two`() {
-        val result = increaseStock(listOf(item(quantity = "1.00")), "p1", BigDecimal("-2.00"))
+        val result = increaseStock(listOf(item(quantity = "1.00")), "p1", BigDecimal("-2.00"), "org-1", "br-1")
         assertEquals(BigDecimal("-1.00"), result.single().quantity)
+    }
+
+    @Test
+    fun `same product across branches is scoped to the targeted branch only`() {
+        val items = listOf(
+            item(id = "si-a1", branchId = "br-1", productId = "p1", quantity = "10.00"),
+            item(id = "si-b1", branchId = "br-2", productId = "p1", quantity = "10.00")
+        )
+
+        val increased = increaseStock(items, "p1", BigDecimal("2.50"), "org-1", "br-1")
+        assertEquals(BigDecimal("12.50"), increased[0].quantity)
+        assertEquals(BigDecimal("10.00"), increased[1].quantity)
+
+        val decreased = decreaseStock(items, "p1", BigDecimal("3.00"), "org-1", "br-1")
+        assertEquals(BigDecimal("7.00"), decreased[0].quantity)
+        assertEquals(BigDecimal("10.00"), decreased[1].quantity)
+
+        val adjusted = adjustStock(items, "p1", BigDecimal("42.00"), "org-1", "br-1")
+        assertEquals(BigDecimal("42.00"), adjusted[0].quantity)
+        assertEquals(BigDecimal("10.00"), adjusted[1].quantity)
     }
 
     @Test
