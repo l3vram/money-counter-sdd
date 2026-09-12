@@ -33,6 +33,8 @@ import com.moneycounter.domain.SavedCountItem
 import com.moneycounter.domain.SavedProductItem
 import com.moneycounter.domain.StockItem
 import com.moneycounter.domain.backfillStock
+import com.moneycounter.domain.increaseStock
+import com.moneycounter.domain.adjustStock
 import com.moneycounter.domain.resolveBranchStock
 import com.moneycounter.domain.withOrgId
 import com.moneycounter.repository.ClosingRepository
@@ -267,6 +269,24 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
      *  merged read ([branchStock]) resolves per call. */
     private fun updateStockState(items: List<StockItem>) {
         _uiState.update { it.copy(stockItems = items) }
+    }
+
+    /** SINGLE-WRITE FUNNEL (plan 022): every stock mutation writes the new [Product]
+     *  list AND the new [StockItem] list in ONE state update plus both persists, so
+     *  the two stores can never diverge on a write (regla de caja). Callers compute
+     *  [newProducts] and the items transform from the SAME `_uiState.value` read. */
+    private fun updateStockAndItems(
+        newProducts: List<Product>,
+        transform: (List<StockItem>) -> List<StockItem>
+    ) {
+        val newItems = transform(_uiState.value.stockItems)
+        _uiState.update { it.copy(products = newProducts, stockItems = newItems) }
+        persistProducts(newProducts)
+        persistStockItems(newItems)
+    }
+
+    private fun persistStockItems(items: List<StockItem>) {
+        viewModelScope.launch { stockRepository.saveAll(items) }
     }
 
     /** Merged read (master sections 19-26): the [StockItem] quantity for the current
@@ -525,10 +545,12 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         if (prices.values.all { it.unitPrice.signum() == 0 && it.surcharge.signum() == 0 }) return false
         val state = _uiState.value
 
-        val new = Product(generateProductId(state.products), cleanName, cleanUnit, stock, prices)
+        val new = Product(generateProductId(state.products), cleanName, cleanUnit, stock.setScale(Money.SCALE), prices)
         val newProducts = state.products + new
-        _uiState.update { it.copy(products = newProducts) }
-        persistProducts(newProducts)
+        val (finalProducts, newItems) = applyAddProductToStock(
+            newProducts, state.stockItems, new.id, currentOrgId, currentBranchId
+        )
+        updateStockAndItems(finalProducts) { newItems }
         if (stock.signum() > 0) {
             val unitPrice = new.effectiveUnitPriceFor(state.selectedCurrencyId) ?: Money.ZERO
             recordMovement(
@@ -566,10 +588,12 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         val oldStock = oldProduct.stock
 
         val newProducts = state.products.map {
-            if (it.id == id) it.copy(name = cleanName, unit = cleanUnit, stock = stock, prices = prices) else it
+            if (it.id == id) it.copy(name = cleanName, unit = cleanUnit, stock = stock.setScale(Money.SCALE), prices = prices) else it
         }
-        _uiState.update { it.copy(products = newProducts) }
-        persistProducts(newProducts)
+        val (finalProducts, newItems) = applyEditProductToStock(
+            newProducts, state.stockItems, id, currentOrgId, currentBranchId
+        )
+        updateStockAndItems(finalProducts) { newItems }
         val delta = stockInDelta(oldStock, stock)
         if (delta.signum() > 0) {
             val updated = newProducts.first { it.id == id }
@@ -601,14 +625,16 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     fun deleteProduct(id: String): Boolean {
         if (!permissionService.canDeleteProduct()) return false
         val state = _uiState.value
-        val newProducts = state.products.filterNot { it.id == id }
+        val (newProducts, newItems) = applyDeleteProductToStock(
+            state.products, state.stockItems, id, currentBranchId
+        )
+        updateStockAndItems(newProducts) { newItems }
         val newSelections = state.productSelections.map {
             if (it.productId == id) it.copy(productId = null, quantityText = "") else it
         }
         _uiState.update {
-            it.copy(products = newProducts, productSelections = newSelections)
+            it.copy(productSelections = newSelections)
         }
-        persistProducts(newProducts)
         recalculate()
         return true
     }
@@ -625,8 +651,10 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         val newProducts = state.products.map {
             if (it.id == productId) it.copy(stock = newStock) else it
         }
-        _uiState.update { it.copy(products = newProducts) }
-        persistProducts(newProducts)
+        val (finalProducts, newItems) = applyAddStockToStock(
+            newProducts, state.stockItems, productId, qty, currentOrgId, currentBranchId
+        )
+        updateStockAndItems(finalProducts) { newItems }
         val unitPrice = product.effectiveUnitPriceFor(state.selectedCurrencyId) ?: Money.ZERO
         recordMovement(
             buildStockInMovement(
@@ -724,9 +752,10 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         val lossValue = unitPrice.multiply(quantity).setScale(Money.SCALE)
         val cleanReason = reason?.trim()?.takeIf { it.isNotEmpty() }
 
-        val newProducts = applyWriteoff(state.products, product.id, quantity)
-        _uiState.update { it.copy(products = newProducts) }
-        persistProducts(newProducts)
+        val (newProducts, newItems) = applyWriteoffToStock(
+            state.products, state.stockItems, product.id, quantity, currentOrgId, currentBranchId
+        )
+        updateStockAndItems(newProducts) { newItems }
         recordMovement(
             buildMermaMovement(
                 id = UUID.randomUUID().toString(),
@@ -818,15 +847,16 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             sellerName = sellerName
         )
 
+        val (newProducts, newItems) = applySaleToStock(
+            state.products, state.stockItems, state.productSelections, currentOrgId, currentBranchId
+        )
+        updateStockAndItems(newProducts) { newItems }
         _uiState.update { st ->
             st.copy(
                 lastSavedId = saved.id,
                 savedCountId = saved.id
             )
         }
-        val newProducts = applyStockDeduction(state.products, state.productSelections)
-        _uiState.update { it.copy(products = newProducts) }
-        persistProducts(newProducts)
         recordMovement(
             buildVentaMovement(
                 id = saved.id,
@@ -875,16 +905,17 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         val fiadoId = UUID.randomUUID().toString()
         val fiadoAt = System.currentTimeMillis()
 
-        val newProducts = applyStockDeduction(state.products, state.productSelections)
+        val (newProducts, newItems) = applySaleToStock(
+            state.products, state.stockItems, state.productSelections, currentOrgId, currentBranchId
+        )
+        updateStockAndItems(newProducts) { newItems }
         _uiState.update { st ->
             st.copy(
-                products = newProducts,
                 lastFiadoId = fiadoId,
                 productSelections = listOf(ProductSelection()),
                 savedCountId = null
             )
         }
-        persistProducts(newProducts)
         recordMovement(
             buildFiadoMovement(
                 id = fiadoId,
@@ -1190,6 +1221,182 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
                 if (product.id != productId) product
                 else product.copy(stock = product.stock.subtract(quantity).setScale(Money.SCALE))
             }
+        }
+
+        // ---- plan 022: dual-write transforms (Product.stock + StockItem lockstep) ----
+
+        /** Pure dual-write for a sale (VENTA / VENTA_FIADO): deducts the sold quantity
+         *  per product from BOTH `Product.stock` and the current (org, branch) StockItem
+         *  rows. Rows for other orgs/branches never touched. A missing current-branch
+         *  row is created seeded with the post-deduction product stock (defensive —
+         *  plan 021's backfill normally guarantees the row exists). Returns the new
+         *  products and the new items together so callers route both through ONE funnel. */
+        fun applySaleToStock(
+            products: List<Product>,
+            items: List<StockItem>,
+            selections: List<ProductSelection>,
+            organizationId: String,
+            branchId: String,
+            now: Long = System.currentTimeMillis()
+        ): Pair<List<Product>, List<StockItem>> {
+            val newProducts = applyStockDeduction(products, selections)
+            val deltas = soldQuantities(selections)
+            return Pair(newProducts, decreaseCurrentItems(newProducts, items, deltas, organizationId, branchId, now))
+        }
+
+        /** Pure dual-write for a "baja por merma": decreases both stores by [quantity]. */
+        fun applyWriteoffToStock(
+            products: List<Product>,
+            items: List<StockItem>,
+            productId: String,
+            quantity: BigDecimal,
+            organizationId: String,
+            branchId: String,
+            now: Long = System.currentTimeMillis()
+        ): Pair<List<Product>, List<StockItem>> {
+            val newProducts = applyWriteoff(products, productId, quantity)
+            return Pair(newProducts, decreaseCurrentItems(newProducts, items, mapOf(productId to quantity), organizationId, branchId, now))
+        }
+
+        /** Pure dual-write for "alta" (addStock): increases both stores by [quantity].
+         *  A missing current-branch row is created seeded with the post-add product
+         *  stock, so the seeded row is NOT increased again. */
+        fun applyAddStockToStock(
+            products: List<Product>,
+            items: List<StockItem>,
+            productId: String,
+            quantity: BigDecimal,
+            organizationId: String,
+            branchId: String,
+            now: Long = System.currentTimeMillis()
+        ): Pair<List<Product>, List<StockItem>> {
+            val newProducts = products.map { product ->
+                if (product.id == productId) product.copy(stock = product.stock.add(quantity).setScale(Money.SCALE)) else product
+            }
+            val newItems = if (currentRow(items, organizationId, branchId, productId) != null) {
+                increaseStock(items, productId, quantity)
+            } else {
+                val stock = newProducts.firstOrNull { it.id == productId }?.stock ?: Money.ZERO
+                items + newBranchItem(productId, stock, organizationId, branchId, now)
+            }
+            return Pair(newProducts, newItems)
+        }
+
+        /** Pure dual-write for editProduct: [products] carries the desired (post-edit)
+         *  absolute stock; the current-branch row is adjusted to it (created seeded with
+         *  the same absolute quantity when absent). Covers positive AND negative deltas. */
+        fun applyEditProductToStock(
+            products: List<Product>,
+            items: List<StockItem>,
+            productId: String,
+            organizationId: String,
+            branchId: String,
+            now: Long = System.currentTimeMillis()
+        ): Pair<List<Product>, List<StockItem>> {
+            val newStock = products.firstOrNull { it.id == productId }?.stock ?: Money.ZERO
+            val newItems = when (val row = currentRow(items, organizationId, branchId, productId)) {
+                null -> items + newBranchItem(productId, newStock, organizationId, branchId, now)
+                else -> adjustStock(items, productId, newStock)
+            }
+            return Pair(products, newItems)
+        }
+
+        /** Pure dual-write for addProduct with initial stock: seeds a current-branch row
+         *  with the new product's stock. A row cannot pre-exist (fresh id), but if one
+         *  somehow does, it is left untouched. */
+        fun applyAddProductToStock(
+            products: List<Product>,
+            items: List<StockItem>,
+            productId: String,
+            organizationId: String,
+            branchId: String,
+            now: Long = System.currentTimeMillis()
+        ): Pair<List<Product>, List<StockItem>> {
+            if (currentRow(items, organizationId, branchId, productId) != null) return Pair(products, items)
+            val stock = products.firstOrNull { it.id == productId }?.stock ?: Money.ZERO
+            return Pair(products, items + newBranchItem(productId, stock, organizationId, branchId, now))
+        }
+
+        /** Pure dual-write for deleteProduct: removes the product AND drops its current-branch
+         *  StockItem rows only — rows for the same product in OTHER branches stay (the product
+         *  may still exist there). */
+        fun applyDeleteProductToStock(
+            products: List<Product>,
+            items: List<StockItem>,
+            productId: String,
+            branchId: String
+        ): Pair<List<Product>, List<StockItem>> {
+            val newProducts = products.filterNot { it.id == productId }
+            val newItems = items.filterNot { it.productId == productId && it.branchId == branchId }
+            return Pair(newProducts, newItems)
+        }
+
+        private fun currentRow(
+            items: List<StockItem>,
+            organizationId: String,
+            branchId: String,
+            productId: String
+        ): StockItem? =
+            items.firstOrNull {
+                it.organizationId == organizationId && it.branchId == branchId && it.productId == productId
+            }
+
+        private fun newBranchItem(
+            productId: String,
+            quantity: BigDecimal,
+            organizationId: String,
+            branchId: String,
+            now: Long
+        ): StockItem = StockItem(
+            id = "si-$productId",
+            organizationId = organizationId,
+            branchId = branchId,
+            productId = productId,
+            quantity = quantity.setScale(Money.SCALE),
+            updatedAt = now
+        )
+
+        private fun soldQuantities(selections: List<ProductSelection>): Map<String, BigDecimal> =
+            selections
+                .filter { !it.productId.isNullOrBlank() }
+                .groupingBy { it.productId!! }
+                .fold(BigDecimal.ZERO) { acc, s -> acc.add(s.quantity()) }
+                .filterValues { it.signum() > 0 }
+
+        /** Applies [deltas] (productId -> positive quantity) to the current (org, branch)
+         *  rows only. A missing current-branch row is created seeded with the product's
+         *  post-mutation stock ([newProducts]); other org/branch rows untouched. */
+        private fun decreaseCurrentItems(
+            newProducts: List<Product>,
+            items: List<StockItem>,
+            deltas: Map<String, BigDecimal>,
+            organizationId: String,
+            branchId: String,
+            now: Long
+        ): List<StockItem> {
+            if (deltas.isEmpty()) return items
+            val currentByProductId = items
+                .filter { it.organizationId == organizationId && it.branchId == branchId }
+                .associateBy { it.productId }
+            val newItems = items.map { item ->
+                if (item.organizationId != organizationId || item.branchId != branchId) item
+                else {
+                    val delta = deltas[item.productId]
+                    if (delta == null || delta.signum() <= 0) item
+                    else item.copy(
+                        quantity = item.quantity.subtract(delta).setScale(Money.SCALE),
+                        updatedAt = now
+                    )
+                }
+            }
+            val toCreate = deltas.entries.mapNotNull { (productId, delta) ->
+                if (delta.signum() <= 0 || productId in currentByProductId) null
+                else {
+                    val stock = newProducts.firstOrNull { it.id == productId }?.stock ?: Money.ZERO
+                    newBranchItem(productId, stock, organizationId, branchId, now)
+                }
+            }
+            return if (toCreate.isEmpty()) newItems else newItems + toCreate
         }
 
         /** Pure guard for fiado registration: requires products selected (positive total)

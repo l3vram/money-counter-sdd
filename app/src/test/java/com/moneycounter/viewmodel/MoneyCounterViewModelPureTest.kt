@@ -5,6 +5,10 @@ import com.moneycounter.domain.Movement
 import com.moneycounter.domain.MovementDenomination
 import com.moneycounter.domain.MovementProductLine
 import com.moneycounter.domain.MovementType
+import com.moneycounter.domain.Product
+import com.moneycounter.domain.ProductPrice
+import com.moneycounter.domain.ProductSelection
+import com.moneycounter.domain.StockItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -347,5 +351,73 @@ class MoneyCounterViewModelPureTest {
         )
         assertEquals("org-2", m.organizationId)
         assertEquals("br-2", m.branchId)
+    }
+
+    // ---- plan 022 dual-write consistency (companion transforms) ----
+
+    private fun bd(value: String) = BigDecimal(value).setScale(Money.SCALE)
+
+    private fun stockProduct(id: String, stock: String) = Product(
+        id,
+        "Name $id",
+        "Lb",
+        bd(stock),
+        prices = mapOf("cup" to ProductPrice(bd("2.00"), bd("0.50")))
+    )
+
+    private fun stockRow(id: String, org: String, branch: String, productId: String, qty: String) =
+        StockItem(id, org, branch, productId, bd(qty), 1L)
+
+    private fun row(items: List<StockItem>, org: String, branch: String, productId: String): StockItem? =
+        items.firstOrNull { it.organizationId == org && it.branchId == branch && it.productId == productId }
+
+    @Test
+    fun `sale transform keeps both stores in lockstep`() {
+        val products = listOf(stockProduct("p1", "40"))
+        val items = listOf(stockRow("si-p1", "org-a", "branch-a", "p1", "40"))
+        val (newProducts, newItems) = MoneyCounterViewModel.applySaleToStock(
+            products, items,
+            listOf(ProductSelection(productId = "p1", quantityText = "3")),
+            "org-a", "branch-a", now = 9L
+        )
+        assertEquals(bd("37.00"), newProducts.single().stock)
+        assertEquals(bd("37.00"), row(newItems, "org-a", "branch-a", "p1")!!.quantity)
+    }
+
+    @Test
+    fun `writeoff transform keeps both stores in lockstep`() {
+        val products = listOf(stockProduct("p1", "20"))
+        val items = listOf(stockRow("si-p1", "org-a", "branch-a", "p1", "20"))
+        val (newProducts, newItems) = MoneyCounterViewModel.applyWriteoffToStock(
+            products, items, "p1", bd("5"), "org-a", "branch-a", now = 9L
+        )
+        assertEquals(bd("15.00"), newProducts.single().stock)
+        assertEquals(bd("15.00"), row(newItems, "org-a", "branch-a", "p1")!!.quantity)
+    }
+
+    @Test
+    fun `addStock transform keeps both stores in lockstep and ignores other branches`() {
+        val products = listOf(stockProduct("p1", "10"), stockProduct("p2", "20"))
+        val items = listOf(
+            stockRow("si-p1", "org-a", "branch-a", "p1", "10"),
+            stockRow("si-p2", "org-a", "branch-b", "p2", "20")
+        )
+        val (newProducts, newItems) = MoneyCounterViewModel.applyAddStockToStock(
+            products, items, "p1", bd("3"), "org-a", "branch-a", now = 9L
+        )
+        assertEquals(bd("13.00"), newProducts.first { it.id == "p1" }.stock)
+        assertEquals(bd("13.00"), row(newItems, "org-a", "branch-a", "p1")!!.quantity)
+        assertEquals(bd("20.00"), row(newItems, "org-a", "branch-b", "p2")!!.quantity)
+    }
+
+    @Test
+    fun `editProduct transform aligns both stores to the edited absolute stock`() {
+        val products = listOf(stockProduct("p1", "25"))
+        val items = listOf(stockRow("si-p1", "org-a", "branch-a", "p1", "30"))
+        val (newProducts, newItems) = MoneyCounterViewModel.applyEditProductToStock(
+            products, items, "p1", "org-a", "branch-a", now = 9L
+        )
+        assertEquals(bd("25.00"), newProducts.single().stock)
+        assertEquals(bd("25.00"), row(newItems, "org-a", "branch-a", "p1")!!.quantity)
     }
 }
