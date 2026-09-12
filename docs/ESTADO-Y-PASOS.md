@@ -113,7 +113,7 @@ como medida puntual hasta que Git quede conectado:
 | Recurso | Deployment | Estado |
 |---|---|---|
 | Function `admin` | `6aa5cb786166e18d64f0` | `ready`, **activa** — permiso de `members` + la key dinámica del header (ver §6ter) |
-| Site `admin-web` | `6aa5cfc07e686a601b7c` | `ready` y activa, sirviendo en `6aa5cfc0db68c8605a81.appwrite.network` (ver abajo: la URL vieja NO se actualiza) |
+| Site `admin-web` | `6aa5d181a6457d79024a` | `ready` y activa, sirviendo en `6aa5d18215a090aa54f7.appwrite.network` (ver abajo: la URL vieja NO se actualiza) |
 
 Fuente: release `webadmin-deploy-2026-09-12b` en `l3vram/money-counter-sdd`, assets
 `admin-web.tar.gz` (24.643 B) y `admin-function.tar.gz` (4.781 B). Los `sourceSize` que
@@ -132,7 +132,7 @@ viejo para siempre.
 | URL | Sirve |
 |---|---|
 | `6aa4cb0a8f6a4c30a83f.appwrite.network` | deployment viejo — **la de todos los docs anteriores, ya no sirve** |
-| **`6aa5cfc0db68c8605a81.appwrite.network`** | **deployment actual (2026-09-12d) — usar esta hoy** |
+| **`6aa5d18215a090aa54f7.appwrite.network`** | **deployment actual (2026-09-12d) — usar esta hoy** |
 | `6aa5c4103a466b90b992.appwrite.network` | deployment 2026-09-12b, ya viejo |
 | `adm.elluiso.com` | sigue al deployment activo (ya se movió solo al nuevo), pero **sin DNS** |
 
@@ -142,6 +142,11 @@ deployment está sirviendo realmente.
 **Consecuencia para CORS:** cada URL nueva necesita su plataforma Web, o Appwrite responde el
 mismo `Invalid Origin` del §6. Se registraron tres: la URL del deployment nuevo,
 `adm.elluiso.com` y `localhost` (esta última destraba el desarrollo local del panel).
+
+**Dato que cambia el calculo: con Git conectado, la URL de la rama es estable** entre
+deployments ("The branch URL will remain consistent for all deployments made for code pushed
+to a specific branch"). O sea que conectar Git no es solo comodidad de deploy: termina con la
+ruleta de URLs y con tener que registrar una plataforma Web nueva cada vez.
 
 **La URL estable es `adm.elluiso.com`**, cuya regla ya sigue al deployment activo. Le falta
 DNS: la verificación de Appwrite falla con *"missing CNAME record"*, y de hecho **`elluiso.com`
@@ -312,7 +317,7 @@ sucursales las crea `approveSignup` al aprobar un DUEÑO. El camino es el flujo 
 
 1. ✅ **Hecho y verificado por API**: `whoami` devuelve `role: "SUPERUSER"` y las acciones de
    lectura responden 200. Falta que Luis entre por el navegador
-   (**https://6aa5cfc0db68c8605a81.appwrite.network**) y cargue su WhatsApp desde
+   (**https://6aa5d18215a090aa54f7.appwrite.network**) y cargue su WhatsApp desde
    Configuración (la fila `settings/app` existe con el campo vacío).
 2. Con la Function desplegada, desde la app se registra una cuenta nueva como **DUEÑO** con
    negocio y sucursales → crea el `signup` en PENDING.
@@ -340,7 +345,7 @@ vacía.
 | Database | `main` |
 | Tablas | `users`, `members`, `signups`, `orgs`, `branches`, `settings` |
 | Function | `admin` — node-18, entrypoint `src/index.js`, deployment `6aa4c515687c4d9d7361` (ready), `execute: ["users"]`, scopes `tables.*`/`rows.*`/`users.*` |
-| Site | `admin-web` → deployment activo en https://6aa5cfc0db68c8605a81.appwrite.network · estable pendiente `adm.elluiso.com` (sin DNS) |
+| Site | `admin-web` → deployment activo en https://6aa5d18215a090aa54f7.appwrite.network · estable pendiente `adm.elluiso.com` (sin DNS) |
 | Repo | `github.com/l3vram/money-counter-sdd` |
 | SUPERUSER | `luisricoblanco2014@gmail.com`, uid `6aa352520004960be987` |
 | MCP Appwrite | `.mcp.json`, `https://mcp.appwrite.io/`, OAuth con scope **muy amplio** (`project:all`, `organization:all`) — aceptado conscientemente |

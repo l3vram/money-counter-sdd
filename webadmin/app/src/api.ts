@@ -23,6 +23,27 @@ const account = new Account(client);
 const functionClient = new Client().setEndpoint(ENDPOINT).setProject(PROJECT_ID);
 const functions = new Functions(functionClient);
 
+/**
+ * "Load failed" (Safari) y "Failed to fetch" (Chrome) son el mismo TypeError: la peticion
+ * no llego a completarse y el navegador no dice cual era. Etiquetar cada paso convierte un
+ * mensaje inutil en un diagnostico, que es justo lo que faltaba al depurar este panel.
+ */
+function describeFailure(step: string, err: unknown): Error {
+  const raw = err instanceof Error ? err.message : String(err);
+  const anyErr = err as { code?: number; type?: string };
+  const detalle = [
+    anyErr && anyErr.code ? `code=${anyErr.code}` : null,
+    anyErr && anyErr.type ? `type=${anyErr.type}` : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const esRed = /load failed|failed to fetch|networkerror/i.test(raw);
+  const pista = esRed
+    ? ' — la peticion no llego a completarse: revisa la conexion, un bloqueador de contenido, o que este dominio este registrado como plataforma Web del proyecto'
+    : '';
+  return new Error(`${step}: ${raw}${detalle ? ` (${detalle})` : ''}${pista}`);
+}
+
 let jwtPromise: Promise<string> | null = null;
 
 function getJwt(): Promise<string> {
@@ -32,7 +53,7 @@ function getJwt(): Promise<string> {
       .then((result) => result.jwt)
       .catch((error) => {
         jwtPromise = null;
-        throw error;
+        throw describeFailure('No se pudo crear el token de sesion (createJWT)', error);
       });
   }
   return jwtPromise;
@@ -64,13 +85,18 @@ async function callFunction<T>(action: string, params: Record<string, unknown> =
   const jwt = await getJwt();
   functionClient.setJWT(jwt);
 
-  const execution = await functions.createExecution({
-    functionId: FUNCTION_ID,
-    body: JSON.stringify({ action, ...params }),
-    async: false,
-    xpath: '/',
-    method: ExecutionMethod.POST,
-  });
+  let execution;
+  try {
+    execution = await functions.createExecution({
+      functionId: FUNCTION_ID,
+      body: JSON.stringify({ action, ...params }),
+      async: false,
+      xpath: '/',
+      method: ExecutionMethod.POST,
+    });
+  } catch (err) {
+    throw describeFailure(`No se pudo ejecutar la funcion (accion "${action}")`, err);
+  }
 
   const status = execution.responseStatusCode;
   const payload = parseResponseBody(execution.responseBody);
@@ -98,7 +124,11 @@ export async function login(email: string, password: string): Promise<UserInfo> 
   } catch (e) {
     // No session to drop: that is the normal path.
   }
-  await account.createEmailPasswordSession(email, password);
+  try {
+    await account.createEmailPasswordSession(email, password);
+  } catch (err) {
+    throw describeFailure('No se pudo iniciar sesion (createEmailPasswordSession)', err);
+  }
   return whoami();
 }
 
