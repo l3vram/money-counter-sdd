@@ -112,7 +112,7 @@ como medida puntual hasta que Git quede conectado:
 
 | Recurso | Deployment | Estado |
 |---|---|---|
-| Function `admin` | `6aa5c4098cf09f8e0956` | `ready`, **activa** — el fix del permiso de `members` ya está en producción |
+| Function `admin` | `6aa5cb786166e18d64f0` | `ready`, **activa** — permiso de `members` + la key dinámica del header (ver §6ter) |
 | Site `admin-web` | `6aa5c40fcf23d03f5bc7` | `ready` y activa, sirviendo en `6aa5c4103a466b90b992.appwrite.network` (ver abajo: la URL vieja NO se actualiza) |
 
 Fuente: release `webadmin-deploy-2026-09-12b` en `l3vram/money-counter-sdd`, assets
@@ -195,6 +195,40 @@ ampliar el cambio.
 
 ---
 
+## 6ter. La causa raíz del 403: el panel nunca funcionó
+
+Tras arreglar el `Failed to fetch`, el login devolvía *"Acceso denegado: se requiere sesión de
+superusuario"* — con la fila SUPERUSER creada y la identidad del llamador bien resuelta. La
+causa era anterior a todo este trabajo:
+
+```js
+.setKey(process.env.APPWRITE_FUNCTION_API_KEY || '')   // ← vacío en ejecución
+```
+
+La doc de Appwrite es explícita: la key dinámica llega **de dos formas distintas**, y sólo una
+sirve en ejecución. `APPWRITE_FUNCTION_API_KEY` existe durante el **build**; durante la
+**ejecución** la key viaja en el header **`x-appwrite-key`**. Leyendo sólo la variable de
+entorno, el cliente quedaba **sin credencial**: toda lectura fallaba, `memberRole` convertía
+la excepción en `null`, y `null` se responde con un 403 plano.
+
+O sea que **el panel nunca funcionó**, ni una vez. El 403 que el plan 029 anotó como
+"comportamiento correcto con `members` vacía" era en realidad este bug, tapado por la
+coincidencia de que la tabla estaba vacía.
+
+Arreglado: `req.headers['x-appwrite-key']` primero, la env var como respaldo, y un `error()`
+si no hay ninguna. Además `memberRole` ahora **loguea** por qué falló la lectura, porque su
+`catch` silencioso es lo que hizo que esto costara tanto: "no tengo membresía" y "mi cliente
+está roto" terminaban indistinguibles.
+
+Verificado con un JWT emitido por `users_create_jwt` para la cuenta de Luis, llamando la
+Function igual que el panel: `whoami` → **200** con `role: "SUPERUSER"`, y `listUsers`,
+`listOrgs`, `listSignups` y `getSettings` → 200. Deployment `6aa5cb786166e18d64f0`.
+
+**Truco de diagnóstico reutilizable:** `users_create_jwt` permite reproducir exactamente lo
+que hace el panel sin la contraseña del usuario ni un navegador. Ojo con el payload: al crear
+una ejecución por REST el cuerpo va como `{"body":"<json como string>","method":"POST"}`, no
+como el JSON de la acción directamente.
+
 ## 7. Deploy: por qué se cambia a Git
 
 El proceso documentado en `webadmin/README.md` es frágil: empaquetar un tarball, subirlo a una
@@ -233,8 +267,10 @@ se cablean los dos recursos por MCP (`installationId`, `providerRepositoryId`,
 `orgs`, `branches` y `signups` están **vacías**: no hay nada que sembrar a mano, la org y las
 sucursales las crea `approveSignup` al aprobar un DUEÑO. El camino es el flujo real:
 
-1. Luis entra al panel (**https://6aa5c4103a466b90b992.appwrite.network**) → `whoami` devuelve `role: "SUPERUSER"` en vez de 403, y carga su
-   WhatsApp desde Configuración (la fila `settings/app` existe con el campo vacío).
+1. ✅ **Hecho y verificado por API**: `whoami` devuelve `role: "SUPERUSER"` y las acciones de
+   lectura responden 200. Falta que Luis entre por el navegador
+   (**https://6aa5c4103a466b90b992.appwrite.network**) y cargue su WhatsApp desde
+   Configuración (la fila `settings/app` existe con el campo vacío).
 2. Con la Function desplegada, desde la app se registra una cuenta nueva como **DUEÑO** con
    negocio y sucursales → crea el `signup` en PENDING.
 3. Luis lo aprueba en el panel → se crean `orgs`, `branches`, la fila `members` **con su

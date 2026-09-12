@@ -38,17 +38,23 @@ async function getRowOrNull(tablesDB, tableId, rowId) {
   }
 }
 
-async function memberRole(tablesDB, userId) {
+async function memberRole(tablesDB, userId, error) {
   if (!userId) return null;
   try {
     const row = await tablesDB.getRow({ databaseId: DATABASE_ID, tableId: TABLE_MEMBERS, rowId: userId });
     return row && row.role ? row.role : null;
   } catch (e) {
+    // Swallowing this silently once cost hours: a missing membership and a broken client
+    // both end up as `null`, and `null` is answered with a flat 403. Say which one it was.
+    if (error) {
+      const code = e && e.code ? e.code : 'sin codigo';
+      error(`No se pudo leer members/${userId} (code=${code}): ${e && e.message}`);
+    }
     return null;
   }
 }
 
-async function getCaller(req, tablesDB, users) {
+async function getCaller(req, tablesDB, users, error) {
   const userId = (req.headers && req.headers['x-appwrite-user-id']) || process.env.APPWRITE_FUNCTION_USER_ID;
   if (!userId) return null;
 
@@ -65,7 +71,7 @@ async function getCaller(req, tablesDB, users) {
     name = null;
   }
 
-  const role = await memberRole(tablesDB, userId);
+  const role = await memberRole(tablesDB, userId, error);
   return { userId, email, name, role };
 }
 
@@ -181,10 +187,21 @@ async function listUsers(tablesDB) {
 }
 
 module.exports = async ({ req, res, log, error }) => {
+  // The dynamic API key reaches a function TWO different ways, and only one of them
+  // works at execution time: the env var `APPWRITE_FUNCTION_API_KEY` exists during the
+  // BUILD, while during EXECUTION the key arrives in the `x-appwrite-key` header. Reading
+  // only the env var leaves the client with no credential, so every read fails, and
+  // `memberRole` turns that into `null` — a permanent 403 for everyone.
+  const dynamicKey =
+    (req.headers && req.headers['x-appwrite-key']) || process.env.APPWRITE_FUNCTION_API_KEY || '';
+  if (!dynamicKey) {
+    error('No dynamic API key: neither the x-appwrite-key header nor APPWRITE_FUNCTION_API_KEY');
+  }
+
   const client = new sdk.Client()
     .setEndpoint(process.env.APPWRITE_FUNCTION_ENDPOINT || 'https://fra.cloud.appwrite.io/v1')
     .setProject(process.env.APPWRITE_FUNCTION_PROJECT_ID || '6aa332f40001072d0747')
-    .setKey(process.env.APPWRITE_FUNCTION_API_KEY || '');
+    .setKey(dynamicKey);
 
   const tablesDB = new sdk.TablesDB(client);
   const users = new sdk.Users(client);
@@ -192,7 +209,7 @@ module.exports = async ({ req, res, log, error }) => {
   const params = parseBody(req);
   const action = params.action;
 
-  const caller = await getCaller(req, tablesDB, users);
+  const caller = await getCaller(req, tablesDB, users, error);
   if (!caller || caller.role !== 'SUPERUSER') {
     return res.json({ ok: false, error: 'Acceso denegado: se requiere sesión de superusuario' }, 403);
   }
