@@ -8,9 +8,13 @@ import com.moneycounter.access.AppAccessState
 import com.moneycounter.access.MembershipRepository
 import com.moneycounter.access.UserProfileData
 import com.moneycounter.access.toAppAccessState
+import com.moneycounter.appwrite.CloudOrgRepository
 import com.moneycounter.auth.AuthRepository
+import com.moneycounter.domain.Branch
 import com.moneycounter.domain.Member
+import com.moneycounter.domain.Organization
 import com.moneycounter.domain.Role
+import com.moneycounter.repository.TenantRepository
 import com.moneycounter.signup.PasswordGenerator
 import com.moneycounter.signup.SignupRepository
 import com.moneycounter.signup.SignupRequest
@@ -24,7 +28,9 @@ class AuthViewModel(
     private val authRepository: AuthRepository,
     private val accessRepository: AccessRepository,
     private val membershipRepository: MembershipRepository,
-    private val signupRepository: SignupRepository? = null
+    private val signupRepository: SignupRepository? = null,
+    private val tenantRepository: TenantRepository? = null,
+    private val cloudOrgRepository: CloudOrgRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<AppAccessState>(AppAccessState.Loading)
@@ -59,6 +65,7 @@ class AuthViewModel(
 
     private var profileJob: Job? = null
     private var memberJob: Job? = null
+    private var seedInProgress = false
 
     init {
         checkAccess()
@@ -122,6 +129,54 @@ class AuthViewModel(
         memberJob = viewModelScope.launch {
             membershipRepository.observeMember(uid).collect { member ->
                 _member.value = member
+                seedCloudTenantIfNeeded(uid, member)
+            }
+        }
+    }
+
+    /**
+     * Plan 028: once a signed-in user's membership row shows up (web admin
+     * approval) with a cloud orgId the local JSON tenant config doesn't have,
+     * seed the org/branches from Appwrite. Failures are never fatal and get
+     * retried on the next poll; the local config is never overwritten for a
+     * different org.
+     */
+    private fun seedCloudTenantIfNeeded(uid: String, member: Member?) {
+        val tenantRepository = tenantRepository ?: return
+        val cloudOrgRepository = cloudOrgRepository ?: return
+        val orgId = member?.orgId?.takeIf { it.isNotBlank() } ?: return
+        if (tenantRepository.loadOrganization()?.id == orgId) return
+        if (seedInProgress) return
+        seedInProgress = true
+        viewModelScope.launch {
+            try {
+                val orgInfo = cloudOrgRepository.getOrg(orgId) ?: return@launch
+                val branches = cloudOrgRepository.getBranches(orgId)
+                tenantRepository.seedFromCloud(
+                    Organization(
+                        id = orgInfo.id,
+                        name = orgInfo.name,
+                        ownerUid = uid,
+                        whatsappNumber = orgInfo.whatsappNumber,
+                        createdAt = orgInfo.createdAt,
+                        active = true
+                    ),
+                    branches.map {
+                        Branch(
+                            id = it.id,
+                            orgId = it.orgId,
+                            name = it.name,
+                            createdAt = it.createdAt,
+                            active = true
+                        )
+                    }
+                )
+            } catch (e: Exception) {
+                // Offline-tolerant: stay unseeded and retry on the next poll.
+                // Logging is intentionally omitted (android.util.Log is not mockable
+                // in the JVM unit tests; matches the appwrite repo catch style).
+            } finally {
+                seedInProgress = false
             }
         }
     }

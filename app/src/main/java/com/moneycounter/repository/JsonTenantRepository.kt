@@ -132,6 +132,32 @@ object TenantJson {
             )
         return org to branch
     }
+
+    /**
+     * Idempotent cloud-merge decision (plan 028): [cloudOrg]/[cloudBranches]
+     * win only when the local config has no real org yet. The bootstrap default
+     * org (DEFAULT_ORG_ID) is a local-only placeholder and is superseded by the
+     * cloud org; an existing different org and its branches are never overwritten.
+     * Returns the org/branches to persist.
+     */
+    fun mergeCloudSeed(
+        existingOrg: Organization?,
+        existingBranches: List<Branch>,
+        cloudOrg: Organization,
+        cloudBranches: List<Branch>
+    ): Pair<Organization, List<Branch>> {
+        val branchesOwned = cloudBranches.filter { it.orgId == cloudOrg.id }
+        if (existingOrg == null || existingOrg.id == DEFAULT_ORG_ID) {
+            return cloudOrg to branchesOwned
+        }
+        if (existingOrg.id == cloudOrg.id) {
+            val missing = branchesOwned.filter { cloudBranch ->
+                existingBranches.none { it.id == cloudBranch.id }
+            }
+            return existingOrg to (existingBranches + missing)
+        }
+        return existingOrg to existingBranches
+    }
 }
 
 class JsonTenantRepository(private val context: Context) : TenantRepository {

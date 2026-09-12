@@ -5,10 +5,17 @@ import com.moneycounter.access.AccessStatus
 import com.moneycounter.access.AppAccessState
 import com.moneycounter.access.MembershipRepository
 import com.moneycounter.access.UserProfileData
+import com.moneycounter.appwrite.BranchInfo
+import com.moneycounter.appwrite.CloudOrgRepository
+import com.moneycounter.appwrite.OrgInfo
+import com.moneycounter.appwrite.TenantCloudFields
 import com.moneycounter.auth.AuthRepository
 import com.moneycounter.auth.AuthUser
+import com.moneycounter.domain.Branch
 import com.moneycounter.domain.Member
+import com.moneycounter.domain.Organization
 import com.moneycounter.domain.Role
+import com.moneycounter.repository.TenantRepository
 import com.moneycounter.signup.SignupRepository
 import com.moneycounter.signup.SignupRequest
 import kotlinx.coroutines.Dispatchers
@@ -108,6 +115,45 @@ class FakeSignupRepository(
     }
 
     override suspend fun readMustChangePassword(uid: String): Boolean = mustChangePassword
+}
+
+class FakeTenantRepository(
+    var org: Organization? = null,
+    var branches: MutableList<Branch> = mutableListOf()
+) : TenantRepository {
+    val seeds: MutableList<Pair<Organization, List<Branch>>> = mutableListOf()
+
+    override fun loadOrganization(): Organization? = org
+
+    override fun loadBranches(): List<Branch> = branches
+
+    override fun saveOrganization(organization: Organization) {
+        org = organization
+    }
+
+    override fun saveBranches(branches: List<Branch>) {
+        this.branches = branches.toMutableList()
+    }
+
+    override fun seedFromCloud(org: Organization, branches: List<Branch>) {
+        seeds.add(org to branches)
+    }
+}
+
+class FakeCloudOrgRepository(
+    var org: OrgInfo? = null,
+    var branches: List<BranchInfo> = emptyList(),
+    var failGetOrg: Boolean = false
+) : CloudOrgRepository {
+    var getOrgCalls = 0
+
+    override suspend fun getOrg(orgId: String): OrgInfo? {
+        getOrgCalls++
+        if (failGetOrg) throw RuntimeException("network down")
+        return org
+    }
+
+    override suspend fun getBranches(orgId: String): List<BranchInfo> = branches
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -539,5 +585,133 @@ class AuthViewModelTest {
         assertEquals(0, fakeAuth.changePasswordCalls)
         assertTrue(fakeSignup.flagUpdates.isEmpty())
         assertTrue(viewModel.uiState.value is AppAccessState.PasswordChangeRequired)
+    }
+
+    @Test
+    fun approvedMember_seedsCloudOrgWhenLocalConfigMissingIt() = runTest {
+        val testUser = AuthUser("uid123", "user@test.com", "Pedro")
+        val fakeAuth = FakeAuthRepository(user = testUser)
+        val fakeAccess = FakeAccessRepository(accessStatusToReturn = AccessStatus.APPROVED)
+        val members = MutableStateFlow<Member?>(
+            Member("uid123", "org-cloud", Role.OWNER, listOf("branch-cloud"))
+        )
+        val fakeMembership = FakeMembershipRepository(memberFlow = members)
+        val fakeTenant = FakeTenantRepository()
+        val now = 1750000000000L
+        val fakeCloud = FakeCloudOrgRepository(
+            org = OrgInfo("org-cloud", "Mi Tienda", "+53 555", TenantCloudFields.STATUS_ACTIVE, now),
+            branches = listOf(
+                BranchInfo("branch-cloud", "org-cloud", "Principal", TenantCloudFields.STATUS_ACTIVE, now)
+            )
+        )
+
+        val viewModel = AuthViewModel(fakeAuth, fakeAccess, fakeMembership, tenantRepository = fakeTenant, cloudOrgRepository = fakeCloud)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(1, fakeTenant.seeds.size)
+        val (seededOrg, seededBranches) = fakeTenant.seeds.first()
+        assertEquals("org-cloud", seededOrg.id)
+        assertEquals("Mi Tienda", seededOrg.name)
+        assertEquals("uid123", seededOrg.ownerUid)
+        assertEquals("+53 555", seededOrg.whatsappNumber)
+        assertEquals(now, seededOrg.createdAt)
+        assertEquals(listOf("branch-cloud"), seededBranches.map { it.id })
+        assertEquals("org-cloud", seededBranches.first().orgId)
+    }
+
+    @Test
+    fun noMemberDoc_doesNotSeedCloudOrg() = runTest {
+        val testUser = AuthUser("uid123", "user@test.com", "Pedro")
+        val fakeAuth = FakeAuthRepository(user = testUser)
+        val fakeAccess = FakeAccessRepository(accessStatusToReturn = AccessStatus.APPROVED)
+        val fakeTenant = FakeTenantRepository()
+        val fakeCloud = FakeCloudOrgRepository(
+            org = OrgInfo("org-cloud", "Mi Tienda", null, TenantCloudFields.STATUS_ACTIVE, 1L)
+        )
+
+        val viewModel = AuthViewModel(
+            fakeAuth, fakeAccess, FakeMembershipRepository(),
+            tenantRepository = fakeTenant, cloudOrgRepository = fakeCloud
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(0, fakeTenant.seeds.size)
+        assertNull(fakeTenant.org)
+        assertEquals(0, fakeCloud.getOrgCalls)
+    }
+
+    @Test
+    fun alreadySeededOrg_doesNotSeedAgain() = runTest {
+        val testUser = AuthUser("uid123", "user@test.com", "Pedro")
+        val fakeAuth = FakeAuthRepository(user = testUser)
+        val fakeAccess = FakeAccessRepository(accessStatusToReturn = AccessStatus.APPROVED)
+        val members = MutableStateFlow<Member?>(
+            Member("uid123", "org-cloud", Role.SELLER, listOf("branch-cloud"))
+        )
+        val fakeMembership = FakeMembershipRepository(memberFlow = members)
+        val fakeTenant = FakeTenantRepository(
+            org = Organization("org-cloud", "Mi Tienda", "uid123", createdAt = 1L)
+        )
+        val fakeCloud = FakeCloudOrgRepository(
+            org = OrgInfo("org-cloud", "Mi Tienda", null, TenantCloudFields.STATUS_ACTIVE, 1L)
+        )
+
+        val viewModel = AuthViewModel(fakeAuth, fakeAccess, fakeMembership, tenantRepository = fakeTenant, cloudOrgRepository = fakeCloud)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(0, fakeTenant.seeds.size)
+        assertEquals(0, fakeCloud.getOrgCalls)
+        assertEquals("org-cloud", fakeTenant.org?.id)
+    }
+
+    @Test
+    fun suspendedOrMissingCloudOrg_doesNotSeed() = runTest {
+        val testUser = AuthUser("uid123", "user@test.com", "Pedro")
+        val fakeAuth = FakeAuthRepository(user = testUser)
+        val fakeAccess = FakeAccessRepository(accessStatusToReturn = AccessStatus.APPROVED)
+        val members = MutableStateFlow<Member?>(
+            Member("uid123", "org-cloud", Role.SELLER, listOf("branch-cloud"))
+        )
+        val fakeMembership = FakeMembershipRepository(memberFlow = members)
+        val fakeTenant = FakeTenantRepository()
+        val fakeCloud = FakeCloudOrgRepository(org = null)
+
+        val viewModel = AuthViewModel(fakeAuth, fakeAccess, fakeMembership, tenantRepository = fakeTenant, cloudOrgRepository = fakeCloud)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(1, fakeCloud.getOrgCalls)
+        assertEquals(0, fakeTenant.seeds.size)
+        assertNull(fakeTenant.org)
+    }
+
+    @Test
+    fun cloudReadFailure_leavesLocalUntouchedAndRetriesOnNextPoll() = runTest {
+        val testUser = AuthUser("uid123", "user@test.com", "Pedro")
+        val fakeAuth = FakeAuthRepository(user = testUser)
+        val fakeAccess = FakeAccessRepository(accessStatusToReturn = AccessStatus.APPROVED)
+        val members = MutableStateFlow<Member?>(
+            Member("uid123", "org-cloud", Role.OWNER, listOf("branch-cloud"))
+        )
+        val fakeMembership = FakeMembershipRepository(memberFlow = members)
+        val fakeTenant = FakeTenantRepository()
+        val fakeCloud = FakeCloudOrgRepository(
+            org = OrgInfo("org-cloud", "Mi Tienda", null, TenantCloudFields.STATUS_ACTIVE, 1L),
+            failGetOrg = true
+        )
+
+        val viewModel = AuthViewModel(fakeAuth, fakeAccess, fakeMembership, tenantRepository = fakeTenant, cloudOrgRepository = fakeCloud)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(0, fakeTenant.seeds.size)
+        assertNull(fakeTenant.org)
+
+        fakeCloud.failGetOrg = false
+        members.value = null
+        testDispatcher.scheduler.advanceUntilIdle()
+        members.value = Member("uid123", "org-cloud", Role.OWNER, listOf("branch-cloud"))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(1, fakeTenant.seeds.size)
+        assertEquals("org-cloud", fakeTenant.seeds.first().first.id)
     }
 }

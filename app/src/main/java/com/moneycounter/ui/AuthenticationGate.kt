@@ -33,12 +33,14 @@ import com.moneycounter.access.UserProfileData
 import com.moneycounter.appwrite.Appwrite
 import com.moneycounter.appwrite.AppwriteAccessRepository
 import com.moneycounter.appwrite.AppwriteAuthRepository
+import com.moneycounter.appwrite.AppwriteCloudOrgRepository
 import com.moneycounter.appwrite.AppwriteHealth
 import com.moneycounter.appwrite.AppwriteMembershipRepository
 import com.moneycounter.appwrite.AppwriteSignupRepository
 import com.moneycounter.auth.AuthRepository
 import com.moneycounter.domain.Member
 import com.moneycounter.domain.Role
+import com.moneycounter.repository.JsonTenantRepository
 import com.moneycounter.ui.screens.AccessRequiredScreen
 import com.moneycounter.ui.screens.ChangePasswordScreen
 import com.moneycounter.ui.screens.LoginScreen
@@ -52,7 +54,14 @@ private class AuthViewModelFactory(private val context: Context) : ViewModelProv
         val accessRepository: AccessRepository = AppwriteAccessRepository()
         val membershipRepository: MembershipRepository = AppwriteMembershipRepository()
         @Suppress("UNCHECKED_CAST")
-        return AuthViewModel(authRepository, accessRepository, membershipRepository, AppwriteSignupRepository()) as T
+        return AuthViewModel(
+            authRepository,
+            accessRepository,
+            membershipRepository,
+            AppwriteSignupRepository(),
+            tenantRepository = JsonTenantRepository(context),
+            cloudOrgRepository = AppwriteCloudOrgRepository()
+        ) as T
     }
 }
 

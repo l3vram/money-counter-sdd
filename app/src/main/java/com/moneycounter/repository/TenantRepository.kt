@@ -27,6 +27,21 @@ interface TenantRepository {
         if (existingBranches.isEmpty()) saveBranches(listOf(seeded.second))
         return seeded
     }
+
+    /**
+     * Idempotent cloud seed (plan 028): merges an approved member's cloud
+     * org/branches into the local config without overwriting existing data.
+     * Default impl works for any repository (io-free; reuse the pure
+     * [TenantJson.mergeCloudSeed] decision).
+     */
+    fun seedFromCloud(org: Organization, branches: List<Branch>) {
+        val existingOrg = loadOrganization()
+        val existingBranches = loadBranches()
+        val (resultOrg, resultBranches) =
+            TenantJson.mergeCloudSeed(existingOrg, existingBranches, org, branches)
+        if (resultOrg != existingOrg) saveOrganization(resultOrg)
+        if (resultBranches != existingBranches) saveBranches(resultBranches)
+    }
 }
 
 /** Membership wins: a non-blank cloud-provided orgId overrides the local bootstrap. */

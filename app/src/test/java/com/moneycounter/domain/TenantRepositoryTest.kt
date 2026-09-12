@@ -121,4 +121,76 @@ class TenantRepositoryTest {
         val (org2, _) = TenantJson.ensureSeeded(null, emptyList(), "   ", now = 1L)
         assertEquals(TenantJson.LOCAL_OWNER_FALLBACK, org2.ownerUid)
     }
+
+    private fun cloudOrg(id: String = "org-cloud", name: String = "Mi Tienda") =
+        Organization(id, name, "user-1", whatsappNumber = "+53 555", createdAt = 1000L)
+
+    private fun cloudBranches(orgId: String) = listOf(
+        Branch("b1", orgId, "Principal", createdAt = 1001L),
+        Branch("b2", orgId, "Centro", createdAt = 1002L)
+    )
+
+    @Test
+    fun `cloud seed adopts cloud org and branches on empty local state`() {
+        val (org, branches) = TenantJson.mergeCloudSeed(null, emptyList(), cloudOrg(), cloudBranches("org-cloud"))
+        assertEquals("org-cloud", org.id)
+        assertEquals("Mi Tienda", org.name)
+        assertEquals("+53 555", org.whatsappNumber)
+        assertEquals(1000L, org.createdAt)
+        assertEquals(listOf("b1", "b2"), branches.map { it.id })
+    }
+
+    @Test
+    fun `cloud seed is idempotent on second run`() {
+        val org = cloudOrg()
+        val branches = cloudBranches("org-cloud")
+        val (firstOrg, firstBranches) = TenantJson.mergeCloudSeed(null, emptyList(), org, branches)
+        val (secondOrg, secondBranches) =
+            TenantJson.mergeCloudSeed(firstOrg, firstBranches, org, branches)
+        assertEquals(firstOrg, secondOrg)
+        assertEquals(firstBranches, secondBranches)
+    }
+
+    @Test
+    fun `cloud seed keeps existing org record when reseeded with same org`() {
+        val existingOrg = Organization("org-cloud", "Nombre Original", "user-1", createdAt = 7L)
+        val existingBranches = listOf(Branch("b1", "org-cloud", "Principal", createdAt = 8L))
+        val (org, branches) =
+            TenantJson.mergeCloudSeed(existingOrg, existingBranches, cloudOrg(), cloudBranches("org-cloud"))
+        assertEquals("Nombre Original", org.name)
+        assertEquals(7L, org.createdAt)
+        assertEquals(listOf("b1", "b2"), branches.map { it.id })
+        assertEquals(8L, branches.first().createdAt)
+    }
+
+    @Test
+    fun `cloud seed never overwrites a different existing org`() {
+        val existingOrg = Organization("org-real", "Tienda Real", "user-1", createdAt = 5L)
+        val existingBranches = listOf(Branch("rb1", "org-real", "Sucursal", createdAt = 6L))
+        val (org, branches) = TenantJson.mergeCloudSeed(
+            existingOrg, existingBranches, cloudOrg(), cloudBranches("org-cloud")
+        )
+        assertEquals(existingOrg, org)
+        assertEquals(existingBranches, branches)
+    }
+
+    @Test
+    fun `cloud seed supersedes the default bootstrap org placeholder`() {
+        val bootstrapOrg = Organization(TenantJson.DEFAULT_ORG_ID, TenantJson.DEFAULT_ORG_NAME, "local-owner", createdAt = 1L)
+        val bootstrapBranches = listOf(Branch(TenantJson.DEFAULT_BRANCH_ID, TenantJson.DEFAULT_ORG_ID, TenantJson.DEFAULT_BRANCH_NAME, createdAt = 2L))
+        val (org, branches) =
+            TenantJson.mergeCloudSeed(bootstrapOrg, bootstrapBranches, cloudOrg(), cloudBranches("org-cloud"))
+        assertEquals("org-cloud", org.id)
+        assertEquals("b1", branches.first().id)
+        assertTrue(branches.none { it.id == TenantJson.DEFAULT_BRANCH_ID })
+    }
+
+    @Test
+    fun `cloud seed ignores branches that belong to another org`() {
+        val foreignBranch = Branch("b9", "other-org", "Otra", createdAt = 9L)
+        val (org, branches) =
+            TenantJson.mergeCloudSeed(null, emptyList(), cloudOrg(), cloudBranches("org-cloud") + foreignBranch)
+        assertEquals("org-cloud", org.id)
+        assertTrue(branches.none { it.id == "b9" })
+    }
 }
