@@ -110,7 +110,8 @@ crea una fila ilegible → 404 → permisos totales para ese usuario.
 | Archivo | Cambio | Estado |
 |---|---|---|
 | `webadmin/function/src/index.js` (~línea 130) | `approveSignup` escribe la fila `members` con `permissions: [sdk.Permission.read(sdk.Role.user(signupId))]` | **necesario para que el alta funcione**; sin desplegar |
-| `webadmin/app/src/api.ts` (`login()`) | `deleteSession('current')` en try/catch antes de crear sesión | arregla el error `Creation of a session is prohibited when a session is active` |
+| `webadmin/app/src/api.ts` (`login()`) | `deleteSession('current')` en try/catch antes de crear sesión | arregla `Creation of a session is prohibited when a session is active` |
+| `webadmin/app/src/api.ts` (`callFunction()`) | agrega `X-Appwrite-Project` y cambia `Authorization: Bearer` por `X-Appwrite-JWT` | arregla el `Failed to fetch`; **sin esto el panel no puede llamar a la Function** |
 | `plans/033-no-membership-no-access.md` | plan nuevo, P0, 7 pasos | TODO |
 | `plans/README.md` | fila del 033, waves, decisiones, y los cambios de base ya aplicados | — |
 | `docs/superuser-bootstrap.md` | actualizado de "bloqueado" a "sembrado" | — |
@@ -123,11 +124,31 @@ intentó entrar **antes** de que existiera la fila SUPERUSER, Appwrite creó la 
 error. Atajo sin desplegar: recarga dura — `App.tsx:33` llama a `whoami()` al montar con la
 sesión existente, y ahora que la fila existe debería entrar derecho.
 
-**Pendiente sin diagnosticar (2026-09-12):** después de limpiar los datos del sitio, el login
-pasó a dar **`Failed to fetch`**. No está investigado. Sospechas a verificar por orden:
-plataforma Web del proyecto / CORS (está registrada `web-admin-site` con el hostname del site,
-**falta `localhost`**), un bloqueador en el navegador, o el endpoint (`fra.cloud.appwrite.io`
-es el correcto para este proyecto, región `fra`).
+### El `Failed to fetch`, diagnosticado y arreglado (2026-09-12)
+
+Segundo error, distinto del anterior y con la misma raíz: el panel no podía llamar a la
+Function. `callFunction` en `api.ts` esquiva el SDK y hace un `fetch` a mano, pero le faltaban
+los dos headers que el SDK agrega solo:
+
+- **`X-Appwrite-Project` no es opcional.** Sin él Appwrite no sabe a qué proyecto pertenece la
+  petición, así que no puede encontrar la plataforma Web registrada y responde
+  `403 general_unknown_origin` con el mensaje *"Invalid Origin. Register your new client…"*.
+- Ese 403 **no lleva `Access-Control-Allow-Origin`**, así que el navegador bloquea la respuesta
+  y `fetch` falla con un TypeError: el **`Failed to fetch`** opaco que se veía en pantalla.
+- Y un JWT de proyecto viaja en **`X-Appwrite-JWT`**, no en `Authorization: Bearer`.
+
+Verificado con curl contra el endpoint real: sin el header → 403 sin CORS; con
+`X-Appwrite-Project` + `X-Appwrite-JWT` → llega a validar el JWT (401 con un token falso, que
+es lo correcto). La plataforma Web `web-admin-site` estaba bien registrada desde el principio:
+el mensaje de "registrá tu cliente" era una pista falsa.
+
+**Ojo para el futuro:** cualquier llamada a la API de Appwrite que no pase por el SDK necesita
+`X-Appwrite-Project`, y su ausencia se disfraza de problema de CORS. Lo ideal sería usar
+`Functions.createExecution()` del SDK en vez del `fetch` a mano; se dejó el `fetch` para no
+ampliar el cambio.
+
+Sigue pendiente, menor: **falta registrar `localhost`** como plataforma Web para poder
+desarrollar el panel en local.
 
 ---
 
@@ -155,7 +176,7 @@ se cablean los dos recursos por MCP (`installationId`, `providerRepositoryId`,
 | 1 | **Mergear el webadmin a `main`** | El deploy apunta a `main`; sin esto el auto-deploy no trae nada |
 | 2 | **Conectar la GitHub App** (paso manual del dueño) y cablear Function + Site | Sin esto sigue el tarball a mano |
 | 3 | **Desplegar la Function** con el fix del permiso | Sin esto, aprobar a alguien le da permisos totales (§5) |
-| 4 | **Diagnosticar el `Failed to fetch`** del login | Bloquea todo el uso del panel |
+| 4 | **Desplegar el sitio** con los dos fixes de `api.ts` | Sin esto el panel no puede llamar a la Function (el `Failed to fetch` ya está diagnosticado y arreglado en el código) |
 | 5 | **Gate B del plan 030**: probar el APK debug y mergear | 033 y 032 salen de esa rama; cada plan apilado encima es un rebase peor |
 | 6 | **Plan 033** (P0) — fail-closed + cerrar `users`/`orgs`/`branches` | La mitad de base ya está aplicada; el código tiene que alcanzarla |
 | 7 | **Plan 032** — interfaces de repositorio `suspend` | Habilita cualquier implementación de red (paso 2 del diseño F2) |

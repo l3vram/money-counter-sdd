@@ -59,11 +59,18 @@ async function callFunction<T>(action: string, params: Record<string, unknown> =
     throw new Error('Configuración inválida: falta VITE_ADMIN_FUNCTION_ID');
   }
   const jwt = await getJwt();
+  // This call bypasses the SDK, so it must carry the two headers the SDK would add.
+  // `X-Appwrite-Project` is not optional: without it Appwrite cannot tell which project
+  // the request belongs to, so it cannot match the registered Web platform and answers
+  // 403 `general_unknown_origin` — *without* an `Access-Control-Allow-Origin` header, which
+  // the browser reports as an opaque "Failed to fetch". And a project JWT travels in
+  // `X-Appwrite-JWT`, not in `Authorization: Bearer`.
   const response = await fetch(`${ENDPOINT}/functions/${FUNCTION_ID}/executions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${jwt}`,
+      'X-Appwrite-Project': PROJECT_ID,
+      'X-Appwrite-JWT': jwt,
     },
     body: JSON.stringify({ action, ...params }),
   });
