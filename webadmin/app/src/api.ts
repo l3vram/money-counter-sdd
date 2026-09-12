@@ -1,4 +1,4 @@
-import { Account, Client } from 'appwrite';
+import { Account, Client, ExecutionMethod, Functions } from 'appwrite';
 import type {
   BranchRow,
   ListResult,
@@ -18,6 +18,11 @@ export const FUNCTION_ID: string = import.meta.env.VITE_ADMIN_FUNCTION_ID ?? '';
 const client = new Client().setEndpoint(ENDPOINT).setProject(PROJECT_ID);
 const account = new Account(client);
 
+// A client of its own for function calls: `setJWT` is per-client, and the session client
+// must not start sending a JWT on every `account` call.
+const functionClient = new Client().setEndpoint(ENDPOINT).setProject(PROJECT_ID);
+const functions = new Functions(functionClient);
+
 let jwtPromise: Promise<string> | null = null;
 
 function getJwt(): Promise<string> {
@@ -31,14 +36,6 @@ function getJwt(): Promise<string> {
       });
   }
   return jwtPromise;
-}
-
-interface ExecutionResponse {
-  responseStatusCode?: number;
-  responseBody?: string;
-  statusCode?: number;
-  stderr?: string;
-  message?: string;
 }
 
 function parseResponseBody(body: string | undefined): { ok: boolean; data?: unknown; error?: string } {
@@ -58,36 +55,24 @@ async function callFunction<T>(action: string, params: Record<string, unknown> =
   if (!FUNCTION_ID) {
     throw new Error('Configuración inválida: falta VITE_ADMIN_FUNCTION_ID');
   }
+
+  // Go through the SDK, never a hand-rolled fetch. Two bugs came out of doing it by hand:
+  // the missing `X-Appwrite-Project` header (which Appwrite reports as a bogus CORS/origin
+  // error), and the execution payload shape — the action JSON must be wrapped as the
+  // `body` field of the create-execution request, not sent as the request itself, or the
+  // function receives an empty body and answers "Acción desconocida: undefined".
   const jwt = await getJwt();
-  // This call bypasses the SDK, so it must carry the two headers the SDK would add.
-  // `X-Appwrite-Project` is not optional: without it Appwrite cannot tell which project
-  // the request belongs to, so it cannot match the registered Web platform and answers
-  // 403 `general_unknown_origin` — *without* an `Access-Control-Allow-Origin` header, which
-  // the browser reports as an opaque "Failed to fetch". And a project JWT travels in
-  // `X-Appwrite-JWT`, not in `Authorization: Bearer`.
-  const response = await fetch(`${ENDPOINT}/functions/${FUNCTION_ID}/executions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Appwrite-Project': PROJECT_ID,
-      'X-Appwrite-JWT': jwt,
-    },
+  functionClient.setJWT(jwt);
+
+  const execution = await functions.createExecution({
+    functionId: FUNCTION_ID,
     body: JSON.stringify({ action, ...params }),
+    async: false,
+    xpath: '/',
+    method: ExecutionMethod.POST,
   });
 
-  let execution: ExecutionResponse;
-  try {
-    execution = (await response.json()) as ExecutionResponse;
-  } catch (e) {
-    throw new Error(`Error de conexión con la función (HTTP ${response.status})`);
-  }
-
-  if (!response.ok) {
-    const message = execution.message ?? execution.stderr ?? `HTTP ${response.status}`;
-    throw new Error(message);
-  }
-
-  const status = execution.responseStatusCode ?? response.status;
+  const status = execution.responseStatusCode;
   const payload = parseResponseBody(execution.responseBody);
   if (status < 200 || status >= 300) {
     throw new Error(payload.error ?? `HTTP ${status}`);

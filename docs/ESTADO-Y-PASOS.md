@@ -113,7 +113,7 @@ como medida puntual hasta que Git quede conectado:
 | Recurso | Deployment | Estado |
 |---|---|---|
 | Function `admin` | `6aa5cb786166e18d64f0` | `ready`, **activa** — permiso de `members` + la key dinámica del header (ver §6ter) |
-| Site `admin-web` | `6aa5c40fcf23d03f5bc7` | `ready` y activa, sirviendo en `6aa5c4103a466b90b992.appwrite.network` (ver abajo: la URL vieja NO se actualiza) |
+| Site `admin-web` | `6aa5cfc07e686a601b7c` | `ready` y activa, sirviendo en `6aa5cfc0db68c8605a81.appwrite.network` (ver abajo: la URL vieja NO se actualiza) |
 
 Fuente: release `webadmin-deploy-2026-09-12b` en `l3vram/money-counter-sdd`, assets
 `admin-web.tar.gz` (24.643 B) y `admin-function.tar.gz` (4.781 B). Los `sourceSize` que
@@ -132,7 +132,8 @@ viejo para siempre.
 | URL | Sirve |
 |---|---|
 | `6aa4cb0a8f6a4c30a83f.appwrite.network` | deployment viejo — **la de todos los docs anteriores, ya no sirve** |
-| **`6aa5c4103a466b90b992.appwrite.network`** | **deployment nuevo, con los fixes — usar esta hoy** |
+| **`6aa5cfc0db68c8605a81.appwrite.network`** | **deployment actual (2026-09-12d) — usar esta hoy** |
+| `6aa5c4103a466b90b992.appwrite.network` | deployment 2026-09-12b, ya viejo |
 | `adm.elluiso.com` | sigue al deployment activo (ya se movió solo al nuevo), pero **sin DNS** |
 
 Se diagnostica con el header **`x-appwrite-deployment-id`** de la respuesta, que dice qué
@@ -229,6 +230,48 @@ que hace el panel sin la contraseña del usuario ni un navegador. Ojo con el pay
 una ejecución por REST el cuerpo va como `{"body":"<json como string>","method":"POST"}`, no
 como el JSON de la acción directamente.
 
+## 6quater. El tercer bug del mismo origen, y por qué el panel tarda ~4 s
+
+Con la key arreglada, el panel devolvía **"Acción desconocida: undefined"**. Misma raíz que
+los dos anteriores: `callFunction` armaba el REST a mano. Al crear una ejecución, el JSON de
+la acción **va envuelto en el campo `body`** de la petición (`{"body":"{\"action\":...}"}`),
+no como la petición misma. Mandándolo directo, Appwrite no encuentra `body`, la Function
+recibe el cuerpo vacío y `params.action` queda `undefined`.
+
+`callFunction` ahora usa **`Functions.createExecution()` del SDK**, con un cliente propio
+(`setJWT` es por cliente, y el cliente de sesión no debe empezar a mandar un JWT en cada
+llamada a `account`). Los tres bugs del panel salieron de esquivar el SDK: headers, forma del
+payload y manejo de la respuesta. **No armar peticiones a Appwrite a mano.**
+
+### Los ~4 segundos, medidos
+
+| | |
+|---|---|
+| Duración interna de la Function | **0,10 – 0,22 s** |
+| Round-trip completo de una ejecución | **0,87 – 1,16 s** |
+| RTT de una llamada normal a la API | ~0,25 s (el edge contesta a 8 ms; el origen está en Frankfurt) |
+| Arranque en frío de la Function | ~1,2 s la primera vez tras estar inactiva |
+
+O sea que **~85% del tiempo es plataforma, no código nuestro**: el salto al origen y el
+arranque sincrónico del contenedor. El login encadena cuatro viajes secuenciales
+(`deleteSession` → `createEmailPasswordSession` → `createJWT` → `createExecution`), y ahí
+salen los ~4 s.
+
+Las palancas reales, en orden de rendimiento:
+
+1. **Menos ejecuciones.** Cada acción cuesta ~1 s de plataforma. Si el Dashboard dispara
+   varias al entrar, juntarlas en una sola acción (un `bootstrap` que devuelva todo) convierte
+   N segundos en uno. Es la única mejora grande.
+2. **`listUsers` tiene un N+1**: hace un `getRow` de `signups` por cada usuario. Con 2
+   usuarios no se nota; con 50 va a doler. Se arregla con un `listRows` y un mapa.
+3. `getCaller` hace `users.get` y el `getRow` de `members` en serie; un `Promise.all` ahorra
+   un salto interno (~50 ms). Menor.
+4. Arranque en frío: no hay nada que hacer en el plan tier-0.
+5. Región: el origen está en Frankfurt. Acercarlo implicaría recrear el proyecto; no vale la
+   pena.
+
+Nada de esto está hecho: es diagnóstico, no plan.
+
 ## 7. Deploy: por qué se cambia a Git
 
 El proceso documentado en `webadmin/README.md` es frágil: empaquetar un tarball, subirlo a una
@@ -269,7 +312,7 @@ sucursales las crea `approveSignup` al aprobar un DUEÑO. El camino es el flujo 
 
 1. ✅ **Hecho y verificado por API**: `whoami` devuelve `role: "SUPERUSER"` y las acciones de
    lectura responden 200. Falta que Luis entre por el navegador
-   (**https://6aa5c4103a466b90b992.appwrite.network**) y cargue su WhatsApp desde
+   (**https://6aa5cfc0db68c8605a81.appwrite.network**) y cargue su WhatsApp desde
    Configuración (la fila `settings/app` existe con el campo vacío).
 2. Con la Function desplegada, desde la app se registra una cuenta nueva como **DUEÑO** con
    negocio y sucursales → crea el `signup` en PENDING.
@@ -297,7 +340,7 @@ vacía.
 | Database | `main` |
 | Tablas | `users`, `members`, `signups`, `orgs`, `branches`, `settings` |
 | Function | `admin` — node-18, entrypoint `src/index.js`, deployment `6aa4c515687c4d9d7361` (ready), `execute: ["users"]`, scopes `tables.*`/`rows.*`/`users.*` |
-| Site | `admin-web` → deployment activo en https://6aa5c4103a466b90b992.appwrite.network · estable pendiente `adm.elluiso.com` (sin DNS) |
+| Site | `admin-web` → deployment activo en https://6aa5cfc0db68c8605a81.appwrite.network · estable pendiente `adm.elluiso.com` (sin DNS) |
 | Repo | `github.com/l3vram/money-counter-sdd` |
 | SUPERUSER | `luisricoblanco2014@gmail.com`, uid `6aa352520004960be987` |
 | MCP Appwrite | `.mcp.json`, `https://mcp.appwrite.io/`, OAuth con scope **muy amplio** (`project:all`, `organization:all`) — aceptado conscientemente |
