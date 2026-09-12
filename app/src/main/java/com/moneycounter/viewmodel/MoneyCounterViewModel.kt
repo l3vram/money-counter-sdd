@@ -64,6 +64,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
+import java.math.RoundingMode
 import java.util.UUID
 
 data class MoneyCounterUiState(
@@ -545,7 +546,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         if (prices.values.all { it.unitPrice.signum() == 0 && it.surcharge.signum() == 0 }) return false
         val state = _uiState.value
 
-        val new = Product(generateProductId(state.products), cleanName, cleanUnit, stock.setScale(Money.SCALE), prices)
+        val new = Product(generateProductId(state.products), cleanName, cleanUnit, stock.setScale(Money.SCALE, RoundingMode.HALF_UP), prices)
         val newProducts = state.products + new
         val (finalProducts, newItems) = applyAddProductToStock(
             newProducts, state.stockItems, new.id, currentOrgId, currentBranchId
@@ -588,7 +589,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         val oldStock = oldProduct.stock
 
         val newProducts = state.products.map {
-            if (it.id == id) it.copy(name = cleanName, unit = cleanUnit, stock = stock.setScale(Money.SCALE), prices = prices) else it
+            if (it.id == id) it.copy(name = cleanName, unit = cleanUnit, stock = stock.setScale(Money.SCALE, RoundingMode.HALF_UP), prices = prices) else it
         }
         val (finalProducts, newItems) = applyEditProductToStock(
             newProducts, state.stockItems, id, currentOrgId, currentBranchId
@@ -1205,7 +1206,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             return products.map { product ->
                 val sold = soldByProduct[product.id] ?: BigDecimal.ZERO
                 if (sold.signum() <= 0) product
-                else product.copy(stock = product.stock.subtract(sold).setScale(Money.SCALE))
+                else product.copy(stock = product.stock.subtract(sold).setScale(Money.SCALE, RoundingMode.HALF_UP))
             }
         }
 
@@ -1219,7 +1220,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         ): List<Product> {
             return products.map { product ->
                 if (product.id != productId) product
-                else product.copy(stock = product.stock.subtract(quantity).setScale(Money.SCALE))
+                else product.copy(stock = product.stock.subtract(quantity).setScale(Money.SCALE, RoundingMode.HALF_UP))
             }
         }
 

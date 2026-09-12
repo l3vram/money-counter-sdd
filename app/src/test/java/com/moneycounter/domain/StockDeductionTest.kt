@@ -273,4 +273,23 @@ class StockDeductionTest {
         assertEquals(bd("8.00"), row(newItems, ORG_A, BRANCH_A, "p1")!!.quantity)
         assertEquals(bd("5.00"), row(newItems, ORG_B, BRANCH_B, "p2")!!.quantity)
     }
+
+    @Test
+    fun `sale of product with more than two decimals in stock does not throw and yields scale-two quantities in both stores`() {
+        val products = listOf(
+            Product(
+                "p1", "Name p1", "Lb", BigDecimal("10.555"),
+                mapOf("cup" to ProductPrice(BigDecimal("2.00"), BigDecimal("0.50")))
+            )
+        )
+        val (newProducts, newItems) = MoneyCounterViewModel.applySaleToStock(
+            products, emptyList(), listOf(sel("p1", "3")), ORG_A, BRANCH_A, now = 7L
+        )
+        assertEquals(2, newProducts.single().stock.scale())
+        assertEquals(bd("7.56"), newProducts.single().stock)
+        val seeded = row(newItems, ORG_A, BRANCH_A, "p1")
+        assertNotNull(seeded)
+        assertEquals(2, seeded!!.quantity.scale())
+        assertEquals(bd("7.56"), seeded.quantity)
+    }
 }
