@@ -89,7 +89,10 @@ fun MoneyCounterApp(
     member: Member?
 ) {
     val viewModel: MoneyCounterViewModel = viewModel()
-    LaunchedEffect(profile?.uid) {
+    // Keyed on the role too (plan 030): the membership resolves asynchronously,
+    // so an effect keyed only on the uid would never see the role that arrives
+    // later and the session would keep its unresolved permissions.
+    LaunchedEffect(profile?.uid, member?.role) {
         viewModel.setSellerContext(profile?.uid, profile?.displayName, member?.role)
     }
     var currentScreen by remember { mutableStateOf("counter") }
