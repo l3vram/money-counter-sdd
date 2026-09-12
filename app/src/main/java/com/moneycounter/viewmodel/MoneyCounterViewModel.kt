@@ -113,6 +113,15 @@ data class MoneyCounterUiState(
     val selectedBranchId: String? = null
 )
 
+/**
+ * Plan 030: a transient null role — membership not resolved yet, or a failed
+ * poll — must never widen permissions for a session that already knows its role.
+ * A null role resolves to [com.moneycounter.domain.DefaultPermissionService],
+ * which grants everything, so letting one overwrite a known role is a privilege
+ * escalation. Only an explicit sign-out resets the session.
+ */
+fun retainRole(incoming: Role?, current: Role?): Role? = incoming ?: current
+
 class MoneyCounterViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository: DenominationRepository = JsonDenominationRepository(application)
@@ -178,10 +187,12 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         sellerUid = uid.orEmpty()
         sellerName = name.orEmpty()
         memberOrgId = cloudOrgId?.takeIf { it.isNotBlank() }
-        currentRole = role
-        permissionService = DefaultPermissionService.forRole(role)
+        // Defense in depth: never let a transient null widen this session's permissions.
+        val effectiveRole = retainRole(role, currentRole)
+        currentRole = effectiveRole
+        permissionService = DefaultPermissionService.forRole(effectiveRole)
         uid?.takeIf { it.isNotBlank() }?.let { cleanUid ->
-            context = AppContext(cleanUid, role = role)
+            context = AppContext(cleanUid, role = effectiveRole)
         }
         refreshPermissions()
         resolveTenantContext()
