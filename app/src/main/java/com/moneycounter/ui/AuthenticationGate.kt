@@ -28,6 +28,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.moneycounter.access.AccessRepository
 import com.moneycounter.access.AccessStatus
 import com.moneycounter.access.AppAccessState
+import com.moneycounter.access.JsonMemberCacheRepository
 import com.moneycounter.access.MembershipRepository
 import com.moneycounter.access.UserProfileData
 import com.moneycounter.appwrite.Appwrite
@@ -60,7 +61,8 @@ private class AuthViewModelFactory(private val context: Context) : ViewModelProv
             membershipRepository,
             AppwriteSignupRepository(),
             tenantRepository = JsonTenantRepository(context),
-            cloudOrgRepository = AppwriteCloudOrgRepository()
+            cloudOrgRepository = AppwriteCloudOrgRepository(),
+            memberCacheRepository = JsonMemberCacheRepository(context)
         ) as T
     }
 }
