@@ -17,6 +17,7 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -40,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.moneycounter.R
@@ -58,6 +60,7 @@ fun LoginScreen(
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
     var checkingConnection by remember { mutableStateOf(false) }
     var connectionResult by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -148,7 +151,21 @@ fun LoginScreen(
                 label = { Text("Contraseña") },
                 singleLine = true,
                 enabled = !isLoggingIn,
-                visualTransformation = PasswordVisualTransformation(),
+                // Mismo ojo de mostrar/ocultar que la pantalla de cambio de contraseña: quien
+                // no tiene práctica escribiendo en el teléfono necesita ver lo que tipeó.
+                visualTransformation = if (passwordVisible) {
+                    VisualTransformation.None
+                } else {
+                    PasswordVisualTransformation()
+                },
+                trailingIcon = {
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Text(
+                            text = if (passwordVisible) "🙈" else "👁",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+                },
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Password,
                     imeAction = ImeAction.Done

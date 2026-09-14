@@ -554,6 +554,80 @@ class AuthViewModelTest {
     }
 
     @Test
+    fun changePassword_usesTheRememberedLoginPassword_withoutAskingForIt() = runTest {
+        // Nadie recuerda una contraseña generada minutos despues, asi que la pantalla ya no
+        // la pide: el ViewModel guarda en memoria la que se uso para entrar y la manda el.
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val fakeAuth = FakeAuthRepository(user = null)
+        val fakeAccess = FakeAccessRepository(accessStatusToReturn = AccessStatus.APPROVED)
+        val fakeSignup = FakeSignupRepository(mustChangePassword = true)
+        val viewModel = AuthViewModel(fakeAuth, fakeAccess, FakeMembershipRepository(), fakeSignup)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse("sin login previo no se conoce la actual", viewModel.knowsCurrentPassword.value)
+
+        fakeAuth.signInResult = Result.success(testUser)
+        viewModel.signInWithEmail("user@test.com", "temporal123")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue("tras entrar, se conoce", viewModel.knowsCurrentPassword.value)
+        assertTrue(viewModel.uiState.value is AppAccessState.PasswordChangeRequired)
+
+        // La UI manda la actual vacia: la recordada es la que tiene que llegar al repositorio.
+        viewModel.changePassword("", "miClaveNueva", "miClaveNueva")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("temporal123", fakeAuth.lastChangeCurrentPassword)
+        assertEquals("miClaveNueva", fakeAuth.lastChangeNewPassword)
+        assertTrue(viewModel.uiState.value is AppAccessState.Approved)
+    }
+
+    @Test
+    fun changePassword_withoutARememberedPassword_asksForTheCurrentOne() = runTest {
+        // App reabierta desde una sesion guardada: nunca se tipeo nada en esta corrida.
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val fakeAuth = FakeAuthRepository(user = testUser)
+        val fakeAccess = FakeAccessRepository(accessStatusToReturn = AccessStatus.APPROVED)
+        val fakeSignup = FakeSignupRepository(mustChangePassword = true)
+        val viewModel = AuthViewModel(fakeAuth, fakeAccess, FakeMembershipRepository(), fakeSignup)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(viewModel.knowsCurrentPassword.value)
+
+        viewModel.changePassword("", "miClaveNueva", "miClaveNueva")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(
+            "Escribe tu contraseña actual para poder cambiarla.",
+            viewModel.changePasswordError.value
+        )
+        assertEquals(0, fakeAuth.changePasswordCalls)
+        assertTrue(viewModel.uiState.value is AppAccessState.PasswordChangeRequired)
+    }
+
+    @Test
+    fun signOut_forgetsTheRememberedPassword() = runTest {
+        // Dispositivo compartido: el siguiente usuario no debe heredar nada.
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val fakeAuth = FakeAuthRepository(user = null, signInResult = Result.success(testUser))
+        val viewModel = AuthViewModel(
+            fakeAuth,
+            FakeAccessRepository(accessStatusToReturn = AccessStatus.APPROVED),
+            FakeMembershipRepository()
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.signInWithEmail("user@test.com", "temporal123")
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue(viewModel.knowsCurrentPassword.value)
+
+        viewModel.signOut()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(viewModel.knowsCurrentPassword.value)
+    }
+
+    @Test
     fun changePassword_mismatchConfirm_rejectedWithoutRepoCall() = runTest {
         val testUser = AuthUser("uid123", "user@test.com", "Test User")
         val fakeAuth = FakeAuthRepository(user = testUser)

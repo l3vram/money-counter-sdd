@@ -86,6 +86,7 @@ fun AuthenticationGate(
     val profile by viewModel.profile.collectAsState()
     val member by viewModel.member.collectAsState()
     val membershipResolved by viewModel.membershipResolved.collectAsState()
+    val knowsCurrentPassword by viewModel.knowsCurrentPassword.collectAsState()
 
     // Plan 033: being approved is not enough — the membership decides whether the app opens.
     val state = effectiveAccessState(rawState, member, membershipResolved)
@@ -120,6 +121,7 @@ fun AuthenticationGate(
         },
         isChangingPassword = isChangingPassword,
         changePasswordError = changePasswordError,
+        knowsCurrentPassword = knowsCurrentPassword,
         profile = profile,
         onLoadProfile = {
             viewModel.loadProfile()
@@ -146,6 +148,7 @@ fun AuthenticationGateContent(
     onChangePassword: (current: String, new: String, confirm: String) -> Unit,
     isChangingPassword: Boolean = false,
     changePasswordError: String? = null,
+    knowsCurrentPassword: Boolean = true,
     profile: UserProfileData?,
     onLoadProfile: () -> Unit,
     member: Member?,
@@ -197,6 +200,7 @@ fun AuthenticationGateContent(
             ChangePasswordScreen(
                 isChangingPassword = isChangingPassword,
                 errorMessage = changePasswordError,
+                knowsCurrentPassword = knowsCurrentPassword,
                 onChangePassword = onChangePassword
             )
         }

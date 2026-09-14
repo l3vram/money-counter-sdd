@@ -33,10 +33,10 @@ fun AssignmentPendingScreen(
     val title = if (panelOnly) "Cuenta de administración" else "Falta asignarte tu puesto"
     val body = if (panelOnly) {
         "Esta cuenta administra la plataforma desde el panel web y no opera la caja. " +
-            "Para vender, cobrar o ver inventario, iniciá sesión con una cuenta de negocio."
+            "Para vender, cobrar o ver inventario, inicia sesión con una cuenta de negocio."
     } else {
-        "Tu cuenta ya está aprobada, pero el administrador todavía no te asignó negocio, " +
-            "sucursal y rol. En cuanto lo haga, entrás sin hacer nada más."
+        "Tu cuenta ya está aprobada, pero el administrador todavía no te ha asignado negocio, " +
+            "sucursal y rol. En cuanto lo haga, entras sin hacer nada más."
     }
 
     Surface(

@@ -72,6 +72,25 @@ class AuthViewModel(
      * the membership arrives; with it, an unresolved membership shows the loading state, which
      * grants nothing either.
      */
+    /**
+     * The password used to sign in, held **in memory only** for this session and never
+     * persisted. It exists so the forced change does not have to ask for the temporary
+     * password the user just typed: nobody remembers a generated password minutes later, and
+     * asking again is the step where people got stuck. Cleared on sign-out and as soon as the
+     * change succeeds.
+     *
+     * Appwrite requires the old password to change a password on an account that has one, so
+     * this is what lets the screen ask only for the new one. It is not a credential store:
+     * if the app is reopened from a restored session without typing anything, this is null and
+     * the screen asks for it.
+     */
+    private var sessionPassword: String? = null
+
+    /** Whether the forced change can proceed without asking for the current password. */
+    val knowsCurrentPassword: StateFlow<Boolean>
+        get() = _knowsCurrentPassword.asStateFlow()
+    private val _knowsCurrentPassword = MutableStateFlow(false)
+
     private val _membershipResolved = MutableStateFlow(false)
     val membershipResolved: StateFlow<Boolean> = _membershipResolved.asStateFlow()
 
@@ -226,6 +245,8 @@ class AuthViewModel(
             _isLoggingIn.value = false
             result.fold(
                 onSuccess = {
+                    sessionPassword = password
+                    _knowsCurrentPassword.value = true
                     checkAccess()
                 },
                 onFailure = { error ->
@@ -243,6 +264,8 @@ class AuthViewModel(
         _profile.value = null
         _member.value = null
         _membershipResolved.value = false
+        sessionPassword = null
+        _knowsCurrentPassword.value = false
         // Shared device: never let the next user inherit this session's role.
         memberCacheRepository?.clear()
         viewModelScope.launch {
@@ -251,9 +274,19 @@ class AuthViewModel(
         }
     }
 
+    /**
+     * @param current only used when [knowsCurrentPassword] is false — the app was reopened from
+     *   a restored session, so the password was never typed on this run. Normally the screen
+     *   leaves it blank and the remembered one is used.
+     */
     fun changePassword(current: String, new: String, confirm: String) {
         val state = _uiState.value
         val user = (state as? AppAccessState.PasswordChangeRequired)?.user ?: return
+        val effectiveCurrent = sessionPassword ?: current.takeIf { it.isNotBlank() }
+        if (effectiveCurrent == null) {
+            _changePasswordError.value = "Escribe tu contraseña actual para poder cambiarla."
+            return
+        }
         if (new.length < MIN_PASSWORD_LENGTH) {
             _changePasswordError.value = "La nueva contraseña debe tener al menos $MIN_PASSWORD_LENGTH caracteres."
             return
@@ -262,21 +295,27 @@ class AuthViewModel(
             _changePasswordError.value = "Las contraseñas no coinciden."
             return
         }
-        if (new == current) {
+        if (new == effectiveCurrent) {
             _changePasswordError.value = "La nueva contraseña debe ser diferente de la actual."
             return
         }
         _isChangingPassword.value = true
         _changePasswordError.value = null
         viewModelScope.launch {
-            val result = authRepository.changePassword(current, new)
+            val result = authRepository.changePassword(effectiveCurrent, new)
             _isChangingPassword.value = false
             result.fold(
                 onSuccess = {
+                    // The new one is now this session's password: the user may be asked to
+                    // change it again later, and we must not keep the old one around.
+                    sessionPassword = new
                     runCatching { signupRepository?.setMustChangePassword(user.uid, false) }
                     _uiState.value = AppAccessState.Approved(user)
                 },
                 onFailure = { error ->
+                    // No re-mapear: `authRepository.changePassword` ya devuelve el mensaje
+                    // traducido por mapAuthError. Mapearlo otra vez lo degrada a "Error
+                    // inesperado", porque el texto en español no coincide con ningún patrón.
                     _changePasswordError.value =
                         error.localizedMessage ?: "Error al cambiar la contraseña"
                 }
@@ -308,6 +347,8 @@ class AuthViewModel(
             // signing up entirely: the sign-in failed with "invalid credentials" for an account
             // that did not exist yet.
             val result = authRepository.signUpWithEmail(normalizedEmail, tempPassword)
+            sessionPassword = tempPassword
+            _knowsCurrentPassword.value = true
             _isSigningUp.value = false
             result.fold(
                 onSuccess = { user ->
