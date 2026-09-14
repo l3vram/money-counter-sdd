@@ -291,7 +291,7 @@ class ClosingComputeTest {
     // ---- plan 023: closingsVisibleForRole ----
 
     @Test
-    fun `closingsVisibleForRole null role sees everything`() {
+    fun `closingsVisibleForRole null role sees nothing (plan 033)`() {
         val closings = listOf(
             closingWithTenant("a", organizationId = "org-1", branchId = "br-1"),
             closingWithTenant("b", organizationId = "org-2", branchId = "br-2"),
@@ -300,7 +300,8 @@ class ClosingComputeTest {
         val visible = com.moneycounter.viewmodel.MoneyCounterViewModel.closingsVisibleForRole(
             closings, null, "org-1", "br-1"
         )
-        assertEquals(setOf("a", "b", "c"), visible.map { it.id }.toSet())
+        // Used to return all three, across tenants. No usable membership now shows nothing.
+        assertTrue(visible.isEmpty())
     }
 
     @Test

@@ -1674,8 +1674,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
 
         /** Role-scoped view of past closings (plan 023), keeping [visibleForRole]
          *  semantics: blank-tolerant (a closing with blank org/branch matches anyone),
-         *  OWNER → own org, ADMIN/SELLER → own branch, null (single-user install) →
-         *  EVERYTHING, SUPERUSER → empty. */
+         *  OWNER → own org, ADMIN/SELLER → own branch, SUPERUSER → empty, and since plan
+         *  033 a null role → empty too (no usable membership shows nothing). */
         fun closingsVisibleForRole(
             closings: List<Closing>,
             role: Role?,
@@ -1686,7 +1686,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             Role.ADMIN -> closings.filter { it.branchId.isBlank() || it.branchId == branchId }
             Role.OWNER -> closings.filter { it.organizationId.isBlank() || it.organizationId == organizationId }
             Role.SUPERUSER -> emptyList()
-            null -> closings
+            null -> emptyList()
         }
     }
 }

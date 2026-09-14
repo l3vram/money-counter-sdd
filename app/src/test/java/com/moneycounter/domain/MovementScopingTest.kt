@@ -83,14 +83,16 @@ class MovementScopingTest {
     // ---- null: everything ----
 
     @Test
-    fun `null role sees everything as a single-user install`() {
+    fun `null role sees nothing (plan 033)`() {
         val movements = listOf(
             movement("a", organizationId = "org1", branchId = "br1"),
             movement("b", organizationId = "org2", branchId = "br9"),
             movement("c")
         )
         val visible = visibleForRole(movements, null, orgId = "", branchId = "", uid = "")
-        assertEquals(movements, visible)
+        // Used to return every movement of every tenant. A session with no usable membership
+        // cannot reach this screen after plan 033; if it ever does, it leaks nothing.
+        assertTrue(visible.isEmpty())
     }
 
     // ---- SUPERUSER: nothing ----

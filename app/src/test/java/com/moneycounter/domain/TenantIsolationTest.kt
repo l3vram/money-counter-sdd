@@ -189,23 +189,23 @@ class TenantIsolationTest {
         assertEquals(listOf("a-br-a", "a-br-b", "legacy-empty"), visible.map { it.id })
     }
 
-    // ---- 6. Null role: no permissions at all, though the history filters still pass through ----
+    // ---- 6. Null role: no permissions and no visibility at all ----
 
     @Test
-    fun `null role grants no permission, and the history filters stay pass-through`() {
+    fun `null role grants no permission and sees no history (plan 033)`() {
         val movements = listOf(
             movement("a", orgA, brA, s1),
             movement("b", orgB, brB, s2),
             movement("legacy-empty")
         )
         val visible = visibleForRole(movements, null, orgId = "", branchId = "", uid = "")
-        assertEquals(movements, visible)
+        assertTrue("a null role must not see any movement", visible.isEmpty())
 
         val closings = listOf(closing("c-a", orgA, brA), closing("c-b", orgB, brB))
         val closingsVisible = MoneyCounterViewModel.closingsVisibleForRole(
             closings, null, organizationId = "", branchId = ""
         )
-        assertEquals(closings, closingsVisible)
+        assertTrue("a null role must not see any closing", closingsVisible.isEmpty())
 
         // Plan 033 reversed this: a null role used to grant every operational permission,
         // which is the escalation the plan closes. It now grants none.

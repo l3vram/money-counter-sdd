@@ -107,5 +107,9 @@ fun visibleForRole(
         it.organizationId.isBlank() || it.organizationId == orgId
     }
     Role.SUPERUSER -> emptyList()
-    null -> movements
+    // No usable membership shows nothing (plan 033). This used to return every movement of
+    // every tenant, which is the same fail-open the plan closes, in a second place. After
+    // plan 033 a session with no role cannot reach these screens at all, so this is defense
+    // in depth: if it is ever reached, it must not leak across tenants.
+    null -> emptyList()
 }
