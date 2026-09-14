@@ -68,7 +68,7 @@ Hallazgo que origina 030: el rol de sesión se resuelve por red y *cualquier* fa
 | # | Plan | Título | Priority | Effort | Deps | Status |
 |---|------|--------|----------|--------|------|--------|
 | 030 | `030-role-fail-closed` | Rol cacheado localmente + no degradar por error de red + re-cableado | P1 | M | — | ✅ DONE en `plan/030` (`ff98b3f`, 444 tests) — **Gate B pendiente** |
-| 033 | `033-no-membership-no-access` | Sin membresía no se entra (fail-closed) + cerrar tablas de tenant | **P0** | M | 030 | TODO |
+| 033 | `033-no-membership-no-access` | Sin membresía no se entra (fail-closed) + cerrar tablas de tenant | **P0** | M | 030 | 🔄 pasos 1–6 DONE en `plan/033` (460 tests) — **paso 7 (dispositivo) pendiente del dueño** |
 | 032 | `032-suspend-repositories` | Interfaces de repositorio `suspend` (habilita impl cloud) | P1 | M | 030 | TODO |
 | 031 | `031-repo-cleanup` | Rescatar prosa del glosario y podar worktrees/ramas obsoletos | P3 | S | — | TODO |
 

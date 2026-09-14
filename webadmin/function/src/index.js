@@ -84,7 +84,7 @@ async function listAll(tablesDB, tableId, queries) {
   return { rows: result.rows || [], total: result.total || result.rows.length };
 }
 
-async function approveSignup(tablesDB, params) {
+async function approveSignup(tablesDB, params, error) {
   const { signupId } = params;
   const signup = await getRowOrNull(tablesDB, TABLE_SIGNUPS, signupId);
   if (!signup) throw httpError(404, 'Solicitud no encontrada (signupId=' + signupId + ')');
@@ -156,6 +156,8 @@ async function approveSignup(tablesDB, params) {
     data: { status: 'APPROVED', approvedAt: now },
   });
 
+  await grantTenantRead(tablesDB, signupId, orgId, branchIds, error);
+
   return { signupId, orgId, branchIds };
 }
 
@@ -169,6 +171,52 @@ async function approveSignup(tablesDB, params) {
 // registration, its enum cannot even express SUPERUSER, and a seeded account (the superuser
 // itself) has no signup row at all — so reading the role from there showed no role for the
 // one account that has the highest one.
+/**
+ * Adds a read grant for one user to a row's existing permissions, without disturbing them.
+ * Several members share one organization, so this must merge and never overwrite — and it
+ * must be idempotent, because approving again would otherwise pile up duplicates.
+ */
+function withUserRead(existing, uid) {
+  const grant = sdk.Permission.read(sdk.Role.user(uid));
+  const current = Array.isArray(existing) ? existing : [];
+  return current.includes(grant) ? current : current.concat([grant]);
+}
+
+/**
+ * Plan 033 step 5: let an approved member read its own organization and branches.
+ * The Android app reads `orgs/{orgId}` and lists `branches` client-side for the
+ * post-approval sync (plan 028), so once those tables are closed (step 6) each row needs to
+ * name its readers explicitly. Granting here, at approval time, is what makes closing them
+ * safe.
+ */
+async function grantTenantRead(tablesDB, uid, orgId, branchIds, error) {
+  const targets = [{ tableId: TABLE_ORGS, rowId: orgId }].concat(
+    (Array.isArray(branchIds) ? branchIds : []).map((id) => ({ tableId: TABLE_BRANCHES, rowId: id }))
+  );
+  for (const target of targets) {
+    if (!target.rowId) continue;
+    try {
+      const row = await tablesDB.getRow({
+        databaseId: DATABASE_ID,
+        tableId: target.tableId,
+        rowId: target.rowId,
+      });
+      await tablesDB.updateRow({
+        databaseId: DATABASE_ID,
+        tableId: target.tableId,
+        rowId: target.rowId,
+        permissions: withUserRead(row.$permissions, uid),
+      });
+    } catch (e) {
+      // Never fail an approval over this: the membership is already written and the panel
+      // can re-grant. But say so, or a user silently loses sight of its own business.
+      if (error) {
+        error(`No se pudo dar lectura de ${target.tableId}/${target.rowId} a ${uid}: ${e && e.message}`);
+      }
+    }
+  }
+}
+
 async function listUsers(tablesDB) {
   const [users, signups, members] = await Promise.all([
     listAll(tablesDB, TABLE_USERS, []),
@@ -252,7 +300,7 @@ module.exports = async ({ req, res, log, error }) => {
       }
 
       case 'approve':
-        data = await approveSignup(tablesDB, params);
+        data = await approveSignup(tablesDB, params, error);
         break;
 
       case 'reject': {
