@@ -1,4 +1,10 @@
 export type Role = 'OWNER' | 'ADMIN' | 'SELLER';
+/**
+ * A role as assigned in `members`. Kept apart from [Role] on purpose: the signup form can
+ * only request the three business roles, while the SUPERUSER is seeded by hand and never
+ * requested — its own `signups.role` enum cannot even express it.
+ */
+export type MemberRole = Role | 'SUPERUSER';
 export type SignupStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type OrgStatus = 'ACTIVE' | 'SUSPENDED' | 'DELETED';
 export type BranchStatus = 'ACTIVE' | 'SUSPENDED';
@@ -44,7 +50,9 @@ export interface UserRow {
   displayName: string;
   access: string;
   createdAt?: number | null;
-  role: Role | null;
+  role: MemberRole | null;
+  orgId?: string | null;
+  branchIds?: string[];
   mustChangePassword: boolean;
   signupStatus: SignupStatus | null;
 }
@@ -54,10 +62,11 @@ export interface ListResult<T> {
   total: number;
 }
 
-export const ROLE_LABEL: Record<Role, string> = {
+export const ROLE_LABEL: Record<MemberRole, string> = {
   OWNER: 'Dueño',
   ADMIN: 'Administrador',
   SELLER: 'Vendedor',
+  SUPERUSER: 'Superusuario',
 };
 
 export function formatDate(value: number | null | undefined): string {

@@ -163,31 +163,47 @@ async function approveSignup(tablesDB, params) {
 // expects. Returning `{ users }` / `{ signups }` instead left `result.rows` undefined in the
 // panel, which then crashed on `.length`. TypeScript could not catch it: the payload crosses
 // the wire as `unknown` and is cast.
+//
+// Three bulk reads, not one per user. The role comes from `members`, which is the
+// authoritative assignment; `signups.role` is only what the person ASKED for at
+// registration, its enum cannot even express SUPERUSER, and a seeded account (the superuser
+// itself) has no signup row at all — so reading the role from there showed no role for the
+// one account that has the highest one.
 async function listUsers(tablesDB) {
-  const result = await listAll(tablesDB, TABLE_USERS, []);
-  const rows = [];
-  for (const row of result.rows) {
-    let role = null;
-    let mustChangePassword = false;
-    let signupStatus = null;
-    const signup = await getRowOrNull(tablesDB, TABLE_SIGNUPS, row.$id);
-    if (signup) {
-      role = signup.role || null;
-      mustChangePassword = Boolean(signup.mustChangePassword);
-      signupStatus = signup.status || null;
-    }
-    rows.push({
+  const [users, signups, members] = await Promise.all([
+    listAll(tablesDB, TABLE_USERS, []),
+    listAll(tablesDB, TABLE_SIGNUPS, []),
+    listAll(tablesDB, TABLE_MEMBERS, []),
+  ]);
+
+  const byId = (result) => {
+    const map = new Map();
+    for (const row of result.rows) map.set(row.$id, row);
+    return map;
+  };
+  const signupById = byId(signups);
+  const memberById = byId(members);
+
+  const rows = users.rows.map((row) => {
+    const signup = signupById.get(row.$id) || null;
+    const member = memberById.get(row.$id) || null;
+    return {
       id: row.$id,
       email: row.email || '',
       displayName: row.displayName || '',
       access: row.access || '',
       createdAt: row.createdAt != null ? row.createdAt : null,
-      role,
-      mustChangePassword,
-      signupStatus,
-    });
-  }
-  return { rows, total: result.total };
+      // The assigned role, with the requested one as a fallback for someone approved before
+      // their membership row existed.
+      role: (member && member.role) || (signup && signup.role) || null,
+      orgId: (member && member.orgId) || null,
+      branchIds: (member && member.branchIds) || [],
+      mustChangePassword: Boolean(signup && signup.mustChangePassword),
+      signupStatus: (signup && signup.status) || null,
+    };
+  });
+
+  return { rows, total: users.total };
 }
 
 module.exports = async ({ req, res, log, error }) => {
