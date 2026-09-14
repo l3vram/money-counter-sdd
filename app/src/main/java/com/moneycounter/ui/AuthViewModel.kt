@@ -65,6 +65,15 @@ class AuthViewModel(
     private val _member = MutableStateFlow<Member?>(null)
     val member: StateFlow<Member?> = _member.asStateFlow()
 
+    /**
+     * Plan 033: whether the membership poll has answered at all, which is NOT the same as
+     * [member] being null. Without this, a first launch would flash the locked screen before
+     * the membership arrives; with it, an unresolved membership shows the loading state, which
+     * grants nothing either.
+     */
+    private val _membershipResolved = MutableStateFlow(false)
+    val membershipResolved: StateFlow<Boolean> = _membershipResolved.asStateFlow()
+
     private var profileJob: Job? = null
     private var memberJob: Job? = null
     private var seedInProgress = false
@@ -108,6 +117,7 @@ class AuthViewModel(
                 memberJob?.cancel()
                 memberJob = null
                 _member.value = null
+                _membershipResolved.value = false
                 return@launch
             }
             _uiState.value = AppAccessState.Loading
@@ -140,12 +150,15 @@ class AuthViewModel(
         }
         memberJob = viewModelScope.launch {
             membershipRepository.observeMember(uid).collect { member ->
+                // Either kind of answer resolves the question. The repository only emits null
+                // on a genuine 404 (plan 030), so this is not a transport failure.
+                _membershipResolved.value = true
                 if (member != null) {
                     _member.value = member
                     memberCacheRepository?.save(member)
                 } else if (memberCacheRepository?.load() == null) {
-                    // The row is genuinely missing and nothing was ever cached:
-                    // a legacy single-user install keeps its current behavior.
+                    // The row is genuinely missing and nothing was ever cached: since plan
+                    // 033 that means no access, not the old single-user free-for-all.
                     _member.value = null
                 }
                 seedCloudTenantIfNeeded(uid, member)
@@ -224,6 +237,7 @@ class AuthViewModel(
         memberJob = null
         _profile.value = null
         _member.value = null
+        _membershipResolved.value = false
         // Shared device: never let the next user inherit this session's role.
         memberCacheRepository?.clear()
         viewModelScope.launch {

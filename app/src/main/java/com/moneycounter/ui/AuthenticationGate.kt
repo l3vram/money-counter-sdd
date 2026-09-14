@@ -28,6 +28,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.moneycounter.access.AccessRepository
 import com.moneycounter.access.AccessStatus
 import com.moneycounter.access.AppAccessState
+import com.moneycounter.access.effectiveAccessState
 import com.moneycounter.access.JsonMemberCacheRepository
 import com.moneycounter.access.MembershipRepository
 import com.moneycounter.access.UserProfileData
@@ -43,6 +44,7 @@ import com.moneycounter.domain.Member
 import com.moneycounter.domain.Role
 import com.moneycounter.repository.JsonTenantRepository
 import com.moneycounter.ui.screens.AccessRequiredScreen
+import com.moneycounter.ui.screens.AssignmentPendingScreen
 import com.moneycounter.ui.screens.ChangePasswordScreen
 import com.moneycounter.ui.screens.LoginScreen
 import com.moneycounter.ui.screens.SignUpScreen
@@ -73,7 +75,7 @@ fun AuthenticationGate(
 ) {
     val context = LocalContext.current.applicationContext
     val viewModel: AuthViewModel = viewModel(factory = remember(context) { AuthViewModelFactory(context) })
-    val state by viewModel.uiState.collectAsState()
+    val rawState by viewModel.uiState.collectAsState()
     val isLoggingIn by viewModel.isLoggingIn.collectAsState()
     val loginError by viewModel.loginError.collectAsState()
     val isSigningUp by viewModel.isSigningUp.collectAsState()
@@ -83,6 +85,10 @@ fun AuthenticationGate(
     val changePasswordError by viewModel.changePasswordError.collectAsState()
     val profile by viewModel.profile.collectAsState()
     val member by viewModel.member.collectAsState()
+    val membershipResolved by viewModel.membershipResolved.collectAsState()
+
+    // Plan 033: being approved is not enough — the membership decides whether the app opens.
+    val state = effectiveAccessState(rawState, member, membershipResolved)
 
     AuthenticationGateContent(
         state = state,
@@ -192,6 +198,19 @@ fun AuthenticationGateContent(
                 isChangingPassword = isChangingPassword,
                 errorMessage = changePasswordError,
                 onChangePassword = onChangePassword
+            )
+        }
+        is AppAccessState.AwaitingAssignment -> {
+            AssignmentPendingScreen(
+                panelOnly = false,
+                onRetry = onRetry,
+                onLogout = onLogout
+            )
+        }
+        is AppAccessState.PanelOnlyAccount -> {
+            AssignmentPendingScreen(
+                panelOnly = true,
+                onLogout = onLogout
             )
         }
         is AppAccessState.Blocked -> {
