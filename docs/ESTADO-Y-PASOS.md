@@ -1,6 +1,6 @@
 # Estado y pasos — El Luiso
 
-> **Punto de entrada para retomar el trabajo.** Última actualización: **2026-09-14, 19:00 UTC**.
+> **Punto de entrada para retomar el trabajo.** Última actualización: **2026-09-14, 23:30 UTC**.
 >
 > Si sos un agente que arranca de cero: leé las secciones 1 a 5 antes de tocar nada. La
 > sección 9 ("Trampas") te va a ahorrar horas — cada una costó un diagnóstico equivocado.
@@ -31,7 +31,7 @@ dominio pero pasaban con la base abierta de par en par.
 | Rama | Commit | Qué tiene |
 |---|---|---|
 | `main` | `5bb7e59` | Todo hasta el plan 030 + webadmin. **Rama de deploy del sitio.** |
-| `plan/033` | `b40c2c0` | Plan 033 pasos 1–6, plan 034 escrito, y **los arreglos del webadmin que ya están en producción** |
+| `plan/033` | `b4f5496` | Plan 033 pasos 1–6, plan 034 escrito, y **los arreglos del webadmin que ya están en producción** |
 
 > ### ⚠️ Riesgo activo
 > **Producción corre código del webadmin que sólo existe en `plan/033`.** Los deployments
@@ -55,7 +55,7 @@ requieren instalar un APK nuevo (`./gradlew :app:installDebug`).
 | API | **https://api.elluiso.l3vram.com/v1** |
 | Function `admin` | deployment **`6aa842e61d6162ac0269`** |
 | Site `admin-web` | deployment **`6aa8344490f6a26140fd`** |
-| Tests | **460**, 0 fallos, en `plan/033` |
+| Tests | **471**, 0 fallos, en `plan/033` |
 | Duración de sesión | 1 año (máximo de Appwrite; no existe "para siempre") |
 
 ### Permisos de las tablas (ya aplicado en producción)
@@ -66,7 +66,7 @@ requieren instalar un APK nuevo (`./gradlew :app:installDebug`).
 | `users` | `create("users")` | ✅ true | cerrada |
 | `orgs` | `[]` | ✅ true | cerrada |
 | `branches` | `[]` | ✅ true | cerrada |
-| `signups` | `create("users")` | false | ya estaba bien (sin lectura) |
+| `signups` | `create("users")` | ✅ true | cerrada; el `rowSecurity` se activó el 14/09 para que el usuario pueda leer SU fila — ver §9.11 |
 | `settings` | `read("users")` | false | **legible a propósito**: la app necesita el WhatsApp del superusuario |
 
 Antes, `members`, `users`, `orgs` y `branches` tenían `read("users")`: cualquier usuario
@@ -108,7 +108,7 @@ el cierre; la app lee sólo su propia fila.
 
 | # | Qué | Quién | Notas |
 |---|---|---|---|
-| 1 | **Paso 7 del plan 033**: probar en dispositivo | **Dueño** | Ver §6. Requiere instalar el APK de `plan/033` |
+| 1 | ~~Paso 7 del plan 033~~ | **Dueño** | ✅ **Flujo de login y alta cerrado por el dueño el 14/09.** Queda sin probar en dispositivo sólo la regresión offline del plan 030 (modo avión), y el caso `AwaitingAssignment`, descartado por el dueño: sin sucursal la cuenta queda pendiente, así que no es un caso de uso |
 | 2 | **Mergear `plan/033` → `main`** | Agente | Resuelve el riesgo de §2 |
 | 3 | **Instalar la Appwrite GitHub App** sobre `l3vram/money-counter-sdd` | **Dueño** | Consola → Function `admin` → Settings → Git. Hoy hay **0** instalaciones de VCS. Con eso el deploy deja de ser manual (§8) |
 | 4 | **Plan 034** — sesión offline + 401 que expulsa + indicador | Agente | `plans/034-offline-session.md`, escrito y listo para ejecutar |
@@ -122,6 +122,9 @@ el cierre; la app lee sólo su propia fila.
 ---
 
 ## 6. Cómo verificar (el camino de prueba)
+
+> **Estado al 14/09**: el dueño probó y cerró el flujo completo — registro con validación de
+> correo, aprobación desde el panel, cambio forzado de contraseña y entrada a la caja.
 
 El flujo real, que es también la prueba del alta:
 
@@ -260,6 +263,35 @@ TypeScript no podía atraparlo porque la respuesta cruza el cable como `unknown`
 `signups.role` es el rol **solicitado** al registrarse, y su enum (`OWNER|ADMIN|SELLER`) no
 puede expresar SUPERUSER. Leer el rol de ahí hacía que la cuenta con el rol más alto fuera
 justamente la única que nunca podía mostrarlo.
+
+### 9.11. Una fila que no podés leer responde 404, no 403
+
+`signups` tenía `rowSecurity: false`, así que sus permisos **por fila se ignoraban** y sólo
+aplicaba el de tabla: `create("users")`, sin lectura. La app no podía leer su propia fila y
+Appwrite contesta **404** para una fila que no podés leer — oculta su existencia. Como
+`readMustChangePassword` trata el 404 como "no hay nada que cambiar", el cambio forzado de
+contraseña **nunca se disparaba**: falla silenciosa perfecta, sin error en ningún log.
+
+Regla: al cerrar una tabla, verificar qué lee la app de ella. Un permiso faltante no se
+manifiesta como "prohibido" sino como "no existe", y el código de arriba suele interpretar
+"no existe" como un estado legítimo.
+
+### 9.12. Orden de inicialización en Kotlin
+
+`init` llamaba a `refreshTenantScope()`, que termina leyendo `sellerUid` — declarado **después**
+del bloque `init`. Kotlin corre inicializadores y bloques init en orden de declaración, así
+que el campo todavía era JVM-null y `visibleForRole`, cuyo `uid` es no-nulable, tiraba
+"Parameter specified as non-null is null" y mataba la app justo después del login.
+
+Regla: cualquier propiedad que `init` lea, transitivamente, va declarada **arriba** de `init`.
+No es testeable en unit test acá porque el ViewModel toma un `Application`, así que la
+protección es el comentario en el código.
+
+### 9.13. No mapear dos veces un mensaje de error
+
+`authRepository.changePassword` ya devuelve el texto traducido por `mapAuthError`. Volver a
+mapearlo en el ViewModel lo degradaba a "Error inesperado", porque el español ya no coincide
+con ningún patrón en inglés. Lo atrapó un test.
 
 ### 9.10. Cuidado con el N+1 en la Function
 
