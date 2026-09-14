@@ -106,7 +106,7 @@ el cierre; la app lee sólo su propia fila.
 |---|---|---|---|
 | 1 | ~~Paso 7 del plan 033~~ | **Dueño** | ✅ **Flujo de login y alta cerrado por el dueño el 14/09.** Queda sin probar en dispositivo sólo la regresión offline del plan 030 (modo avión), y el caso `AwaitingAssignment`, descartado por el dueño: sin sucursal la cuenta queda pendiente, así que no es un caso de uso |
 | ~~2~~ | ~~Mergear `plan/033` → `main`~~ | Agente | ✅ hecho el 14/09, fast-forward sin conflictos |
-| 3 | **Instalar la Appwrite GitHub App** sobre `l3vram/money-counter-sdd` | **Dueño** | Consola → Function `admin` → Settings → Git. Hoy hay **0** instalaciones de VCS. Con eso el deploy deja de ser manual (§8) |
+| ~~3~~ | ~~Conectar Git~~ | — | ✅ hecho el 14/09: los dos recursos atados a `main`, primer deploy por Git verificado (§8) |
 | 4 | **Plan 034** — sesión offline + 401 que expulsa + indicador | Agente | `plans/034-offline-session.md`, escrito y listo para ejecutar |
 | 5 | **Aprobación atómica** (plan nuevo, sin escribir) | Agente | La aprobación escribe 5+ filas sin transacción. Appwrite tiene `transaction_id` en TablesDB. Ver §9.5 |
 | 6 | **Plan 032** — repos `suspend` | Agente | Habilita cualquier implementación de red; paso 2 del diseño F2 |
@@ -162,23 +162,46 @@ y para instalar sin el IDE, `./gradlew :app:installDebug`.
 
 ---
 
-## 8. El deploy, hoy y como debería ser
+## 8. El deploy: por Git, desde `main`
 
-**Hoy, a mano** — nueve releases el 14/09 dan la pauta de lo tedioso que es:
+**Conectado el 14/09.** Se terminó el baile del tarball. Ahora un push a `main` que toque el
+webadmin dispara el deploy solo.
 
-1. Empaquetar `webadmin/function` o `webadmin/app` en un tarball.
-2. Subirlo como asset de un release de GitHub (`gh release create`) — los build servers de
-   Appwrite necesitan una URL pública alcanzable. **Ojo**: catbox y x0.at bloquean datacenters,
-   y el base64 inline arriesga corrupción.
-3. `functions_create_deployment` / `sites_create_deployment` por MCP con esa URL.
-4. Esperar el build y verificar contra el deployment nuevo.
+| | Function `admin` | Site `admin-web` |
+|---|---|---|
+| Instalación VCS | `6aa8234ea75791feec3a` (org `l3vram`) | la misma |
+| Repositorio | `1356205416` (`l3vram/money-counter-sdd`) | el mismo |
+| Rama de producción | `main` | `main` |
+| **Root directory** | **`webadmin/function`** | **`webadmin/app`** |
+| Paths que disparan | `webadmin/function/**` | `webadmin/app/**` |
+| Silent mode | sí | sí |
 
-**Como debería ser**: con la GitHub App instalada, se cablean Function (`webadmin/function`) y
-Site (`webadmin/app`) como root directories sobre `main`, y el ciclo pasa a ser commit + push.
-Bonus documentado: **la URL de una rama es estable** entre deployments, así que se termina
-también el registro manual de plataformas Web.
+**El root directory es el campo que decide si funciona.** Al listar el repo, Appwrite lo
+detecta como `runtime: java-25` — ve el proyecto Android de la raíz. Sin el root directory
+intentaría compilar Kotlin como si fuera la Function.
 
----
+**Los `providerPaths` no son opcionales en la práctica.** `main` recibe sobre todo commits de
+Android; sin acotar los paths, cada uno dispararía dos builds inútiles.
+
+**Las variables del sitio sobreviven**: `VITE_APPWRITE_ENDPOINT`,
+`VITE_APPWRITE_PROJECT_ID` y `VITE_ADMIN_FUNCTION_ID` viven en el recurso, no en el repo.
+Verificado en el bundle del primer deploy por Git: el endpoint horneado sigue siendo
+`https://api.elluiso.l3vram.com/v1`, y el hash del bundle salió idéntico al del deploy
+manual anterior — build reproducible.
+
+**Primer deploy por Git verificado** (commit `bebec7c`): Function `6aa8827dc4384136f48d` →
+`whoami` responde 200 con `role: SUPERUSER`; Site `6aa88283f083a436e014` → sirviendo en
+`elluiso.l3vram.com`.
+
+**Detalle a no confundir**: al conectar Git, ambos recursos quedan `live: false` hasta el
+primer deploy por Git. Es Appwrite avisando que el deployment activo se construyó con otra
+configuración, no un error.
+
+### Cómo desplegar de ahora en más
+
+Un push a `main` que toque `webadmin/`. Nada más. Si hace falta forzarlo sin commit nuevo:
+`functions_create_vcs_deployment` / `sites_create_vcs_deployment` con
+`{type: "branch", reference: "main", activate: true}`.
 
 ## 9. Trampas (cada una costó un diagnóstico equivocado)
 
