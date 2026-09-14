@@ -3,7 +3,10 @@ package com.moneycounter.ui
 import com.moneycounter.access.AccessRepository
 import com.moneycounter.access.AccessStatus
 import com.moneycounter.access.AppAccessState
+import com.moneycounter.access.CachedSession
+import com.moneycounter.access.MemberCacheRepository
 import com.moneycounter.access.MembershipRepository
+import com.moneycounter.access.SessionCacheRepository
 import com.moneycounter.access.UserProfileData
 import com.moneycounter.appwrite.BranchInfo
 import com.moneycounter.appwrite.CloudOrgRepository
@@ -11,6 +14,7 @@ import com.moneycounter.appwrite.OrgInfo
 import com.moneycounter.appwrite.TenantCloudFields
 import com.moneycounter.auth.AuthRepository
 import com.moneycounter.auth.AuthUser
+import io.appwrite.exceptions.AppwriteException
 import com.moneycounter.domain.Branch
 import com.moneycounter.domain.Member
 import com.moneycounter.domain.Organization
@@ -83,18 +87,50 @@ class FakeAuthRepository(
     }
 }
 
+class FakeSessionCacheRepository(
+    var stored: CachedSession? = null
+) : SessionCacheRepository {
+    var saves = 0
+    var clears = 0
+
+    override fun load(): CachedSession? = stored
+
+    override fun save(session: CachedSession) {
+        saves++
+        stored = session
+    }
+
+    override fun clear() {
+        clears++
+        stored = null
+    }
+}
+
+class FakeMemberCacheRepositoryForOffline(
+    var stored: Member? = null
+) : MemberCacheRepository {
+    override fun load(): Member? = stored
+    override fun save(member: Member) { stored = member }
+    override fun clear() { stored = null }
+}
+
 class FakeAccessRepository(
     var accessStatusToReturn: AccessStatus = AccessStatus.APPROVED,
     var shouldThrowError: Boolean = false,
-    var profileFlow: Flow<UserProfileData?> = MutableStateFlow(null)
+    var profileFlow: Flow<UserProfileData?> = MutableStateFlow(null),
+    /** Plan 034: para distinguir un fallo de transporte (null) de un 401. */
+    var errorToThrow: Exception? = null
 ) : AccessRepository {
+    private fun failure(): Exception =
+        errorToThrow ?: RuntimeException("Network error")
+
     override suspend fun getAccess(uid: String): AccessStatus? {
-        if (shouldThrowError) throw RuntimeException("Network error")
+        if (shouldThrowError) throw failure()
         return accessStatusToReturn
     }
 
     override suspend fun ensureUserDocument(user: AuthUser): AccessStatus {
-        if (shouldThrowError) throw RuntimeException("Network error")
+        if (shouldThrowError) throw failure()
         return accessStatusToReturn
     }
 
@@ -249,6 +285,162 @@ class AuthViewModelTest {
         // El mensaje del SDK ya no llega crudo a la pantalla: pasa por mapAuthError, que es
         // lo que evita que el usuario vea texto en inglés.
         assertEquals("Sin conexión. Verifica tu internet.", errorState.message)
+    }
+
+    // ---- Plan 034: arrancar sin conexión ----
+
+    private fun cachedSession(access: AccessStatus = AccessStatus.APPROVED) = CachedSession(
+        uid = "uid123",
+        email = "user@test.com",
+        displayName = "Test User",
+        photoUrl = null,
+        access = access,
+        savedAtMs = 1_000
+    )
+
+    private fun cachedMember() = Member(
+        uid = "uid123",
+        orgId = "org1",
+        role = Role.SELLER,
+        branchIds = listOf("br1")
+    )
+
+    @Test
+    fun checkAccess_success_savesTheSessionAndClearsTheOfflineFlag() = runTest {
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val sessionCache = FakeSessionCacheRepository()
+        val viewModel = AuthViewModel(
+            FakeAuthRepository(user = testUser),
+            FakeAccessRepository(accessStatusToReturn = AccessStatus.APPROVED),
+            FakeMembershipRepository(),
+            sessionCacheRepository = sessionCache
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value is AppAccessState.Approved)
+        assertFalse(viewModel.isOffline.value)
+        assertEquals(1, sessionCache.saves)
+        assertEquals("uid123", sessionCache.stored?.uid)
+        assertEquals(AccessStatus.APPROVED, sessionCache.stored?.access)
+    }
+
+    @Test
+    fun checkAccess_offlineWithSessionAndMembershipCached_opensTheAppOffline() = runTest {
+        // El caso que motiva el plan: un vendedor abre la app sin señal y tiene que poder
+        // mirar lo que ya tenía, en vez de quedarse en la pantalla de error.
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val viewModel = AuthViewModel(
+            FakeAuthRepository(user = testUser),
+            FakeAccessRepository(shouldThrowError = true),
+            FakeMembershipRepository(),
+            memberCacheRepository = FakeMemberCacheRepositoryForOffline(cachedMember()),
+            sessionCacheRepository = FakeSessionCacheRepository(cachedSession())
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(
+            "debería abrir con la sesión cacheada, no dar error",
+            viewModel.uiState.value is AppAccessState.Approved
+        )
+        assertTrue("y avisar que está sin conexión", viewModel.isOffline.value)
+    }
+
+    @Test
+    fun checkAccess_offlineWithSessionButNoMembership_showsTheConnectionScreen() = runTest {
+        // Sin membresía cacheada no hay con qué decidir. Abrir reabriría el agujero del plan
+        // 033, y quedarse en Loading dejaría la app colgada para siempre.
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val viewModel = AuthViewModel(
+            FakeAuthRepository(user = testUser),
+            FakeAccessRepository(shouldThrowError = true),
+            FakeMembershipRepository(),
+            memberCacheRepository = FakeMemberCacheRepositoryForOffline(null),
+            sessionCacheRepository = FakeSessionCacheRepository(cachedSession())
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value is AppAccessState.Error)
+        assertFalse(viewModel.isOffline.value)
+    }
+
+    @Test
+    fun checkAccess_offlineWithAPendingSession_showsPendingWithoutNeedingAMembership() = runTest {
+        // Una cuenta pendiente no opera igual, así que la membresía es irrelevante: mostrarle
+        // "esperando aprobación" sin conexión es correcto y además útil.
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val viewModel = AuthViewModel(
+            FakeAuthRepository(user = testUser),
+            FakeAccessRepository(shouldThrowError = true),
+            FakeMembershipRepository(),
+            memberCacheRepository = FakeMemberCacheRepositoryForOffline(null),
+            sessionCacheRepository = FakeSessionCacheRepository(cachedSession(AccessStatus.PENDING))
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value is AppAccessState.Pending)
+        assertTrue(viewModel.isOffline.value)
+    }
+
+    @Test
+    fun checkAccess_offlineWithNothingCached_showsTheConnectionScreen() = runTest {
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val viewModel = AuthViewModel(
+            FakeAuthRepository(user = testUser),
+            FakeAccessRepository(shouldThrowError = true),
+            FakeMembershipRepository(),
+            sessionCacheRepository = FakeSessionCacheRepository(null)
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value is AppAccessState.Error)
+        assertFalse(viewModel.isOffline.value)
+    }
+
+    @Test
+    fun checkAccess_a401SignsOutAndWipesBothCaches() = runTest {
+        // Sesión revocada, cuenta borrada o acceso quitado. Es lo que hace aceptable que una
+        // sesión offline no expire: la revocación surte efecto al recuperar la red.
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val sessionCache = FakeSessionCacheRepository(cachedSession())
+        val memberCache = FakeMemberCacheRepositoryForOffline(cachedMember())
+        val viewModel = AuthViewModel(
+            FakeAuthRepository(user = testUser),
+            FakeAccessRepository(
+                shouldThrowError = true,
+                errorToThrow = AppwriteException(message = "revocada", code = 401)
+            ),
+            FakeMembershipRepository(),
+            memberCacheRepository = memberCache,
+            sessionCacheRepository = sessionCache
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value is AppAccessState.SignedOut)
+        assertNull("el caché de sesión debe quedar limpio", sessionCache.stored)
+        assertNull("y el de membresía también", memberCache.stored)
+    }
+
+    @Test
+    fun checkAccess_a403IsNotARevocation_soItWorksOffline() = runTest {
+        // Solo el 401 mata la sesión. Un 403 es un permiso de fila y expulsar por eso sería
+        // un bug muy difícil de diagnosticar desde el lado del usuario.
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val sessionCache = FakeSessionCacheRepository(cachedSession())
+        val viewModel = AuthViewModel(
+            FakeAuthRepository(user = testUser),
+            FakeAccessRepository(
+                shouldThrowError = true,
+                errorToThrow = AppwriteException(message = "prohibido", code = 403)
+            ),
+            FakeMembershipRepository(),
+            memberCacheRepository = FakeMemberCacheRepositoryForOffline(cachedMember()),
+            sessionCacheRepository = sessionCache
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value is AppAccessState.Approved)
+        assertTrue(viewModel.isOffline.value)
+        assertNotNull("no debe borrar nada", sessionCache.stored)
     }
 
     @Test

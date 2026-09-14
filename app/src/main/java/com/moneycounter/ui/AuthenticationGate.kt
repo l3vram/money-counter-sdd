@@ -30,6 +30,7 @@ import com.moneycounter.access.AccessStatus
 import com.moneycounter.access.AppAccessState
 import com.moneycounter.access.effectiveAccessState
 import com.moneycounter.access.JsonMemberCacheRepository
+import com.moneycounter.access.JsonSessionCacheRepository
 import com.moneycounter.access.MembershipRepository
 import com.moneycounter.access.UserProfileData
 import com.moneycounter.appwrite.Appwrite
@@ -64,7 +65,8 @@ private class AuthViewModelFactory(private val context: Context) : ViewModelProv
             AppwriteSignupRepository(),
             tenantRepository = JsonTenantRepository(context),
             cloudOrgRepository = AppwriteCloudOrgRepository(),
-            memberCacheRepository = JsonMemberCacheRepository(context)
+            memberCacheRepository = JsonMemberCacheRepository(context),
+            sessionCacheRepository = JsonSessionCacheRepository(context)
         ) as T
     }
 }
