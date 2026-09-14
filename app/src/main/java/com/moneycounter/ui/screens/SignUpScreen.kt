@@ -46,6 +46,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.moneycounter.config.ContactConfig
+import com.moneycounter.auth.isValidEmail
 import com.moneycounter.domain.Role
 import com.moneycounter.signup.SignupRequest
 import com.moneycounter.signup.SignupWhatsAppMessage
@@ -53,7 +54,7 @@ import com.moneycounter.util.openWhatsApp
 
 private val roleOptions = listOf(
     Role.OWNER to "DUEÑO",
-    Role.ADMIN to "ADMINISTRADOR",
+    Role.ADMIN to "ADMIN",
     Role.SELLER to "VENDEDOR"
 )
 
@@ -88,7 +89,7 @@ fun SignUpScreen(
         val normalizedBranches = branches.map { it.trim() }.filter { it.isNotBlank() }
         val normalizedBusinessName = businessName.trim().takeIf { it.isNotBlank() }
         val isOwner = selectedRole == Role.OWNER
-        if (email.isBlank() || (isOwner && (normalizedBusinessName == null || normalizedBranches.isEmpty()))) return
+        if (!isValidEmail(email) || (isOwner && (normalizedBusinessName == null || normalizedBranches.isEmpty()))) return
         onSignUp(
             email.trim(),
             selectedRole,
@@ -131,6 +132,17 @@ fun SignUpScreen(
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
+
+            // Sin esto el botón quedaba deshabilitado en silencio y el usuario no sabía por qué.
+            if (email.isNotBlank() && !isValidEmail(email)) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Revisa el correo: falta el @ o el dominio",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -219,7 +231,7 @@ fun SignUpScreen(
 
             Button(
                 onClick = { submit() },
-                enabled = !isSigningUp && email.isNotBlank() &&
+                enabled = !isSigningUp && isValidEmail(email) &&
                     (selectedRole != Role.OWNER ||
                         (businessName.isNotBlank() && branches.any { it.isNotBlank() })),
                 modifier = Modifier

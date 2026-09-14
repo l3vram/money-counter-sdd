@@ -967,7 +967,6 @@ private fun SummarySection(
                             LuisoButton(
                                 text = "GUARDAR EN HISTORIAL",
                                 onClick = onSave,
-                                leadingIcon = Icons.Default.Check,
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }

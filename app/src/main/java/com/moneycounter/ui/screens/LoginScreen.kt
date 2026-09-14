@@ -43,6 +43,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.moneycounter.R
+import com.moneycounter.auth.isValidEmail
 import com.moneycounter.auth.mapAuthError
 import kotlinx.coroutines.launch
 
@@ -129,6 +130,18 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            if (email.isNotBlank() && !isValidEmail(email)) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Revisa el correo: falta el @ o el dominio",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
@@ -164,7 +177,7 @@ fun LoginScreen(
                 },
                 // Appwrite exige 8 caracteres como minimo. Con 6 el boton se habilitaba, la
                 // peticion fallaba y el usuario veia el error crudo de la API en ingles.
-                enabled = !isLoggingIn && email.isNotBlank() && password.length >= MIN_PASSWORD_LENGTH,
+                enabled = !isLoggingIn && isValidEmail(email) && password.length >= MIN_PASSWORD_LENGTH,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
