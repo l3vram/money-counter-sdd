@@ -336,13 +336,28 @@ module.exports = async ({ req, res, log, error }) => {
           throw httpError(400, 'La contraseña temporal debe tener al menos 8 caracteres');
         }
         await users.updatePassword({ userId, password });
-        await tablesDB.updateRow({
-          databaseId: DATABASE_ID,
-          tableId: TABLE_SIGNUPS,
-          rowId: userId,
-          data: { mustChangePassword: true },
-        });
-        data = { userId, reset: true };
+
+        // The forced-change flag lives in `signups`, and a seeded account -- the superuser --
+        // has no row there. The password change above already happened and IS the point of
+        // this action, so a missing flag row must not be reported as a failure: doing so made
+        // the panel answer "Row with the requested ID could not be found" for a reset that had
+        // actually succeeded, which is the worst kind of wrong answer.
+        let mustChangePasswordFlagged = false;
+        try {
+          await tablesDB.updateRow({
+            databaseId: DATABASE_ID,
+            tableId: TABLE_SIGNUPS,
+            rowId: userId,
+            data: { mustChangePassword: true },
+          });
+          mustChangePasswordFlagged = true;
+        } catch (e) {
+          // Only a genuinely missing row is tolerated; anything else is a real failure.
+          if (!e || e.code !== 404) throw e;
+          log(`Sin fila en signups para ${userId}: contrasena cambiada sin marcar cambio forzado`);
+        }
+
+        data = { userId, reset: true, mustChangePasswordFlagged };
         break;
       }
 
