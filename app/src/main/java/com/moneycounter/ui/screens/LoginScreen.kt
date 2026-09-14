@@ -21,6 +21,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -42,6 +43,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.moneycounter.R
+import com.moneycounter.auth.mapAuthError
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -144,13 +146,25 @@ fun LoginScreen(
                     .bringIntoViewRequester(passwordBringIntoView)
             )
 
+            if (password.isNotEmpty() && password.length < MIN_PASSWORD_LENGTH) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "La contraseña debe tener al menos $MIN_PASSWORD_LENGTH caracteres",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = {
                     onLogin(email.trim(), password)
                 },
-                enabled = !isLoggingIn && email.isNotBlank() && password.length >= 6,
+                // Appwrite exige 8 caracteres como minimo. Con 6 el boton se habilitaba, la
+                // peticion fallaba y el usuario veia el error crudo de la API en ingles.
+                enabled = !isLoggingIn && email.isNotBlank() && password.length >= MIN_PASSWORD_LENGTH,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
@@ -164,6 +178,28 @@ fun LoginScreen(
                     Text(
                         text = "Entrar",
                         style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
+
+            // El error va acá, inmediatamente debajo de "Entrar". Antes se pintaba al final de
+            // la pantalla, despues de los botones de crear cuenta y verificar conexion, donde
+            // pasaba desapercibido o quedaba fuera de la vista.
+            if (!errorMessage.isNullOrEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Text(
+                        text = errorMessage,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp)
                     )
                 }
             }
@@ -192,7 +228,9 @@ fun LoginScreen(
                                 connectionResult = "Conectado - ${latency} ms"
                             },
                             onFailure = { error ->
-                                connectionResult = "Sin conexión: ${error.message ?: "error desconocido"}"
+                                // El mensaje del SDK viene en inglés: se traduce antes de
+                                // mostrarlo.
+                                connectionResult = "Sin conexión: ${mapAuthError(Exception(error))}"
                             }
                         )
                         checkingConnection = false
@@ -222,15 +260,10 @@ fun LoginScreen(
                 )
             }
 
-            if (!errorMessage.isNullOrEmpty()) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = errorMessage,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center
-                )
-            }
         }
     }
 }
+
+/** Mínimo que exige Appwrite. Habilitar el botón con menos hacía que el usuario viera el
+ *  error crudo de la API, en inglés, en vez de un aviso en el propio formulario. */
+private const val MIN_PASSWORD_LENGTH = 8

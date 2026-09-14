@@ -54,6 +54,22 @@ class AppwriteAuthRepository : AuthRepository {
         }
     }
 
+    override suspend fun signUpWithEmail(email: String, password: String): Result<AuthUser> {
+        return try {
+            account.create(
+                userId = ID.unique(),
+                email = email,
+                password = password,
+                name = email.substringBefore('@')
+            )
+            account.createEmailPasswordSession(email, password)
+            Result.success(account.get().toAuthUser())
+        } catch (e: Exception) {
+            Log.e(TAG, "signUpWithEmail failed", e)
+            Result.failure(Exception(mapAuthError(e)))
+        }
+    }
+
     override suspend fun changePassword(currentPassword: String, newPassword: String): Result<Unit> {
         return try {
             account.updatePassword(password = newPassword, oldPassword = currentPassword)

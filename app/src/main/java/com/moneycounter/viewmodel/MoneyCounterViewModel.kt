@@ -164,6 +164,19 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     private val _uiState = MutableStateFlow(MoneyCounterUiState())
     val uiState: StateFlow<MoneyCounterUiState> = _uiState.asStateFlow()
 
+    /**
+     * Author identity stamped on movements/counts/closings created by this user.
+     *
+     * Declared **before** the `init` block on purpose. Kotlin runs property initializers and
+     * init blocks in declaration order, and `init` calls `refreshTenantScope()`, which ends in
+     * `recomputeScopedMovements()` and reads these. With the declarations below `init`, the
+     * backing field was still JVM-null at that moment and `visibleForRole` -- whose `uid` is
+     * non-null -- threw "Parameter specified as non-null is null" and killed the app right
+     * after login. Moving anything above `init` that `init` transitively reads is the rule.
+     */
+    private var sellerUid: String = ""
+    private var sellerName: String = ""
+
     init {
         loadDenominations()
         loadCurrencySettings()
@@ -174,10 +187,6 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         resolveTenantContext()
         refreshTenantScope()
     }
-
-    /** Author identity stamped on movements/counts/closings created by this user. */
-    private var sellerUid: String = ""
-    private var sellerName: String = ""
 
     fun setSeller(uid: String?, name: String?) {
         setSellerContext(uid, name, null)

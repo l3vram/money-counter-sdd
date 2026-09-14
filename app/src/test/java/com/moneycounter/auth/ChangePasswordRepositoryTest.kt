@@ -28,6 +28,9 @@ class ChangePasswordRepositoryTest {
         override suspend fun signInWithEmail(email: String, password: String): Result<AuthUser> =
             Result.failure(IllegalStateException("not used"))
 
+        override suspend fun signUpWithEmail(email: String, password: String): Result<AuthUser> =
+            Result.failure(IllegalStateException("not used"))
+
         override suspend fun changePassword(currentPassword: String, newPassword: String): Result<Unit> {
             return try {
                 updatePassword(newPassword, currentPassword)

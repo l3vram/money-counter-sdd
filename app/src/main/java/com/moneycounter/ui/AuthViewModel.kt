@@ -11,6 +11,7 @@ import com.moneycounter.access.UserProfileData
 import com.moneycounter.access.toAppAccessState
 import com.moneycounter.appwrite.CloudOrgRepository
 import com.moneycounter.auth.AuthRepository
+import com.moneycounter.auth.mapAuthError
 import com.moneycounter.domain.Branch
 import com.moneycounter.domain.Member
 import com.moneycounter.domain.Organization
@@ -109,7 +110,9 @@ class AuthViewModel(
             val user = try {
                 authRepository.currentUser()
             } catch (e: Exception) {
-                _uiState.value = AppAccessState.Error(e.localizedMessage ?: "Error de conexión")
+                // mapAuthError traduce lo que viene del SDK; sin eso el usuario veía el
+                // mensaje crudo en inglés.
+                _uiState.value = AppAccessState.Error(mapAuthError(e))
                 return@launch
             }
             if (user == null) {
@@ -131,7 +134,9 @@ class AuthViewModel(
                     toAppAccessState(user, accessStatus)
                 }
             } catch (e: Exception) {
-                _uiState.value = AppAccessState.Error(e.localizedMessage ?: "Error de conexión")
+                // mapAuthError traduce lo que viene del SDK; sin eso el usuario veía el
+                // mensaje crudo en inglés.
+                _uiState.value = AppAccessState.Error(mapAuthError(e))
             }
         }
     }
@@ -298,7 +303,11 @@ class AuthViewModel(
         _signUpError.value = null
         viewModelScope.launch {
             val tempPassword = PasswordGenerator.generate()
-            val result = authRepository.signInWithEmail(normalizedEmail, tempPassword)
+            // Registration creates the account explicitly. It used to call signInWithEmail and
+            // rely on its auto-registration side effect, so removing that side effect broke
+            // signing up entirely: the sign-in failed with "invalid credentials" for an account
+            // that did not exist yet.
+            val result = authRepository.signUpWithEmail(normalizedEmail, tempPassword)
             _isSigningUp.value = false
             result.fold(
                 onSuccess = { user ->
@@ -319,7 +328,7 @@ class AuthViewModel(
                         }.getOrNull()
                         _uiState.value = AppAccessState.SignUpPending(tempPassword, request)
                     } catch (e: Exception) {
-                        _signUpError.value = e.localizedMessage ?: "Error al enviar la solicitud de registro"
+                        _signUpError.value = mapAuthError(e)
                     }
                 },
                 onFailure = { error ->

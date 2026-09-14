@@ -13,6 +13,13 @@ fun mapAuthError(exception: Exception): String {
     val type = (exception as? AppwriteException)?.type.orEmpty()
     return when {
         exception is IOException -> "Sin conexión. Verifica tu internet."
+        // Appwrite devuelve este texto en inglés y se estaba mostrando tal cual en pantalla.
+        // El formulario ya avisa antes de llegar acá; esto es la red de seguridad.
+        message.contains("Password must be between", ignoreCase = true) ||
+            message.contains("Invalid `password` param", ignoreCase = true) ->
+            "La contraseña debe tener entre 8 y 256 caracteres"
+        message.contains("Invalid `email` param", ignoreCase = true) ->
+            "El correo electrónico no es válido"
         type.contains("user_not_found") ||
             message.contains("user_not_found", ignoreCase = true) ->
             "No existe una cuenta con ese correo. Crea una cuenta primero."

@@ -40,6 +40,10 @@ class FakeAuthRepository(
     var signInResult: Result<AuthUser> = Result.success(AuthUser("uid1", "test@example.com"))
 ) : AuthRepository {
     var lastSignInPassword: String? = null
+    var signInCalls = 0
+    var signUpCalls = 0
+    var lastSignUpPassword: String? = null
+    var signUpResult: Result<AuthUser>? = null
     var changePasswordResult: Result<Unit> = Result.success(Unit)
     var changePasswordCalls = 0
     var lastChangeCurrentPassword: String? = null
@@ -48,8 +52,19 @@ class FakeAuthRepository(
     override suspend fun currentUser(): AuthUser? = user
 
     override suspend fun signInWithEmail(email: String, password: String): Result<AuthUser> {
+        signInCalls++
         lastSignInPassword = password
         val res = signInResult
+        if (res.isSuccess) {
+            user = res.getOrNull()
+        }
+        return res
+    }
+
+    override suspend fun signUpWithEmail(email: String, password: String): Result<AuthUser> {
+        signUpCalls++
+        lastSignUpPassword = password
+        val res = signUpResult ?: signInResult
         if (res.isSuccess) {
             user = res.getOrNull()
         }
@@ -231,7 +246,9 @@ class AuthViewModelTest {
 
         assertTrue(viewModel.uiState.value is AppAccessState.Error)
         val errorState = viewModel.uiState.value as AppAccessState.Error
-        assertEquals("Network error", errorState.message)
+        // El mensaje del SDK ya no llega crudo a la pantalla: pasa por mapAuthError, que es
+        // lo que evita que el usuario vea texto en inglés.
+        assertEquals("Sin conexión. Verifica tu internet.", errorState.message)
     }
 
     @Test
@@ -399,7 +416,13 @@ class AuthViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         val tempPassword = (viewModel.uiState.value as AppAccessState.SignUpPending).tempPassword
-        assertEquals(tempPassword, fakeAuth.lastSignInPassword)
+        // Registration must create the account explicitly. It used to call signInWithEmail and
+        // depend on its auto-registration side effect; when that was removed, signing up broke
+        // with "invalid credentials" for an account that did not exist yet. These two
+        // assertions are the regression guard.
+        assertEquals(tempPassword, fakeAuth.lastSignUpPassword)
+        assertEquals(1, fakeAuth.signUpCalls)
+        assertEquals("signing up must not go through sign-in", 0, fakeAuth.signInCalls)
         assertEquals(emptyList<String>(), fakeSignup.requests.first().branches)
         assertNull(fakeSignup.requests.first().businessName)
     }

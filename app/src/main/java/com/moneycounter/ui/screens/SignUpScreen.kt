@@ -53,8 +53,8 @@ import com.moneycounter.util.openWhatsApp
 
 private val roleOptions = listOf(
     Role.OWNER to "DUEÑO",
-    Role.ADMIN to "ADMIN",
-    Role.SELLER to "SELLER"
+    Role.ADMIN to "ADMINISTRADOR",
+    Role.SELLER to "VENDEDOR"
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
