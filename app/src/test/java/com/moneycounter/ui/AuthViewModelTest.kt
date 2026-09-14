@@ -56,7 +56,12 @@ class FakeAuthRepository(
     var lastChangeCurrentPassword: String? = null
     var lastChangeNewPassword: String? = null
 
-    override suspend fun currentUser(): AuthUser? = user
+    var currentUserError: Exception? = null
+
+    override suspend fun currentUser(): AuthUser? {
+        currentUserError?.let { throw it }
+        return user
+    }
 
     override suspend fun signInWithEmail(email: String, password: String): Result<AuthUser> {
         signInCalls++
@@ -530,6 +535,78 @@ class AuthViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertFalse("el poll contestó: se apaga el cartel", viewModel.isOffline.value)
+    }
+
+    @Test
+    fun loadProfile_networkFailure_keepsTheProfileAndThePoll() = runTest {
+        // Antes una excepción de currentUser() se trataba como "no hay usuario": cancelaba el
+        // poll del perfil y lo borraba. Como quedaba cancelado, al volver la conexión nada lo
+        // reiniciaba y la vista de usuario se quedaba vacía para siempre.
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val perfil = UserProfileData(
+            uid = "uid123",
+            email = "user@test.com",
+            displayName = "Test User",
+            photoUrl = null,
+            access = AccessStatus.APPROVED,
+            createdAtMillis = 1L,
+            updatedAtMillis = 1L
+        )
+        val fakeAuth = FakeAuthRepository(user = testUser)
+        val fakeAccess = FakeAccessRepository(
+            accessStatusToReturn = AccessStatus.APPROVED,
+            profileFlow = MutableStateFlow(perfil)
+        )
+        val viewModel = AuthViewModel(
+            fakeAuth,
+            fakeAccess,
+            FakeMembershipRepository(),
+            sessionCacheRepository = FakeSessionCacheRepository()
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+        viewModel.loadProfile()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(perfil, viewModel.profile.value)
+
+        // Se cae la red: currentUser() revienta.
+        fakeAuth.currentUserError = RuntimeException("sin red")
+        viewModel.loadProfile()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("el perfil no debe borrarse por un fallo de red", perfil, viewModel.profile.value)
+    }
+
+    @Test
+    fun loadProfile_explicitSignedOut_clearsTheProfile() = runTest {
+        // El otro lado: si el SDK contesta que NO hay sesión, ahí sí hay que limpiar.
+        val perfil = UserProfileData(
+            uid = "uid123",
+            email = "user@test.com",
+            displayName = "Test User",
+            photoUrl = null,
+            access = AccessStatus.APPROVED,
+            createdAtMillis = 1L,
+            updatedAtMillis = 1L
+        )
+        val fakeAuth = FakeAuthRepository(user = AuthUser("uid123", "user@test.com"))
+        val fakeAccess = FakeAccessRepository(
+            accessStatusToReturn = AccessStatus.APPROVED,
+            profileFlow = MutableStateFlow(perfil)
+        )
+        val viewModel = AuthViewModel(
+            fakeAuth, fakeAccess, FakeMembershipRepository(),
+            sessionCacheRepository = FakeSessionCacheRepository()
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+        viewModel.loadProfile()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(perfil, viewModel.profile.value)
+
+        fakeAuth.user = null
+        viewModel.loadProfile()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(viewModel.profile.value)
     }
 
     @Test

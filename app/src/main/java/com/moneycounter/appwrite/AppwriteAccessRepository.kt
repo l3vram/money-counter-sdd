@@ -73,10 +73,15 @@ class AppwriteAccessRepository(
         val pollingJob = launch {
             while (isActive) {
                 try {
+                    // `getUserProfile` ya devuelve null en un 404 legítimo -la fila no está-,
+                    // así que todo lo que llega al catch es un fallo de red o del servidor.
                     trySend(getUserProfile(uid))
                 } catch (e: Exception) {
-                    // Permission or connectivity issue: degrade instead of crashing.
-                    trySend(null)
+                    // NO emitir nada. Emitir null acá borraba el perfil de la pantalla en
+                    // cuanto se cortaba la señal: la vista de usuario quedaba vacía por un
+                    // problema de red. Es el mismo error que el plan 030 corrigió para el rol
+                    // -un poll fallido descartando datos buenos-, y la regla es la misma:
+                    // conservar lo último conocido y dejar que el próximo poll corrija.
                 }
                 delay(refreshIntervalMillis)
             }

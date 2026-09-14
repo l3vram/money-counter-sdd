@@ -116,12 +116,25 @@ class AuthViewModel(
         checkAccess()
     }
 
+    /**
+     * Plan 034: distinguir "no hay sesión" de "no pude preguntar" también acá.
+     *
+     * Antes, una excepción de `currentUser()` -o sea, quedarse sin señal- se trataba como
+     * usuario ausente: cancelaba el poll del perfil y lo borraba de la pantalla. Como el poll
+     * quedaba cancelado, **al volver la conexión nada lo reiniciaba** y la vista de usuario se
+     * quedaba vacía para siempre. Es el mismo error que el plan 030 corrigió para el rol, en un
+     * tercer lugar.
+     *
+     * Ahora sólo un `null` explícito -el SDK contestó que no hay sesión- limpia el perfil.
+     */
     fun loadProfile() {
         viewModelScope.launch {
             val user = try {
                 authRepository.currentUser()
             } catch (e: Exception) {
-                null
+                // No pude preguntar. Conservar lo que haya y dejar que el poll -o el próximo
+                // `loadProfile`- se recupere solo.
+                return@launch
             }
             if (user == null) {
                 profileJob?.cancel()
@@ -132,10 +145,22 @@ class AuthViewModel(
             if (profileJob?.isActive == true) return@launch
             profileJob = launch {
                 accessRepository.observeUserProfile(user.uid).collect { profile ->
+                    // Un perfil nulo del poll significa que la fila no está (404). No sobre-
+                    // escribir un perfil bueno con null por un fallo de red: eso lo maneja el
+                    // repositorio, que ya no emite nada en ese caso.
                     _profile.value = profile
                 }
             }
         }
+    }
+
+    /**
+     * Plan 034: cuando vuelve la conexión hay que re-enganchar lo que se haya soltado. El poll
+     * de membresía se recupera solo porque nunca se cancela, pero el del perfil puede haber
+     * muerto con la sesión que lo inició, así que se reintenta explícitamente.
+     */
+    private fun onConnectivityRestored() {
+        if (profileJob?.isActive != true) loadProfile()
     }
 
     /**
@@ -261,6 +286,7 @@ class AuthViewModel(
                         _membershipResolved.value = true
                         // The poll answered, so connectivity is back — this is the cheapest
                         // signal there is, and it is why the offline banner needs no timer.
+                        if (_isOffline.value) onConnectivityRestored()
                         _isOffline.value = false
                         _member.value = update.member
                         memberCacheRepository?.save(update.member)
@@ -269,6 +295,7 @@ class AuthViewModel(
 
                     MembershipUpdate.Missing -> {
                         _membershipResolved.value = true
+                        if (_isOffline.value) onConnectivityRestored()
                         _isOffline.value = false
                         if (memberCacheRepository?.load() == null) {
                             // Genuinely absent and nothing was ever cached: since plan 033
