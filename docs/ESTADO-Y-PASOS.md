@@ -373,6 +373,87 @@ la firma.
 Sigue pendiente (rendimiento, no bug): el **N+1 de `listUsers`**, que hace un `getRow` de
 `signups` por usuario.
 
+## 6octies. Bugs de la prueba de onboarding (2026-09-14)
+
+Seis fallas encontradas por el dueño probando el alta de punta a punta. Todas arregladas
+salvo donde se indica.
+
+### 1. Aprobar fallaba: `Row with the requested ID ... could not be found`
+
+`approveSignup` hacía `updateRow` sobre `users`, pero **el alta no crea esa fila**: la escribe
+`ensureUserDocument()` recién cuando la app arranca con sesión. Quien se registra y cierra la
+app no la tiene, así que era **imposible aprobarlo desde el panel**. Ahora es `upsertRow`, con
+el email que ya trae la fila de `signups`.
+
+### 2. La aprobación a medias duplicaba organizaciones
+
+Consecuencia del bug 1, y peor que él. `approveSignup` escribe varias filas en secuencia y
+**no es una transacción**: creaba la organización y las sucursales, después fallaba en `users`
+y dejaba el `signup` en PENDING. Cada reintento generaba un `orgId` nuevo — **tres
+organizaciones "Las Pepas" salieron de tres intentos**, con sus tres sucursales, y los permisos
+vacíos porque el otorgamiento corre después del paso que fallaba.
+
+Arreglado con idempotencia: si el signup ya tiene membresía apuntando a una organización, se
+**reanuda esa** en vez de crear otra. Los huérfanos se borraron a mano (3 orgs, 3 branches, 1
+members) para que la prueba arrancara limpia.
+
+**Pendiente de fondo:** la aprobación sigue sin ser atómica. Appwrite tiene transacciones
+(`transaction_id` en las operaciones de TablesDB) y sería el arreglo correcto. Candidato a
+plan propio.
+
+### 3. El login creaba cuentas, y una contraseña mal escrita decía "la cuenta ya existe"
+
+La raíz de dos síntomas a la vez:
+
+```kotlin
+private fun isUserNotFound(e: AppwriteException): Boolean =
+    e.type?.contains("user_not_found") == true || e.code == 401   // ← el problema
+```
+
+Una **contraseña incorrecta también es 401**. Así que el login leía "credencial inválida" como
+"no existe la cuenta", intentaba registrarla, y el error que salía era *"la cuenta ya existe"*.
+Y cuando el correo de verdad no existía, **creaba la cuenta desde la pantalla de login**: sin
+fila en `signups`, o sea sin rol ni negocio, invisible en Solicitudes e imposible de aprobar.
+Así quedó la cuenta `marvelalvarez89@gmail.com` durante la prueba.
+
+Arreglado: **iniciar sesión nunca crea cuentas.** El registro tiene su propia pantalla, que es
+donde se piden rol y negocio.
+
+### 4. Cuenta existente sin aprobar
+
+Sale del arreglo anterior: con la contraseña correcta hay sesión y la app muestra la pantalla
+de pendiente de aprobación, que ya existía. Con la contraseña incorrecta, dice eso.
+
+### 5. Los mensajes de error del login
+
+Appwrite responde **lo mismo** para una contraseña incorrecta y para un correo que no existe,
+a propósito, para que el formulario no sirva para descubrir quién tiene cuenta. Así que el
+mensaje ofrece las dos lecturas: *"Correo o contraseña incorrectos. Si todavía no tienes
+cuenta, crea una primero."*
+
+Se separó del caso del **cambio** de contraseña (`user_invalid_password`), donde ofrecer crear
+una cuenta no tiene sentido: ahí dice *"La contraseña actual es incorrecta"*.
+
+### 6. La contraseña temporal no se podía copiar
+
+Era un `Text` común: no se podía ni seleccionar, y es el único modo de entrar a la cuenta.
+Ahora está dentro de un `SelectionContainer` y tiene botón **Copiar contraseña**, que confirma
+en el propio botón.
+
+### Y antes, el reset de contraseña del superusuario
+
+Mismo patrón que el bug 1: `users.updatePassword` corría **primero** y funcionaba, después el
+`updateRow` de la marca de cambio forzado tiraba 404 para una cuenta sin fila en `signups`, y
+el panel reportaba fallo **sobre un éxito**. La contraseña ya había cambiado. Ahora la marca es
+best-effort y sólo tolera un 404.
+
+### El patrón que comparten
+
+Cuatro de estos bugs son el mismo error de diseño: **una secuencia de escrituras donde un paso
+accesorio falla y se lleva puesto el resultado del paso esencial**. Vale la pena mirar con esa
+lente cualquier acción nueva de la Function: qué pasa si el paso 3 de 4 falla, y si el paso que
+falló era realmente indispensable.
+
 ## 7. Deploy: por qué se cambia a Git
 
 El proceso documentado en `webadmin/README.md` es frágil: empaquetar un tarball, subirlo a una

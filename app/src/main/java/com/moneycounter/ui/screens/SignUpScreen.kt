@@ -29,13 +29,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -268,6 +272,8 @@ fun SignUpSuccessScreen(
     onBackToLogin: () -> Unit
 ) {
     val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
     val number = superuserWhatsapp?.takeIf { it.isNotBlank() } ?: ContactConfig.WHATSAPP_NUMBER
     val message = SignupWhatsAppMessage.build(
         email = request.email,
@@ -312,14 +318,33 @@ fun SignUpSuccessScreen(
                 color = MaterialTheme.colorScheme.primaryContainer,
                 shape = MaterialTheme.shapes.medium
             ) {
+                // Selectable: this password is the only way into the account, and it was
+                // impossible to even select, let alone copy.
+                SelectionContainer {
+                    Text(
+                        text = tempPassword,
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedButton(
+                onClick = {
+                    clipboard.setText(AnnotatedString(tempPassword))
+                    copied = true
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Text(
-                    text = tempPassword,
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
+                    text = if (copied) "¡Contraseña copiada!" else "Copiar contraseña",
+                    style = MaterialTheme.typography.labelLarge
                 )
             }
 

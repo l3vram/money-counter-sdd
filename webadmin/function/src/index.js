@@ -84,7 +84,7 @@ async function listAll(tablesDB, tableId, queries) {
   return { rows: result.rows || [], total: result.total || result.rows.length };
 }
 
-async function approveSignup(tablesDB, params, error) {
+async function approveSignup(tablesDB, params, error, log) {
   const { signupId } = params;
   const signup = await getRowOrNull(tablesDB, TABLE_SIGNUPS, signupId);
   if (!signup) throw httpError(404, 'Solicitud no encontrada (signupId=' + signupId + ')');
@@ -97,7 +97,19 @@ async function approveSignup(tablesDB, params, error) {
   let branchIds = params.branchIds;
   const createdBranches = [];
 
-  if (signup.role === 'OWNER') {
+  // Idempotence for the OWNER path. The approval writes several rows in sequence and is not
+  // a transaction, so a failure halfway leaves the signup PENDING with the organization
+  // already created. Retrying used to mint a brand new `orgId` and duplicate everything —
+  // three "Las Pepas" organizations came out of three attempts. If this signup already has a
+  // membership pointing at an organization, finish that one instead of starting another.
+  const existingMember = await getRowOrNull(tablesDB, TABLE_MEMBERS, signupId);
+  const alreadyAssignedOrg = existingMember && existingMember.orgId;
+
+  if (signup.role === 'OWNER' && alreadyAssignedOrg) {
+    orgId = existingMember.orgId;
+    branchIds = Array.isArray(existingMember.branchIds) ? existingMember.branchIds : [];
+    if (log) log(`Reanudando aprobacion de ${signupId}: ya tenia la organizacion ${orgId}`);
+  } else if (signup.role === 'OWNER') {
     orgId = sdk.ID.unique();
     const orgName = (signup.businessName && String(signup.businessName).trim()) || 'Negocio sin nombre';
     await tablesDB.createRow({
@@ -143,11 +155,25 @@ async function approveSignup(tablesDB, params, error) {
     data: { orgId, role: signup.role, branchIds },
     permissions: [sdk.Permission.read(sdk.Role.user(signupId))],
   });
-  await tablesDB.updateRow({
+  // Upsert, not update: the signup flow writes the `signups` row, while the `users` row is
+  // only created when the app next boots with a session (`ensureUserDocument`). Someone who
+  // registers and closes the app therefore has no `users` row yet, and an update would 404 —
+  // which made approving them impossible from the panel. The signup row carries the email, so
+  // the row can be completed here.
+  await tablesDB.upsertRow({
     databaseId: DATABASE_ID,
     tableId: TABLE_USERS,
     rowId: signupId,
-    data: { access: 'APPROVED', updatedAt: now },
+    data: {
+      email: signup.email || '',
+      access: 'APPROVED',
+      updatedAt: now,
+      createdAt: signup.createdAt != null ? signup.createdAt : now,
+    },
+    permissions: [
+      sdk.Permission.read(sdk.Role.user(signupId)),
+      sdk.Permission.update(sdk.Role.user(signupId)),
+    ],
   });
   await tablesDB.updateRow({
     databaseId: DATABASE_ID,
@@ -300,7 +326,7 @@ module.exports = async ({ req, res, log, error }) => {
       }
 
       case 'approve':
-        data = await approveSignup(tablesDB, params, error);
+        data = await approveSignup(tablesDB, params, error, log);
         break;
 
       case 'reject': {

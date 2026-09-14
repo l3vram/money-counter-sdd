@@ -27,13 +27,18 @@ class AuthErrorMessageTest {
     @Test
     fun `maps invalid credentials message to friendly message`() {
         val ex = RuntimeException("user (invalid_credentials): A user with the email address was not found")
-        assertEquals("Correo o contraseña incorrectos", mapAuthError(ex))
+        // Appwrite answers the same for a wrong password and for an unknown email, so the
+        // message has to offer both readings.
+        assertEquals(
+            "Correo o contraseña incorrectos. Si todavía no tienes cuenta, crea una primero.",
+            mapAuthError(ex)
+        )
     }
 
     @Test
     fun `maps user_not_found message to friendly message`() {
         val ex = RuntimeException("user (user_not_found): User was not found.")
-        assertEquals("La cuenta no existe", mapAuthError(ex))
+        assertEquals("No existe una cuenta con ese correo. Crea una cuenta primero.", mapAuthError(ex))
     }
 
     @Test

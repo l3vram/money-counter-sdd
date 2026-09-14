@@ -70,7 +70,7 @@ class ChangePasswordRepositoryTest {
         val result = repo.changePassword("temporal123", "nuevaClave123")
 
         assertTrue(result.isFailure)
-        assertEquals("Correo o contraseña incorrectos", result.exceptionOrNull()?.message)
+        assertEquals("La contraseña actual es incorrecta", result.exceptionOrNull()?.message)
     }
 
     @Test

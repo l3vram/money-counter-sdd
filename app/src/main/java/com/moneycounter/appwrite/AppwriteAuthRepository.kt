@@ -36,9 +36,16 @@ class AppwriteAuthRepository : AuthRepository {
         }
     }
 
+    /**
+     * Signing in NEVER creates an account. It used to: any 401 was read as "user not found"
+     * and the account was registered on the spot. That produced two bugs — a wrong password
+     * became "la cuenta ya existe" (the create failed instead of the session), and an unknown
+     * email became an account with no `signups` row, so with no role and no business, which
+     * the panel cannot approve. Registration has its own screen, which collects those.
+     */
     override suspend fun signInWithEmail(email: String, password: String): Result<AuthUser> {
         return try {
-            ensureSession(email, password)
+            account.createEmailPasswordSession(email, password)
             val user = account.get()
             Result.success(user.toAuthUser())
         } catch (e: Exception) {
@@ -60,28 +67,6 @@ class AppwriteAuthRepository : AuthRepository {
     override suspend fun signOut() {
         runCatching { account.deleteSession("current") }
     }
-
-    private suspend fun ensureSession(email: String, password: String) {
-        try {
-            account.createEmailPasswordSession(email, password)
-        } catch (e: AppwriteException) {
-            if (isUserNotFound(e)) {
-                // First sign-in ever: register the account, then open the session.
-                account.create(
-                    userId = ID.unique(),
-                    email = email,
-                    password = password,
-                    name = email.substringBefore('@')
-                )
-                account.createEmailPasswordSession(email, password)
-            } else {
-                throw e
-            }
-        }
-    }
-
-    private fun isUserNotFound(e: AppwriteException): Boolean =
-        e.type?.contains("user_not_found") == true || e.code == 401
 
     private fun User<*>.toAuthUser(): AuthUser = AuthUser(
         uid = id,
