@@ -159,9 +159,13 @@ async function approveSignup(tablesDB, params) {
   return { signupId, orgId, branchIds };
 }
 
+// Every list action answers `{ rows, total }` — the shape the panel's `ListResult<T>`
+// expects. Returning `{ users }` / `{ signups }` instead left `result.rows` undefined in the
+// panel, which then crashed on `.length`. TypeScript could not catch it: the payload crosses
+// the wire as `unknown` and is cast.
 async function listUsers(tablesDB) {
   const result = await listAll(tablesDB, TABLE_USERS, []);
-  const users = [];
+  const rows = [];
   for (const row of result.rows) {
     let role = null;
     let mustChangePassword = false;
@@ -172,7 +176,7 @@ async function listUsers(tablesDB) {
       mustChangePassword = Boolean(signup.mustChangePassword);
       signupStatus = signup.status || null;
     }
-    users.push({
+    rows.push({
       id: row.$id,
       email: row.email || '',
       displayName: row.displayName || '',
@@ -183,7 +187,7 @@ async function listUsers(tablesDB) {
       signupStatus,
     });
   }
-  return { users, total: result.total };
+  return { rows, total: result.total };
 }
 
 module.exports = async ({ req, res, log, error }) => {
@@ -227,7 +231,7 @@ module.exports = async ({ req, res, log, error }) => {
           sdk.Query.equal('status', [status]),
           sdk.Query.orderDesc('createdAt'),
         ]);
-        data = { signups: result.rows, total: result.total };
+        data = { rows: result.rows, total: result.total };
         break;
       }
 

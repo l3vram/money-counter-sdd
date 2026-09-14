@@ -351,6 +351,28 @@ contenido, la manipulación de headers y el CORS: el navegador estaba bien.
 `DELETE /account/sessions/current 401` cuando no hay sesión. Es inofensivo y esperado —
 está dentro de un try/catch—, pero ensucia el diagnóstico. No perseguirlo.
 
+## 6septies. Desajuste de contrato: `rows` vs `users`/`signups` (2026-09-14)
+
+Con el login ya funcionando, los menús **Usuarios** y **Solicitudes** tiraban
+`Cannot read properties of undefined (reading 'length')`. El panel espera `{ rows, total }`
+(`ListResult<T>` en `types.ts:52`) y hace `setUsers(result.rows)`, pero la Function devolvía
+`{ users, total }` y `{ signups, total }`. `result.rows` quedaba `undefined`, entraba así al
+estado y explotaba al renderizar.
+
+Organizaciones y Sucursales funcionaban porque pasan por `listAll`, que ya devuelve `rows`.
+
+Arreglado en el servidor, que era donde estaba la inconsistencia: las cuatro acciones de lista
+responden `{ rows, total }`. Verificado por API: las cuatro devuelven 200 con `rows` como
+lista. Deployment `6aa83188ab226e5f893e`.
+
+**Por qué TypeScript no lo atrapó:** la respuesta de la Function cruza el cable como `unknown`
+y se castea (`return payload.data as T`). El tipo declarado era correcto y la realidad no, y
+el cast lo tapó. Cualquier acción nueva conviene verificarla contra la Function, no confiar en
+la firma.
+
+Sigue pendiente (rendimiento, no bug): el **N+1 de `listUsers`**, que hace un `getRow` de
+`signups` por usuario.
+
 ## 7. Deploy: por qué se cambia a Git
 
 El proceso documentado en `webadmin/README.md` es frágil: empaquetar un tarball, subirlo a una
