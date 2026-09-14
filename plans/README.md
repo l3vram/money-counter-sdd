@@ -69,6 +69,7 @@ Hallazgo que origina 030: el rol de sesión se resuelve por red y *cualquier* fa
 |---|------|--------|----------|--------|------|--------|
 | 030 | `030-role-fail-closed` | Rol cacheado localmente + no degradar por error de red + re-cableado | P1 | M | — | ✅ DONE en `plan/030` (`ff98b3f`, 444 tests) — **Gate B pendiente** |
 | 033 | `033-no-membership-no-access` | Sin membresía no se entra (fail-closed) + cerrar tablas de tenant | **P0** | M | 030 | 🔄 pasos 1–6 DONE en `plan/033` (460 tests) — **paso 7 (dispositivo) pendiente del dueño** |
+| 034 | `034-offline-session` | Sesión offline que sobrevive + un 401 que expulsa + indicador de "sin conexión" | P1 | M | 033 | TODO |
 | 032 | `032-suspend-repositories` | Interfaces de repositorio `suspend` (habilita impl cloud) | P1 | M | 030 | TODO |
 | 031 | `031-repo-cleanup` | Rescatar prosa del glosario y podar worktrees/ramas obsoletos | P3 | S | — | TODO |
 
@@ -76,10 +77,13 @@ Hallazgo que origina 030: el rol de sesión se resuelve por red y *cualquier* fa
 ```
 W1: [030]        seguridad — bloquea todo lo demás
 W2: [033]        seguridad — cierra el fail-open permanente; la mitad de base YA está aplicada
-W3: [032, 031]   032 refactor estructural · 031 limpieza (archivos disjuntos)
+W3: [034]        offline: arrancar sin red (hoy la app no abre sin conexión)
+W4: [032, 031]   032 refactor estructural · 031 limpieza (archivos disjuntos)
 ```
 
 **Decisión del dueño (2026-09-12):** fail-closed mediante **rol cacheado localmente** — offline se usa el último rol conocido en vez de conceder todo; las instalaciones legacy sin rol cacheado conservan el comportamiento actual (`DefaultPermissionService` permisivo). No se endurece `DefaultPermissionService` en este plan.
+
+**Decisiones del dueño (2026-09-14) → plan 034:** la sesión offline **no expira** — sin red el usuario sólo ve lo que ya tenía, nada se refresca y sus operaciones quedan pendientes, así que no hay nada que ganar bloqueándolo. Lo que sí: **un 401 lo expulsa** (sesión revocada, cuenta borrada, acceso quitado), y eso es lo que hace aceptable lo anterior, porque la revocación surte efecto en cuanto el dispositivo vuelve a ver la red. Y el estado desconectado tiene que verse **siempre**, en todas las pantallas. Además se subió la duración de sesión del proyecto al máximo de Appwrite (1 año; no existe "para siempre").
 
 **Decisión del dueño (2026-09-12, revierte lo anterior) → plan 033:** no hay instalaciones legacy que proteger, así que `DefaultPermissionService` **sí** se endurece: sin membresía usable no se entra a la app — **ni como SELLER** — hasta que el SUPERUSER asigne negocio, sucursal y rol. Además el SUPERUSER sigue siendo una fila `members` (los labels de Auth fueron considerados y rechazados); Luis usa otra cuenta para probar roles de negocio.
 
