@@ -1,7 +1,11 @@
 # El Luiso — Status Maestro de Planes
 
 > **Si retomás el trabajo, leé primero `docs/ESTADO-Y-PASOS.md`**: qué estamos haciendo,
-> las decisiones tomadas, los cambios ya aplicados en Appwrite y el orden de los pasos.
+> las decisiones tomadas, los cambios ya aplicados en Appwrite, el orden de los pasos y una
+> sección de trampas donde cada entrada costó un diagnóstico equivocado.
+>
+> ⚠️ **Riesgo activo**: producción corre código del webadmin que sólo existe en `plan/033`,
+> no en `main`. Desplegar desde `main` revertiría los arreglos. Ver §2 de ese documento.
 
 > **Rama activa**: `feature/multi-tenant` — commit `cfd8809`.
 > Rama desviada de `main @ 1069419`. Regresión verde: **424 tests, 0 fallos** (2026-09-12).
