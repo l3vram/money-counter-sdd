@@ -113,7 +113,7 @@ como medida puntual hasta que Git quede conectado:
 | Recurso | Deployment | Estado |
 |---|---|---|
 | Function `admin` | `6aa5cb786166e18d64f0` | `ready`, **activa** — permiso de `members` + la key dinámica del header (ver §6ter) |
-| Site `admin-web` | `6aa5d181a6457d79024a` | `ready` y activa, sirviendo en `6aa5d18215a090aa54f7.appwrite.network` (ver abajo: la URL vieja NO se actualiza) |
+| Site `admin-web` | `6aa5d181a6457d79024a` | `ready` y activa, sirviendo en `elluiso.l3vram.com` (ver abajo: la URL vieja NO se actualiza) |
 
 Fuente: release `webadmin-deploy-2026-09-12b` en `l3vram/money-counter-sdd`, assets
 `admin-web.tar.gz` (24.643 B) y `admin-function.tar.gz` (4.781 B). Los `sourceSize` que
@@ -132,7 +132,7 @@ viejo para siempre.
 | URL | Sirve |
 |---|---|
 | `6aa4cb0a8f6a4c30a83f.appwrite.network` | deployment viejo — **la de todos los docs anteriores, ya no sirve** |
-| **`6aa5d18215a090aa54f7.appwrite.network`** | **deployment actual (2026-09-12d) — usar esta hoy** |
+| **`elluiso.l3vram.com`** | **deployment actual (2026-09-12d) — usar esta hoy** |
 | `6aa5c4103a466b90b992.appwrite.network` | deployment 2026-09-12b, ya viejo |
 | `adm.elluiso.com` | sigue al deployment activo (ya se movió solo al nuevo), pero **sin DNS** |
 
@@ -277,6 +277,47 @@ Las palancas reales, en orden de rendimiento:
 
 Nada de esto está hecho: es diagnóstico, no plan.
 
+## 6quinquies. Dominio propio: el panel y la API bajo `l3vram.com` (2026-09-14)
+
+Resuelto de raíz. El panel y la API ahora comparten dominio registrable, así que para el
+navegador son **el mismo sitio**: las cookies son de primera parte y se termina la clase de
+fallos de Safari (`Load failed`) que venía del cross-site.
+
+| Qué | URL | Regla |
+|---|---|---|
+| Panel | **https://elluiso.l3vram.com** | `ab9f3b7e336130d966494e480d290c45` (site, sigue al deployment activo) |
+| API | **https://api.elluiso.l3vram.com/v1** | `ac4b789cdb6c8669bac01d9f912e76f7` (api) |
+
+**DNS en Cloudflare** — dos CNAME, los dos en **DNS-only (nube gris)**; con el proxy de
+Cloudflare activo Appwrite no puede verificar ni emitir el certificado:
+
+```
+elluiso      CNAME  fastly.appwrite.systems
+api.elluiso  CNAME  fastly.appwrite.systems
+```
+
+Ese destino no está en la doc: se deduce de que tanto los sitios `*.appwrite.network` como
+`fra.cloud.appwrite.io` resuelven por CNAME a `fastly.appwrite.systems`, su ingress.
+`l3vram.com` no tiene registros CAA, así que no hubo que agregar ninguno.
+
+**Trampa al verificar:** la regla de la API falló **un segundo** después de empezar, con
+*"missing CNAME record"* — pero el registro ya resolvía. Era **caché negativa**: Appwrite
+consultó el DNS al crear la regla, cuando el nombre todavía no existía, y el resolver guardó
+el NXDOMAIN. Se arregla **reintentando** (`proxy_update_rule_status`), no cambiando el DNS.
+El sitio tardó ~3 min en tener certificado; la API, ~2 min tras el reintento.
+
+**Variable del sitio:** `VITE_APPWRITE_ENDPOINT` pasó a `https://api.elluiso.l3vram.com/v1`
+y se redeployó para hornearla. Verificado en el bundle servido.
+
+**Verificado de punta a punta** por el dominio nuevo, con un JWT de la cuenta de Luis:
+preflight con `access-control-allow-origin: https://elluiso.l3vram.com`, y `whoami`,
+`listUsers` y `getSettings` → **200**, `role: "SUPERUSER"`.
+
+**La app Android no se tocó**: sigue apuntando a `fra.cloud.appwrite.io`, que funciona igual.
+
+Pendiente menor de limpieza: las reglas y plataformas Web de los deployments viejos
+(`*.appwrite.network`) y la de `adm.elluiso.com`, que quedó sin DNS, ya no hacen falta.
+
 ## 7. Deploy: por qué se cambia a Git
 
 El proceso documentado en `webadmin/README.md` es frágil: empaquetar un tarball, subirlo a una
@@ -317,7 +358,7 @@ sucursales las crea `approveSignup` al aprobar un DUEÑO. El camino es el flujo 
 
 1. ✅ **Hecho y verificado por API**: `whoami` devuelve `role: "SUPERUSER"` y las acciones de
    lectura responden 200. Falta que Luis entre por el navegador
-   (**https://6aa5d18215a090aa54f7.appwrite.network**) y cargue su WhatsApp desde
+   (**https://elluiso.l3vram.com**) y cargue su WhatsApp desde
    Configuración (la fila `settings/app` existe con el campo vacío).
 2. Con la Function desplegada, desde la app se registra una cuenta nueva como **DUEÑO** con
    negocio y sucursales → crea el `signup` en PENDING.
@@ -345,7 +386,7 @@ vacía.
 | Database | `main` |
 | Tablas | `users`, `members`, `signups`, `orgs`, `branches`, `settings` |
 | Function | `admin` — node-18, entrypoint `src/index.js`, deployment `6aa4c515687c4d9d7361` (ready), `execute: ["users"]`, scopes `tables.*`/`rows.*`/`users.*` |
-| Site | `admin-web` → deployment activo en https://6aa5d18215a090aa54f7.appwrite.network · estable pendiente `adm.elluiso.com` (sin DNS) |
+| Site | `admin-web` → deployment activo en https://elluiso.l3vram.com · estable pendiente `adm.elluiso.com` (sin DNS) |
 | Repo | `github.com/l3vram/money-counter-sdd` |
 | SUPERUSER | `luisricoblanco2014@gmail.com`, uid `6aa352520004960be987` |
 | MCP Appwrite | `.mcp.json`, `https://mcp.appwrite.io/`, OAuth con scope **muy amplio** (`project:all`, `organization:all`) — aceptado conscientemente |
