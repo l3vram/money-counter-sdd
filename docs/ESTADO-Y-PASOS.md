@@ -30,17 +30,13 @@ dominio pero pasaban con la base abierta de par en par.
 
 | Rama | Commit | Qué tiene |
 |---|---|---|
-| `main` | `5bb7e59` | Todo hasta el plan 030 + webadmin. **Rama de deploy del sitio.** |
-| `plan/033` | `b4f5496` | Plan 033 pasos 1–6, plan 034 escrito, y **los arreglos del webadmin que ya están en producción** |
+| `main` | `948fc9f` | **Todo, incluido el plan 033 completo.** Rama de deploy del sitio |
+| `plan/033` | `948fc9f` | idéntica a `main`; ya mergeada, se puede borrar |
 
-> ### ⚠️ Riesgo activo
-> **Producción corre código del webadmin que sólo existe en `plan/033`.** Los deployments
-> activos de la Function incluyen arreglos (upsert de `users`, aprobación idempotente, reset de
-> contraseña, rol desde `members`) cuyos commits **no están en `main`**. Si alguien despliega
-> desde `main`, revierte todo eso.
->
-> El arreglo: mergear `plan/033` a `main` en cuanto el dueño apruebe el paso 7. No se puede
-> hacer cherry-pick limpio porque `b40c2c0` mezcla webadmin y app.
+> El riesgo de divergencia que figuraba acá **quedó resuelto el 14/09**: el dueño cerró el
+> flujo de login (Gate B), se mergeó `plan/033` a `main` por fast-forward sin conflictos, y se
+> verificó sobre `main` — 471 tests, 0 fallos, `assembleDebug` OK. Producción y `main` vuelven
+> a coincidir.
 
 Los cambios de la **app Android** del plan 033 y de los bugs de hoy **no están desplegados**:
 requieren instalar un APK nuevo (`./gradlew :app:installDebug`).
@@ -109,7 +105,7 @@ el cierre; la app lee sólo su propia fila.
 | # | Qué | Quién | Notas |
 |---|---|---|---|
 | 1 | ~~Paso 7 del plan 033~~ | **Dueño** | ✅ **Flujo de login y alta cerrado por el dueño el 14/09.** Queda sin probar en dispositivo sólo la regresión offline del plan 030 (modo avión), y el caso `AwaitingAssignment`, descartado por el dueño: sin sucursal la cuenta queda pendiente, así que no es un caso de uso |
-| 2 | **Mergear `plan/033` → `main`** | Agente | Resuelve el riesgo de §2 |
+| ~~2~~ | ~~Mergear `plan/033` → `main`~~ | Agente | ✅ hecho el 14/09, fast-forward sin conflictos |
 | 3 | **Instalar la Appwrite GitHub App** sobre `l3vram/money-counter-sdd` | **Dueño** | Consola → Function `admin` → Settings → Git. Hoy hay **0** instalaciones de VCS. Con eso el deploy deja de ser manual (§8) |
 | 4 | **Plan 034** — sesión offline + 401 que expulsa + indicador | Agente | `plans/034-offline-session.md`, escrito y listo para ejecutar |
 | 5 | **Aprobación atómica** (plan nuevo, sin escribir) | Agente | La aprobación escribe 5+ filas sin transacción. Appwrite tiene `transaction_id` en TablesDB. Ver §9.5 |
