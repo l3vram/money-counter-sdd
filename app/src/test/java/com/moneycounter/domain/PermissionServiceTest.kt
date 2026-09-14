@@ -5,6 +5,28 @@ import org.junit.Test
 
 class PermissionServiceTest {
 
+    /** Plan 033: no membership means every permission denied, without exception. */
+    private fun assertNone(ps: PermissionService) {
+        assertFalse(ps.canSell())
+        assertFalse(ps.canRegisterCreditSaleAndCollect())
+        assertFalse(ps.canRegisterExpense())
+        assertFalse(ps.canAddStock())
+        assertFalse(ps.canEditStock())
+        assertFalse(ps.canRegisterWriteoff())
+        assertFalse(ps.canCreateProduct())
+        assertFalse(ps.canEditProduct())
+        assertFalse(ps.canDeleteProduct())
+        assertFalse(ps.canViewInventory())
+        assertFalse(ps.canViewBranchHistory())
+        assertFalse(ps.canViewOrganizationHistory())
+        assertFalse(ps.canCreateSellerClosing())
+        assertFalse(ps.canCreateBranchClosing())
+        assertFalse(ps.canViewReports())
+        assertFalse(ps.canManageCatalog())
+        assertFalse(ps.canViewAllSellersDashboard())
+        assertFalse(ps.canManageAccounts())
+    }
+
     private fun assertFull(ps: PermissionService) {
         assertTrue(ps.canSell())
         assertTrue(ps.canRegisterCreditSaleAndCollect())
@@ -86,16 +108,13 @@ class PermissionServiceTest {
     }
 
     @Test
-    fun `DefaultPermissionService grants single-user ops but never org views or accounts`() {
-        val ps = DefaultPermissionService
-        assertFull(ps)
-        assertTrue(ps.canViewOrganizationHistory())
-        assertFalse(ps.canViewAllSellersDashboard())
-        assertFalse(ps.canManageAccounts())
+    fun `NoAccessPermissionService denies every permission (plan 033)`() {
+        val ps = NoAccessPermissionService
+        assertNone(ps)
     }
 
     @Test
-    fun `forRole maps null to DefaultPermissionService`() {
-        assertSame(DefaultPermissionService, DefaultPermissionService.forRole(null))
+    fun `forRole maps null to NoAccessPermissionService`() {
+        assertSame(NoAccessPermissionService, NoAccessPermissionService.forRole(null))
     }
 }

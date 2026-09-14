@@ -18,7 +18,7 @@ data class Member(
  *
  * `null` means no membership row, which is the case this predicate exists for: the absence
  * of a membership used to hand the session every permission through
- * [DefaultPermissionService]. It now means no access at all.
+ * [NoAccessPermissionService]. It now means no access at all.
  *
  * Two of the rules plan 033 asked for are unreachable by construction and deliberately
  * absent: [Member] requires a non-blank `orgId` in its `init`, and its `role` is not

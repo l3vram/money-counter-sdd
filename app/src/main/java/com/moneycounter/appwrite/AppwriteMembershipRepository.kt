@@ -14,9 +14,11 @@ import kotlinx.coroutines.launch
 
 /**
  * Only a genuinely missing row means "this install has no membership" (plan 030).
- * Every other failure — connectivity, permissions, server error — must leave the
- * last known member in place: degrading to "no member" hands the session
- * [com.moneycounter.domain.DefaultPermissionService], i.e. every permission.
+ * Every other failure — connectivity, permissions, server error — must leave the last known
+ * member in place. Since plan 033, "no member" means
+ * [com.moneycounter.domain.NoAccessPermissionService] and therefore a locked session, so
+ * mistaking a transport failure for a missing row now locks out a legitimate user instead of
+ * promoting them. Both directions are wrong; the row must be genuinely absent.
  * A null code means the throwable carried no HTTP status, so it is a transport
  * failure, not a missing row.
  */

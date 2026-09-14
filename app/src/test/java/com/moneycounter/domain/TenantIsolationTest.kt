@@ -189,10 +189,10 @@ class TenantIsolationTest {
         assertEquals(listOf("a-br-a", "a-br-b", "legacy-empty"), visible.map { it.id })
     }
 
-    // ---- 6. Null-role fallback: legacy single-user sees everything ----
+    // ---- 6. Null role: no permissions at all, though the history filters still pass through ----
 
     @Test
-    fun `null role keeps full single-user access as the safety fallback`() {
+    fun `null role grants no permission, and the history filters stay pass-through`() {
         val movements = listOf(
             movement("a", orgA, brA, s1),
             movement("b", orgB, brB, s2),
@@ -207,10 +207,12 @@ class TenantIsolationTest {
         )
         assertEquals(closings, closingsVisible)
 
+        // Plan 033 reversed this: a null role used to grant every operational permission,
+        // which is the escalation the plan closes. It now grants none.
         val p: PermissionService = RolePermissionService(null)
-        assertTrue("null role keeps sale access", p.canSell())
-        assertTrue("null role keeps stock access", p.canAddStock())
-        assertTrue("null role keeps catalog access", p.canManageCatalog())
+        assertFalse("a null role must not sell", p.canSell())
+        assertFalse("a null role must not touch stock", p.canAddStock())
+        assertFalse("a null role must not manage the catalog", p.canManageCatalog())
     }
 
     // ---- 7. SELLER own-history: only own movements, other sellers excluded ----

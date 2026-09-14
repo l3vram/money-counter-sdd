@@ -11,7 +11,7 @@ import org.junit.Test
 /**
  * Plan 030 regression guard. The bug: the role came from a network `members`
  * row, and any failure — including simply being offline — produced a null role,
- * which meant DefaultPermissionService and therefore *every* permission. A
+ * which meant NoAccessPermissionService and therefore *every* permission. A
  * SELLER without signal operated as an OWNER.
  */
 class RoleRetentionTest {

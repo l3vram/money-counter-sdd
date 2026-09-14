@@ -11,7 +11,7 @@ import com.moneycounter.domain.CounterResult
 import com.moneycounter.domain.CounterStatus
 import com.moneycounter.domain.Currency
 import com.moneycounter.domain.DefaultCurrencies
-import com.moneycounter.domain.DefaultPermissionService
+import com.moneycounter.domain.NoAccessPermissionService
 import com.moneycounter.domain.Denomination
 import com.moneycounter.domain.PermissionService
 import com.moneycounter.domain.MeasurementUnit
@@ -114,11 +114,11 @@ data class MoneyCounterUiState(
 )
 
 /**
- * Plan 030: a transient null role — membership not resolved yet, or a failed
- * poll — must never widen permissions for a session that already knows its role.
- * A null role resolves to [com.moneycounter.domain.DefaultPermissionService],
- * which grants everything, so letting one overwrite a known role is a privilege
- * escalation. Only an explicit sign-out resets the session.
+ * Plan 030: a transient null role — membership not resolved yet, or a failed poll — must
+ * never overwrite the role a session already knows. Since plan 033 a null role resolves to
+ * [com.moneycounter.domain.NoAccessPermissionService], which denies everything, so a
+ * transient null would now lock out a working session instead of escalating it. Keeping the
+ * known role is right either way. Only an explicit sign-out resets the session.
  */
 fun retainRole(incoming: Role?, current: Role?): Role? = incoming ?: current
 
@@ -140,9 +140,9 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     private var currentRole: Role? = null
 
     /** Security boundary: every mutation below must consult this before acting. */
-    private var permissionService: PermissionService = DefaultPermissionService
+    private var permissionService: PermissionService = NoAccessPermissionService
 
-    /** Role of the current session (null = no member doc yet / single-user install).
+    /** Role of the current session (null = no usable membership ⇒ no access, plan 033).
      *  Exposed for UI scoping — e.g. CierresScreen filters past closings by role
      *  via [closingsVisibleForRole]. */
     val role: Role?
@@ -190,7 +190,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         // Defense in depth: never let a transient null widen this session's permissions.
         val effectiveRole = retainRole(role, currentRole)
         currentRole = effectiveRole
-        permissionService = DefaultPermissionService.forRole(effectiveRole)
+        permissionService = NoAccessPermissionService.forRole(effectiveRole)
         uid?.takeIf { it.isNotBlank() }?.let { cleanUid ->
             context = AppContext(cleanUid, role = effectiveRole)
         }

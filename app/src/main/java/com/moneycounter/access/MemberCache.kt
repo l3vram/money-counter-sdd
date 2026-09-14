@@ -11,10 +11,11 @@ import java.io.File
  * Pure (de)serialization for the locally cached membership (plan 030).
  * No Android I/O here: unit-tested directly, mirroring [com.moneycounter.repository.TenantJson].
  *
- * The cache exists so a connectivity failure cannot degrade the session to
- * "no member" — which would hand out [com.moneycounter.domain.DefaultPermissionService]
- * and therefore every permission. It is defense in depth and an offline-UX
- * enabler, NOT an authorization boundary: the real boundary must live server-side.
+ * The cache exists so a connectivity failure cannot degrade the session to "no member".
+ * Since plan 033 that degradation locks the user out instead of handing out every
+ * permission, so the cache is now what keeps an assigned user working offline rather than
+ * what stops a privilege escalation. Defense in depth and an offline-UX enabler, NOT an
+ * authorization boundary: the real boundary must live server-side.
  */
 object MemberCacheJson {
 

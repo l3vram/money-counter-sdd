@@ -117,23 +117,27 @@ fun Role.canManageAccounts(): Boolean = when (this) {
 }
 
 /**
- * Gate helpers for UI visibility. A `null` role means the user has no member doc yet
- * (not assigned to an org/branch), which keeps today's single-user privileges.
+ * Gate helpers for UI visibility. A `null` role means the session has no usable membership —
+ * no `members` row, or one the SUPERUSER has not finished assigning — and every gate is then
+ * **closed** (plan 033).
+ *
+ * These mirror [com.moneycounter.domain.PermissionService] on purpose: this is UX visibility,
+ * the ViewModel is the security boundary. They must not disagree, so both fail closed.
  */
-fun Role?.mayRegisterWriteoff(): Boolean = this?.canRegisterWriteoff() ?: true
+fun Role?.mayRegisterWriteoff(): Boolean = this?.canRegisterWriteoff() ?: false
 
-fun Role?.mayEditStock(): Boolean = this?.canEditStock() ?: true
+fun Role?.mayEditStock(): Boolean = this?.canEditStock() ?: false
 
-fun Role?.mayAddStock(): Boolean = this?.canAddStock() ?: true
+fun Role?.mayAddStock(): Boolean = this?.canAddStock() ?: false
 
-fun Role?.mayRegisterExpense(): Boolean = this?.canRegisterExpense() ?: true
+fun Role?.mayRegisterExpense(): Boolean = this?.canRegisterExpense() ?: false
 
-fun Role?.mayCreateSellerClosing(): Boolean = this?.canCreateSellerClosing() ?: true
+fun Role?.mayCreateSellerClosing(): Boolean = this?.canCreateSellerClosing() ?: false
 
-fun Role?.mayCreateBranchClosing(): Boolean = this?.canCreateBranchClosing() ?: true
+fun Role?.mayCreateBranchClosing(): Boolean = this?.canCreateBranchClosing() ?: false
 
-fun Role?.mayManageCatalog(): Boolean = this?.canManageCatalog() ?: true
+fun Role?.mayManageCatalog(): Boolean = this?.canManageCatalog() ?: false
 
-fun Role?.mayViewBranchHistory(): Boolean = this?.canViewBranchHistory() ?: true
+fun Role?.mayViewBranchHistory(): Boolean = this?.canViewBranchHistory() ?: false
 
 fun Role?.mayViewOwnerDashboard(): Boolean = this?.canViewAllSellersDashboard() ?: false

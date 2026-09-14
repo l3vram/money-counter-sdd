@@ -26,54 +26,62 @@ interface PermissionService {
 }
 
 /**
- * Default single-user behavior: everything allowed except the org-level views.
- * Returned when [role] is `null` (legacy installs / no member doc yet) or as the
- * initial value before the session role is known.
+ * No membership, no access (plan 033). Returned when the role is `null` — no `members` row,
+ * or a row that is not usable yet — and used as the initial value before the session role is
+ * known.
+ *
+ * It denies **everything**, on purpose. Until plan 033 this object granted every operational
+ * permission "for legacy single-user installs"; there were none, the app had never shipped,
+ * and the result was that an unresolved role meant OWNER-grade powers. The name says what it
+ * does: a thing called "Default" that denies everything is a trap for the next reader.
+ *
+ * The session only opens the app with a membership that [Member.isOperable] accepts, so in
+ * practice this service backs a locked screen rather than a usable one.
  */
-object DefaultPermissionService : PermissionService {
-    override fun canSell() = true
-    override fun canRegisterCreditSaleAndCollect() = true
-    override fun canRegisterExpense() = true
-    override fun canAddStock() = true
-    override fun canEditStock() = true
-    override fun canRegisterWriteoff() = true
-    override fun canCreateProduct() = true
-    override fun canEditProduct() = true
-    override fun canDeleteProduct() = true
-    override fun canViewInventory() = true
-    override fun canViewBranchHistory() = true
-    override fun canViewOrganizationHistory() = true
-    override fun canCreateSellerClosing() = true
-    override fun canCreateBranchClosing() = true
-    override fun canViewReports() = true
-    override fun canManageCatalog() = true
+object NoAccessPermissionService : PermissionService {
+    override fun canSell() = false
+    override fun canRegisterCreditSaleAndCollect() = false
+    override fun canRegisterExpense() = false
+    override fun canAddStock() = false
+    override fun canEditStock() = false
+    override fun canRegisterWriteoff() = false
+    override fun canCreateProduct() = false
+    override fun canEditProduct() = false
+    override fun canDeleteProduct() = false
+    override fun canViewInventory() = false
+    override fun canViewBranchHistory() = false
+    override fun canViewOrganizationHistory() = false
+    override fun canCreateSellerClosing() = false
+    override fun canCreateBranchClosing() = false
+    override fun canViewReports() = false
+    override fun canManageCatalog() = false
     override fun canViewAllSellersDashboard() = false
     override fun canManageAccounts() = false
 }
 
 /** Delegates every permission to the [Role.kt] matrix. */
 class RolePermissionService(private val role: Role?) : PermissionService {
-    override fun canSell(): Boolean = role?.canSell() ?: DefaultPermissionService.canSell()
+    override fun canSell(): Boolean = role?.canSell() ?: NoAccessPermissionService.canSell()
     override fun canRegisterCreditSaleAndCollect(): Boolean =
-        role?.canRegisterCreditSaleAndCollect() ?: DefaultPermissionService.canRegisterCreditSaleAndCollect()
-    override fun canRegisterExpense(): Boolean = role?.canRegisterExpense() ?: DefaultPermissionService.canRegisterExpense()
-    override fun canAddStock(): Boolean = role?.canAddStock() ?: DefaultPermissionService.canAddStock()
-    override fun canEditStock(): Boolean = role?.canEditStock() ?: DefaultPermissionService.canEditStock()
-    override fun canRegisterWriteoff(): Boolean = role?.canRegisterWriteoff() ?: DefaultPermissionService.canRegisterWriteoff()
-    override fun canCreateProduct(): Boolean = role?.canCreateProduct() ?: DefaultPermissionService.canCreateProduct()
-    override fun canEditProduct(): Boolean = role?.canEditProduct() ?: DefaultPermissionService.canEditProduct()
-    override fun canDeleteProduct(): Boolean = role?.canDeleteProduct() ?: DefaultPermissionService.canDeleteProduct()
-    override fun canViewInventory(): Boolean = role?.canViewInventory() ?: DefaultPermissionService.canViewInventory()
-    override fun canViewBranchHistory(): Boolean = role?.canViewBranchHistory() ?: DefaultPermissionService.canViewBranchHistory()
-    override fun canViewOrganizationHistory(): Boolean = role?.canViewOrganizationHistory() ?: DefaultPermissionService.canViewOrganizationHistory()
-    override fun canCreateSellerClosing(): Boolean = role?.canCreateSellerClosing() ?: DefaultPermissionService.canCreateSellerClosing()
-    override fun canCreateBranchClosing(): Boolean = role?.canCreateBranchClosing() ?: DefaultPermissionService.canCreateBranchClosing()
-    override fun canViewReports(): Boolean = role?.canViewReports() ?: DefaultPermissionService.canViewReports()
-    override fun canManageCatalog(): Boolean = role?.canManageCatalog() ?: DefaultPermissionService.canManageCatalog()
-    override fun canViewAllSellersDashboard(): Boolean = role?.canViewAllSellersDashboard() ?: DefaultPermissionService.canViewAllSellersDashboard()
-    override fun canManageAccounts(): Boolean = role?.canManageAccounts() ?: DefaultPermissionService.canManageAccounts()
+        role?.canRegisterCreditSaleAndCollect() ?: NoAccessPermissionService.canRegisterCreditSaleAndCollect()
+    override fun canRegisterExpense(): Boolean = role?.canRegisterExpense() ?: NoAccessPermissionService.canRegisterExpense()
+    override fun canAddStock(): Boolean = role?.canAddStock() ?: NoAccessPermissionService.canAddStock()
+    override fun canEditStock(): Boolean = role?.canEditStock() ?: NoAccessPermissionService.canEditStock()
+    override fun canRegisterWriteoff(): Boolean = role?.canRegisterWriteoff() ?: NoAccessPermissionService.canRegisterWriteoff()
+    override fun canCreateProduct(): Boolean = role?.canCreateProduct() ?: NoAccessPermissionService.canCreateProduct()
+    override fun canEditProduct(): Boolean = role?.canEditProduct() ?: NoAccessPermissionService.canEditProduct()
+    override fun canDeleteProduct(): Boolean = role?.canDeleteProduct() ?: NoAccessPermissionService.canDeleteProduct()
+    override fun canViewInventory(): Boolean = role?.canViewInventory() ?: NoAccessPermissionService.canViewInventory()
+    override fun canViewBranchHistory(): Boolean = role?.canViewBranchHistory() ?: NoAccessPermissionService.canViewBranchHistory()
+    override fun canViewOrganizationHistory(): Boolean = role?.canViewOrganizationHistory() ?: NoAccessPermissionService.canViewOrganizationHistory()
+    override fun canCreateSellerClosing(): Boolean = role?.canCreateSellerClosing() ?: NoAccessPermissionService.canCreateSellerClosing()
+    override fun canCreateBranchClosing(): Boolean = role?.canCreateBranchClosing() ?: NoAccessPermissionService.canCreateBranchClosing()
+    override fun canViewReports(): Boolean = role?.canViewReports() ?: NoAccessPermissionService.canViewReports()
+    override fun canManageCatalog(): Boolean = role?.canManageCatalog() ?: NoAccessPermissionService.canManageCatalog()
+    override fun canViewAllSellersDashboard(): Boolean = role?.canViewAllSellersDashboard() ?: NoAccessPermissionService.canViewAllSellersDashboard()
+    override fun canManageAccounts(): Boolean = role?.canManageAccounts() ?: NoAccessPermissionService.canManageAccounts()
 }
 
-/** Resolves the permission service for a role: `null` role ⇒ [DefaultPermissionService]. */
+/** Resolves the permission service for a role: no role means no access. */
 fun PermissionService.forRole(role: Role?): PermissionService =
-    if (role == null) DefaultPermissionService else RolePermissionService(role)
+    if (role == null) NoAccessPermissionService else RolePermissionService(role)

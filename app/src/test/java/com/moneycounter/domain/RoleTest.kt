@@ -113,15 +113,17 @@ class RoleTest {
     }
 
     @Test
-    fun `null role keeps single-user privileges`() {
-        assertTrue((null as Role?).mayRegisterWriteoff())
-        assertTrue((null as Role?).mayEditStock())
-        assertTrue((null as Role?).mayAddStock())
-        assertTrue((null as Role?).mayRegisterExpense())
-        assertTrue((null as Role?).mayCreateSellerClosing())
-        assertTrue((null as Role?).mayCreateBranchClosing())
-        assertTrue((null as Role?).mayManageCatalog())
-        assertTrue((null as Role?).mayViewBranchHistory())
+    fun `null role closes every UI gate (plan 033)`() {
+        // Before plan 033 these defaulted to `true`, so a session whose membership had not
+        // resolved showed the full OWNER-grade UI. No membership now shows nothing.
+        assertFalse((null as Role?).mayRegisterWriteoff())
+        assertFalse((null as Role?).mayEditStock())
+        assertFalse((null as Role?).mayAddStock())
+        assertFalse((null as Role?).mayRegisterExpense())
+        assertFalse((null as Role?).mayCreateSellerClosing())
+        assertFalse((null as Role?).mayCreateBranchClosing())
+        assertFalse((null as Role?).mayManageCatalog())
+        assertFalse((null as Role?).mayViewBranchHistory())
         assertFalse((null as Role?).mayViewOwnerDashboard())
     }
 
