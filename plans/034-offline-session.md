@@ -7,7 +7,7 @@
 > in `plans/README.md`.
 >
 > **Drift check (run first)**:
-> `git diff --stat 908af91..HEAD -- app/src/main/java/com/moneycounter/appwrite/AppwriteAuthRepository.kt app/src/main/java/com/moneycounter/appwrite/AppwriteAccessRepository.kt app/src/main/java/com/moneycounter/ui/AuthViewModel.kt app/src/main/java/com/moneycounter/access/`
+> `git diff --stat 948fc9f..HEAD -- app/src/main/java/com/moneycounter/appwrite/AppwriteAuthRepository.kt app/src/main/java/com/moneycounter/appwrite/AppwriteAccessRepository.kt app/src/main/java/com/moneycounter/ui/AuthViewModel.kt app/src/main/java/com/moneycounter/access/`
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
@@ -20,6 +20,12 @@
 - **Depends on**: `plans/033-no-membership-no-access.md` (steps 1–6, on `plan/033`)
 - **Category**: feature + security
 - **Planned at**: commit `908af91`, 2026-09-14
+- **Rebased at**: commit `948fc9f`, 2026-09-14 — drift reconciliado tras el trabajo de login:
+  `currentUser()` sigue igual (401 ⇒ null, el resto se re-lanza) y `checkAccess()` sigue
+  poniendo `AppAccessState.Error`, ahora con el mensaje traducido por `mapAuthError`. La
+  premisa del plan se mantiene. Novedad a tener en cuenta: el ViewModel ahora guarda
+  `sessionPassword` en memoria para el cambio forzado de contraseña — **el caché de sesión de
+  este plan NO debe persistir la contraseña**, sólo identidad y estado de acceso.
 
 ## Why this matters
 
@@ -113,11 +119,11 @@ an explicit revocation.
 | Unit tests | `./gradlew :app:testDebugUnitTest` | exit 0, 0 failures |
 | Build APK | `./gradlew :app:assembleDebug` | exit 0 |
 
-**Baseline: 460 tests on `plan/033`.** Record the new count in the status row.
+**Baseline: 471 tests on `main` @ `948fc9f`.** Record the new count in the status row.
 
 ## Git workflow
 
-- Branch: `plan/034` off `plan/033`.
+- Branch: `plan/034` off `main`.
 - One commit per step, in Spanish, suffixed `(plan 034, paso N)`.
 - Do NOT push, do NOT merge.
 
@@ -125,7 +131,7 @@ an explicit revocation.
 
 ### Step 0: Record the baseline
 
-Run the three commands. If the test count is not 460, STOP and report.
+Run the three commands. If the test count is not 471, STOP and report.
 
 ### Step 1: The session cache (pure)
 
@@ -264,7 +270,7 @@ Requirements:
 
 ## STOP conditions
 
-- Baseline is not 460 tests, or the drift check shows in-scope files changed.
+- Baseline is not 471 tests, or the drift check shows in-scope files changed beyond the login work reconciled above.
 - Making the session cache work would require changing what permissions an offline session
   has. That is plan 030's territory and this plan must not touch it.
 - The offline path would open the app for a session whose membership was never determined.
