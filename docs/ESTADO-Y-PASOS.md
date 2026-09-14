@@ -318,6 +318,39 @@ preflight con `access-control-allow-origin: https://elluiso.l3vram.com`, y `whoa
 Pendiente menor de limpieza: las reglas y plataformas Web de los deployments viejos
 (`*.appwrite.network`) y la de `adm.elluiso.com`, que quedó sin DNS, ya no hacen falta.
 
+## 6sexies. Fuera el JWT: la sesión es la credencial (2026-09-14)
+
+Último eslabón del `Failed to fetch` / 403. Con el dominio propio, la cookie de sesión pasó a
+ser de primera parte, y el JWT —que era el parche para el cross-site— quedó no sólo de más,
+sino **dañino**:
+
+- **Cuando hay cookie, Appwrite ignora el JWT.** Verificado: con una cookie basura más un JWT
+  válido, la petición se resuelve como invitado (401 `user_unauthorized`).
+- **Un JWT muere con la sesión que lo emitió.** Nuestro propio `login()` hace
+  `deleteSession('current')` al empezar, así que mataba JWTs emitidos antes. Esto invalidó una
+  prueba de diagnóstico intermedia: un JWT vigente y sin vencer fallaba como invitado porque
+  su sesión ya no existía.
+- Costaba un round-trip (~250 ms) por cada arranque de sesión.
+
+**La prueba que lo decidió** la corrió el dueño en su navegador: dos `fetch` idénticos a
+`executions` con el header de proyecto, diferenciándose sólo en `credentials`:
+
+| | Resultado |
+|---|---|
+| A · sin cookies | 401 `user_unauthorized` (invitado) — esperado |
+| B · con cookies | **201**, objeto de ejecución real |
+
+O sea que la cookie sola autentica y ejecuta. Eso descartó de una vez el bloqueador de
+contenido, la manipulación de headers y el CORS: el navegador estaba bien.
+
+`callFunction` ahora usa **un solo cliente** (el de sesión) y llama a `createExecution` sin
+`setJWT`. `clearAuth()` quedó vacío a propósito: ya no hay nada cacheado que limpiar, y
+`logout()` borra la sesión.
+
+**Lección transferible:** el `deleteSession` preventivo del login aparece en la consola como
+`DELETE /account/sessions/current 401` cuando no hay sesión. Es inofensivo y esperado —
+está dentro de un try/catch—, pero ensucia el diagnóstico. No perseguirlo.
+
 ## 7. Deploy: por qué se cambia a Git
 
 El proceso documentado en `webadmin/README.md` es frágil: empaquetar un tarball, subirlo a una

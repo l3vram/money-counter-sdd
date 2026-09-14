@@ -17,11 +17,7 @@ export const FUNCTION_ID: string = import.meta.env.VITE_ADMIN_FUNCTION_ID ?? '';
 
 const client = new Client().setEndpoint(ENDPOINT).setProject(PROJECT_ID);
 const account = new Account(client);
-
-// A client of its own for function calls: `setJWT` is per-client, and the session client
-// must not start sending a JWT on every `account` call.
-const functionClient = new Client().setEndpoint(ENDPOINT).setProject(PROJECT_ID);
-const functions = new Functions(functionClient);
+const functions = new Functions(client);
 
 /**
  * "Load failed" (Safari) y "Failed to fetch" (Chrome) son el mismo TypeError: la peticion
@@ -42,21 +38,6 @@ function describeFailure(step: string, err: unknown): Error {
     ? ' — la peticion no llego a completarse: revisa la conexion, un bloqueador de contenido, o que este dominio este registrado como plataforma Web del proyecto'
     : '';
   return new Error(`${step}: ${raw}${detalle ? ` (${detalle})` : ''}${pista}`);
-}
-
-let jwtPromise: Promise<string> | null = null;
-
-function getJwt(): Promise<string> {
-  if (!jwtPromise) {
-    jwtPromise = account
-      .createJWT()
-      .then((result) => result.jwt)
-      .catch((error) => {
-        jwtPromise = null;
-        throw describeFailure('No se pudo crear el token de sesion (createJWT)', error);
-      });
-  }
-  return jwtPromise;
 }
 
 function parseResponseBody(body: string | undefined): { ok: boolean; data?: unknown; error?: string } {
@@ -82,9 +63,12 @@ async function callFunction<T>(action: string, params: Record<string, unknown> =
   // error), and the execution payload shape — the action JSON must be wrapped as the
   // `body` field of the create-execution request, not sent as the request itself, or the
   // function receives an empty body and answers "Acción desconocida: undefined".
-  const jwt = await getJwt();
-  functionClient.setJWT(jwt);
-
+  //
+  // No JWT: the session cookie is the credential. The JWT was a workaround for the panel
+  // and the API living on different sites; now that both are under one registrable domain
+  // the cookie is first-party and travels on its own. Keeping the JWT actively hurt — when
+  // a cookie is present Appwrite ignores the JWT anyway, a JWT dies with the session that
+  // minted it (our own `deleteSession` on login killed one), and it cost a round trip.
   let execution;
   try {
     execution = await functions.createExecution({
@@ -110,7 +94,8 @@ async function callFunction<T>(action: string, params: Record<string, unknown> =
 }
 
 export function clearAuth(): void {
-  jwtPromise = null;
+  // Nothing cached to clear any more: the session cookie is the only credential, and
+  // `logout()` deletes it. Kept so callers do not have to change.
 }
 
 export async function login(email: string, password: string): Promise<UserInfo> {
