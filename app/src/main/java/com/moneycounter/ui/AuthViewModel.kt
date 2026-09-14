@@ -11,6 +11,7 @@ import com.moneycounter.access.SessionCacheRepository
 import com.moneycounter.access.SessionOutcome
 import com.moneycounter.access.sessionOutcomeFor
 import com.moneycounter.access.MembershipRepository
+import com.moneycounter.access.MembershipUpdate
 import com.moneycounter.access.UserProfileData
 import com.moneycounter.access.toAppAccessState
 import com.moneycounter.appwrite.CloudOrgRepository
@@ -254,19 +255,36 @@ class AuthViewModel(
             memberCacheRepository?.load()?.takeIf { it.uid == uid }?.let { _member.value = it }
         }
         memberJob = viewModelScope.launch {
-            membershipRepository.observeMember(uid).collect { member ->
-                // Either kind of answer resolves the question. The repository only emits null
-                // on a genuine 404 (plan 030), so this is not a transport failure.
-                _membershipResolved.value = true
-                if (member != null) {
-                    _member.value = member
-                    memberCacheRepository?.save(member)
-                } else if (memberCacheRepository?.load() == null) {
-                    // The row is genuinely missing and nothing was ever cached: since plan
-                    // 033 that means no access, not the old single-user free-for-all.
-                    _member.value = null
+            membershipRepository.observeMember(uid).collect { update ->
+                when (update) {
+                    is MembershipUpdate.Assigned -> {
+                        _membershipResolved.value = true
+                        // The poll answered, so connectivity is back — this is the cheapest
+                        // signal there is, and it is why the offline banner needs no timer.
+                        _isOffline.value = false
+                        _member.value = update.member
+                        memberCacheRepository?.save(update.member)
+                        seedCloudTenantIfNeeded(uid, update.member)
+                    }
+
+                    MembershipUpdate.Missing -> {
+                        _membershipResolved.value = true
+                        _isOffline.value = false
+                        if (memberCacheRepository?.load() == null) {
+                            // Genuinely absent and nothing was ever cached: since plan 033
+                            // that means no access, not the old single-user free-for-all.
+                            _member.value = null
+                        }
+                        seedCloudTenantIfNeeded(uid, null)
+                    }
+
+                    MembershipUpdate.Revoked -> {
+                        // Plan 034: a 401 here means the session died while the app was open —
+                        // revoked, deleted, or access withdrawn. Before, this was swallowed and
+                        // the app kept running on a dead session until the next restart.
+                        signOut()
+                    }
                 }
-                seedCloudTenantIfNeeded(uid, member)
             }
         }
     }

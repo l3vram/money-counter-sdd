@@ -6,6 +6,7 @@ import com.moneycounter.access.AppAccessState
 import com.moneycounter.access.CachedSession
 import com.moneycounter.access.MemberCacheRepository
 import com.moneycounter.access.MembershipRepository
+import com.moneycounter.access.MembershipUpdate
 import com.moneycounter.access.SessionCacheRepository
 import com.moneycounter.access.UserProfileData
 import com.moneycounter.appwrite.BranchInfo
@@ -25,7 +26,9 @@ import com.moneycounter.signup.SignupRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -140,9 +143,16 @@ class FakeAccessRepository(
 }
 
 class FakeMembershipRepository(
-    var memberFlow: Flow<Member?> = MutableStateFlow(null)
+    var memberFlow: Flow<Member?> = MutableStateFlow(null),
+    /** Plan 034: para probar la revocación, que no se puede expresar como `Member?`. */
+    var updateFlow: Flow<MembershipUpdate>? = null
 ) : MembershipRepository {
-    override fun observeMember(uid: String): Flow<Member?> = memberFlow
+    // Los tests existentes se expresan en `Member?`; el fake traduce, así el cambio de tipo
+    // del repositorio no obliga a reescribirlos.
+    override fun observeMember(uid: String): Flow<MembershipUpdate> =
+        updateFlow ?: memberFlow.map { member ->
+            if (member != null) MembershipUpdate.Assigned(member) else MembershipUpdate.Missing
+        }
 }
 
 class FakeSignupRepository(
@@ -298,6 +308,13 @@ class AuthViewModelTest {
         savedAtMs = 1_000
     )
 
+    /**
+     * Sin conexión el poll de membresía **no contesta nada** — no emite `Missing`, que
+     * significaría que el servidor respondió que no hay fila. Un fake que emita `Missing`
+     * apagaría el flag de offline y no representa el caso.
+     */
+    private fun neverAnswers(): Flow<MembershipUpdate> = MutableSharedFlow()
+
     private fun cachedMember() = Member(
         uid = "uid123",
         orgId = "org1",
@@ -332,7 +349,7 @@ class AuthViewModelTest {
         val viewModel = AuthViewModel(
             FakeAuthRepository(user = testUser),
             FakeAccessRepository(shouldThrowError = true),
-            FakeMembershipRepository(),
+            FakeMembershipRepository(updateFlow = neverAnswers()),
             memberCacheRepository = FakeMemberCacheRepositoryForOffline(cachedMember()),
             sessionCacheRepository = FakeSessionCacheRepository(cachedSession())
         )
@@ -371,7 +388,7 @@ class AuthViewModelTest {
         val viewModel = AuthViewModel(
             FakeAuthRepository(user = testUser),
             FakeAccessRepository(shouldThrowError = true),
-            FakeMembershipRepository(),
+            FakeMembershipRepository(updateFlow = neverAnswers()),
             memberCacheRepository = FakeMemberCacheRepositoryForOffline(null),
             sessionCacheRepository = FakeSessionCacheRepository(cachedSession(AccessStatus.PENDING))
         )
@@ -432,7 +449,7 @@ class AuthViewModelTest {
                 shouldThrowError = true,
                 errorToThrow = AppwriteException(message = "prohibido", code = 403)
             ),
-            FakeMembershipRepository(),
+            FakeMembershipRepository(updateFlow = neverAnswers()),
             memberCacheRepository = FakeMemberCacheRepositoryForOffline(cachedMember()),
             sessionCacheRepository = sessionCache
         )
@@ -441,6 +458,78 @@ class AuthViewModelTest {
         assertTrue(viewModel.uiState.value is AppAccessState.Approved)
         assertTrue(viewModel.isOffline.value)
         assertNotNull("no debe borrar nada", sessionCache.stored)
+    }
+
+    @Test
+    fun observeMember_a401WhileRunning_signsOutAndWipesTheCaches() = runTest {
+        // La contraparte de lo del arranque: la sesión puede morir con la app abierta. Antes
+        // el 401 del poll se lo comía el catch y la app seguía andando con datos viejos.
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val updates = MutableSharedFlow<MembershipUpdate>(replay = 1)
+        val sessionCache = FakeSessionCacheRepository(cachedSession())
+        val memberCache = FakeMemberCacheRepositoryForOffline(cachedMember())
+        val viewModel = AuthViewModel(
+            FakeAuthRepository(user = testUser),
+            FakeAccessRepository(accessStatusToReturn = AccessStatus.APPROVED),
+            FakeMembershipRepository(updateFlow = updates),
+            memberCacheRepository = memberCache,
+            sessionCacheRepository = sessionCache
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is AppAccessState.Approved)
+
+        updates.emit(MembershipUpdate.Revoked)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value is AppAccessState.SignedOut)
+        assertNull(sessionCache.stored)
+        assertNull(memberCache.stored)
+    }
+
+    @Test
+    fun observeMember_a404DoesNotSignOut_itIsADifferentQuestion() = runTest {
+        // 404 es "no tenés membresía asignada" (plan 033), no "tu sesión murió". Confundirlas
+        // expulsaría a alguien que sólo está esperando que el administrador lo asigne.
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val updates = MutableSharedFlow<MembershipUpdate>(replay = 1)
+        val viewModel = AuthViewModel(
+            FakeAuthRepository(user = testUser),
+            FakeAccessRepository(accessStatusToReturn = AccessStatus.APPROVED),
+            FakeMembershipRepository(updateFlow = updates),
+            sessionCacheRepository = FakeSessionCacheRepository()
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        updates.emit(MembershipUpdate.Missing)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(
+            "un 404 no debe cerrar la sesión",
+            viewModel.uiState.value is AppAccessState.SignedOut
+        )
+        assertTrue(viewModel.membershipResolved.value)
+    }
+
+    @Test
+    fun observeMember_answering_clearsTheOfflineBanner() = runTest {
+        // El poll ya late cada 10 s: una respuesta suya es la señal más barata de que la
+        // conectividad volvió, así que el cartel se apaga solo sin un segundo temporizador.
+        val testUser = AuthUser("uid123", "user@test.com", "Test User")
+        val updates = MutableSharedFlow<MembershipUpdate>(replay = 1)
+        val viewModel = AuthViewModel(
+            FakeAuthRepository(user = testUser),
+            FakeAccessRepository(shouldThrowError = true),
+            FakeMembershipRepository(updateFlow = updates),
+            memberCacheRepository = FakeMemberCacheRepositoryForOffline(cachedMember()),
+            sessionCacheRepository = FakeSessionCacheRepository(cachedSession())
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue("arranca sin conexión", viewModel.isOffline.value)
+
+        updates.emit(MembershipUpdate.Assigned(cachedMember()))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse("el poll contestó: se apaga el cartel", viewModel.isOffline.value)
     }
 
     @Test

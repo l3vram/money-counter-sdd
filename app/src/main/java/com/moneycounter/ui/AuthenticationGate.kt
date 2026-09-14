@@ -48,6 +48,7 @@ import com.moneycounter.ui.screens.AccessRequiredScreen
 import com.moneycounter.ui.screens.AssignmentPendingScreen
 import com.moneycounter.ui.screens.ChangePasswordScreen
 import com.moneycounter.ui.screens.LoginScreen
+import com.moneycounter.ui.screens.OfflineAwareContent
 import com.moneycounter.ui.screens.SignUpScreen
 import com.moneycounter.ui.screens.SignUpSuccessScreen
 
@@ -89,6 +90,7 @@ fun AuthenticationGate(
     val member by viewModel.member.collectAsState()
     val membershipResolved by viewModel.membershipResolved.collectAsState()
     val knowsCurrentPassword by viewModel.knowsCurrentPassword.collectAsState()
+    val isOffline by viewModel.isOffline.collectAsState()
 
     // Plan 033: being approved is not enough — the membership decides whether the app opens.
     val state = effectiveAccessState(rawState, member, membershipResolved)
@@ -124,6 +126,7 @@ fun AuthenticationGate(
         isChangingPassword = isChangingPassword,
         changePasswordError = changePasswordError,
         knowsCurrentPassword = knowsCurrentPassword,
+        isOffline = isOffline,
         profile = profile,
         onLoadProfile = {
             viewModel.loadProfile()
@@ -151,6 +154,7 @@ fun AuthenticationGateContent(
     isChangingPassword: Boolean = false,
     changePasswordError: String? = null,
     knowsCurrentPassword: Boolean = true,
+    isOffline: Boolean = false,
     profile: UserProfileData?,
     onLoadProfile: () -> Unit,
     member: Member?,
@@ -256,7 +260,11 @@ fun AuthenticationGateContent(
             LaunchedEffect(Unit) {
                 onLoadProfile()
             }
-            content(onLogout, profile, onLoadProfile, member)
+            // El cartel de "sin conexión" envuelve TODO el contenido, así que se ve en
+            // cualquier pantalla a la que el usuario navegue (plan 034).
+            OfflineAwareContent(isOffline = isOffline) {
+                content(onLogout, profile, onLoadProfile, member)
+            }
         }
     }
 }
