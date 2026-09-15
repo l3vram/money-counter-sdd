@@ -73,6 +73,7 @@ Hallazgo que origina 030: el rol de sesión se resuelve por red y *cualquier* fa
 |---|------|--------|----------|--------|------|--------|
 | 030 | `030-role-fail-closed` | Rol cacheado localmente + no degradar por error de red + re-cableado | P1 | M | — | ✅ DONE en `plan/030` (`ff98b3f`, 444 tests) — **Gate B pendiente** |
 | 033 | `033-no-membership-no-access` | Sin membresía no se entra (fail-closed) + cerrar tablas de tenant | **P0** | M | 030 | 🔄 pasos 1–6 DONE en `plan/033` (460 tests) — **paso 7 (dispositivo) pendiente del dueño** |
+| 035 | `035-atomic-approval` | Aprobar un registro en **una** transacción + primer harness de tests de la Function | P2 | M | — | TODO |
 | 034 | `034-offline-session` | Sesión offline que sobrevive + un 401 que expulsa + indicador de "sin conexión" | P1 | M | 033 | ✅ DONE en `plan/034` (507 tests) — dueño verificó en dispositivo el 14/09: arranque sin red OK, cartel OK; la expulsión inmediata por 401 se aceptó como limitación (ver §9.11bis del handoff) |
 | 032 | `032-suspend-repositories` | Interfaces de repositorio `suspend` (habilita impl cloud) | P1 | M | 030 | TODO |
 | 031 | `031-repo-cleanup` | Rescatar prosa del glosario y podar worktrees/ramas obsoletos | P3 | S | — | TODO |
