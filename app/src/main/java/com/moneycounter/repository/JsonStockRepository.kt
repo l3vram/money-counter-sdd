@@ -75,7 +75,7 @@ class JsonStockRepository(private val context: Context) : StockRepository {
 
     private val fileName = "stock.json"
 
-    override fun load(): List<StockItem> {
+    override suspend fun load(): List<StockItem> {
         return try {
             val file = File(context.filesDir, fileName)
             if (!file.exists()) return emptyList()
@@ -89,7 +89,7 @@ class JsonStockRepository(private val context: Context) : StockRepository {
         }
     }
 
-    override fun saveAll(items: List<StockItem>) {
+    override suspend fun saveAll(items: List<StockItem>) {
         try {
             val file = File(context.filesDir, fileName)
             val tempFile = File(context.filesDir, "$fileName.tmp")

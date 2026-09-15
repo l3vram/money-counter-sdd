@@ -114,7 +114,7 @@ class JsonProductRepository(private val context: Context) : ProductRepository {
 
     private val fileName = "products.json"
 
-    override fun load(): List<Product> {
+    override suspend fun load(): List<Product> {
         return try {
             val file = File(context.filesDir, fileName)
             if (!file.exists()) return emptyList()
@@ -128,7 +128,7 @@ class JsonProductRepository(private val context: Context) : ProductRepository {
         }
     }
 
-    override fun save(products: List<Product>) {
+    override suspend fun save(products: List<Product>) {
         try {
             val file = File(context.filesDir, fileName)
             val tempFile = File(context.filesDir, "$fileName.tmp")

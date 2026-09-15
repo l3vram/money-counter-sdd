@@ -20,7 +20,7 @@ class JsonClosingRepository(private val context: Context) : ClosingRepository {
 
     private val fileName = "closings.json"
 
-    override fun load(): List<Closing> {
+    override suspend fun load(): List<Closing> {
         return try {
             val file = File(context.filesDir, fileName)
             if (!file.exists()) return emptyList()
@@ -31,7 +31,7 @@ class JsonClosingRepository(private val context: Context) : ClosingRepository {
         }
     }
 
-    override fun saveAll(closings: List<Closing>) {
+    override suspend fun saveAll(closings: List<Closing>) {
         try {
             val json = ClosingJson.toJson(closings)
             val file = File(context.filesDir, fileName)

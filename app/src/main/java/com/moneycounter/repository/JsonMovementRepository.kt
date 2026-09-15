@@ -23,7 +23,7 @@ class JsonMovementRepository(private val context: Context) : MovementRepository 
 
     private val fileName = "movements.json"
 
-    override fun load(): List<Movement> {
+    override suspend fun load(): List<Movement> {
         val file = File(context.filesDir, fileName)
         val existing = try {
             if (!file.exists()) null
@@ -62,7 +62,7 @@ class JsonMovementRepository(private val context: Context) : MovementRepository 
         }
     }
 
-    override fun saveAll(movements: List<Movement>) {
+    override suspend fun saveAll(movements: List<Movement>) {
         try {
             val json = MovementJson.toJson(movements)
             val file = File(context.filesDir, fileName)

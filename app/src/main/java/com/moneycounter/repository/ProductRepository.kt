@@ -3,6 +3,6 @@ package com.moneycounter.repository
 import com.moneycounter.domain.Product
 
 interface ProductRepository {
-    fun load(): List<Product>
-    fun save(products: List<Product>)
+    suspend fun load(): List<Product>
+    suspend fun save(products: List<Product>)
 }

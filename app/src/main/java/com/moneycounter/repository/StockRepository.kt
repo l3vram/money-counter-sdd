@@ -3,6 +3,6 @@ package com.moneycounter.repository
 import com.moneycounter.domain.StockItem
 
 interface StockRepository {
-    fun load(): List<StockItem>
-    fun saveAll(items: List<StockItem>)
+    suspend fun load(): List<StockItem>
+    suspend fun saveAll(items: List<StockItem>)
 }
