@@ -51,7 +51,7 @@ requieren instalar un APK nuevo (`./gradlew :app:installDebug`).
 | API | **https://api.elluiso.l3vram.com/v1** |
 | Function `admin` | deployment **`6aa842e61d6162ac0269`** |
 | Site `admin-web` | deployment **`6aa8344490f6a26140fd`** |
-| Tests | **471**, 0 fallos, en `plan/033` |
+| Tests | **507**, 0 fallos |
 | Duración de sesión | 1 año (máximo de Appwrite; no existe "para siempre") |
 
 ### Permisos de las tablas (ya aplicado en producción)
@@ -294,6 +294,31 @@ contraseña **nunca se disparaba**: falla silenciosa perfecta, sin error en ning
 Regla: al cerrar una tabla, verificar qué lee la app de ella. Un permiso faltante no se
 manifiesta como "prohibido" sino como "no existe", y el código de arriba suele interpretar
 "no existe" como un estado legítimo.
+
+### 9.11bis. La revocación no se puede detectar leyendo filas (limitación aceptada)
+
+Corolario de §9.11, verificado con curl el 14/09:
+
+| Llamada con la sesión muerta | Respuesta |
+|---|---|
+| `members/{uid}` — lo que hace el poll | **404** `row_not_found` |
+| `account.get()` — lo que hace el arranque | **401** |
+
+Cuando la sesión muere, el cliente pasa a ser invitado y la fila —que sólo tiene
+`read("user:<uid>")`— deja de existir para él. Appwrite contesta 404, y 404 significa "no hay
+membresía asignada", que por el plan 030 **conserva la membresía cacheada**. Así que la app
+sigue operando.
+
+Consecuencia: `MembershipUpdate.Revoked` existe y está bien implementado, pero **desde el poll
+de membresía nunca se emite**. La revocación se aplica al siguiente arranque, cuando
+`currentUser()` recibe su 401.
+
+**Decisión del dueño (14/09): se acepta así.** Al cerrar y abrir la app el usuario queda
+afuera, y eso alcanza.
+
+Si algún día se quiere expulsión inmediata, el arreglo **no** es tocar la política del poll:
+hay que consultar un endpoint de `/account/*`, el único que responde 401 con una sesión muerta.
+Cambiar el mapeo del 404 sería peor — rompería el caso legítimo de "aún no me asignaron".
 
 ### 9.12. Orden de inicialización en Kotlin
 

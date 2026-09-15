@@ -5,12 +5,18 @@ import androidx.lifecycle.viewModelScope
 import com.moneycounter.access.AccessRepository
 import com.moneycounter.access.AccessStatus
 import com.moneycounter.access.AppAccessState
+import com.moneycounter.access.CachedSession
 import com.moneycounter.access.MemberCacheRepository
+import com.moneycounter.access.SessionCacheRepository
+import com.moneycounter.access.SessionOutcome
+import com.moneycounter.access.sessionOutcomeFor
 import com.moneycounter.access.MembershipRepository
+import com.moneycounter.access.MembershipUpdate
 import com.moneycounter.access.UserProfileData
 import com.moneycounter.access.toAppAccessState
 import com.moneycounter.appwrite.CloudOrgRepository
 import com.moneycounter.auth.AuthRepository
+import io.appwrite.exceptions.AppwriteException
 import com.moneycounter.auth.mapAuthError
 import com.moneycounter.domain.Branch
 import com.moneycounter.domain.Member
@@ -33,7 +39,8 @@ class AuthViewModel(
     private val signupRepository: SignupRepository? = null,
     private val tenantRepository: TenantRepository? = null,
     private val cloudOrgRepository: CloudOrgRepository? = null,
-    private val memberCacheRepository: MemberCacheRepository? = null
+    private val memberCacheRepository: MemberCacheRepository? = null,
+    private val sessionCacheRepository: SessionCacheRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<AppAccessState>(AppAccessState.Loading)
@@ -91,6 +98,13 @@ class AuthViewModel(
         get() = _knowsCurrentPassword.asStateFlow()
     private val _knowsCurrentPassword = MutableStateFlow(false)
 
+    /**
+     * Whether this session is running on cached data because the server could not be reached
+     * (plan 034). Drives the "sin conexión" banner; cleared as soon as a call succeeds.
+     */
+    private val _isOffline = MutableStateFlow(false)
+    val isOffline: StateFlow<Boolean> = _isOffline.asStateFlow()
+
     private val _membershipResolved = MutableStateFlow(false)
     val membershipResolved: StateFlow<Boolean> = _membershipResolved.asStateFlow()
 
@@ -102,12 +116,25 @@ class AuthViewModel(
         checkAccess()
     }
 
+    /**
+     * Plan 034: distinguir "no hay sesión" de "no pude preguntar" también acá.
+     *
+     * Antes, una excepción de `currentUser()` -o sea, quedarse sin señal- se trataba como
+     * usuario ausente: cancelaba el poll del perfil y lo borraba de la pantalla. Como el poll
+     * quedaba cancelado, **al volver la conexión nada lo reiniciaba** y la vista de usuario se
+     * quedaba vacía para siempre. Es el mismo error que el plan 030 corrigió para el rol, en un
+     * tercer lugar.
+     *
+     * Ahora sólo un `null` explícito -el SDK contestó que no hay sesión- limpia el perfil.
+     */
     fun loadProfile() {
         viewModelScope.launch {
             val user = try {
                 authRepository.currentUser()
             } catch (e: Exception) {
-                null
+                // No pude preguntar. Conservar lo que haya y dejar que el poll -o el próximo
+                // `loadProfile`- se recupere solo.
+                return@launch
             }
             if (user == null) {
                 profileJob?.cancel()
@@ -118,20 +145,39 @@ class AuthViewModel(
             if (profileJob?.isActive == true) return@launch
             profileJob = launch {
                 accessRepository.observeUserProfile(user.uid).collect { profile ->
+                    // Un perfil nulo del poll significa que la fila no está (404). No sobre-
+                    // escribir un perfil bueno con null por un fallo de red: eso lo maneja el
+                    // repositorio, que ya no emite nada en ese caso.
                     _profile.value = profile
                 }
             }
         }
     }
 
+    /**
+     * Plan 034: cuando vuelve la conexión hay que re-enganchar lo que se haya soltado. El poll
+     * de membresía se recupera solo porque nunca se cancela, pero el del perfil puede haber
+     * muerto con la sesión que lo inició, así que se reintenta explícitamente.
+     */
+    private fun onConnectivityRestored() {
+        if (profileJob?.isActive != true) loadProfile()
+    }
+
+    /**
+     * Plan 034: the startup path no longer dies without a network.
+     *
+     * `currentUser()` and `ensureUserDocument()` both hit the server, and any failure used to
+     * become [AppAccessState.Error] — so a seller opening the app with no signal could not even
+     * look at what they already had. Now the failure is classified by [sessionOutcomeFor]: a
+     * transport failure falls back to the cached session, a 401 signs out, and only a failure
+     * with nothing cached shows the connection screen.
+     */
     fun checkAccess() {
         viewModelScope.launch {
             val user = try {
                 authRepository.currentUser()
             } catch (e: Exception) {
-                // mapAuthError traduce lo que viene del SDK; sin eso el usuario veía el
-                // mensaje crudo en inglés.
-                _uiState.value = AppAccessState.Error(mapAuthError(e))
+                resolveFailedVerification(e)
                 return@launch
             }
             if (user == null) {
@@ -147,14 +193,75 @@ class AuthViewModel(
                 val accessStatus = accessRepository.ensureUserDocument(user)
                 observeMember(user.uid)
                 val mustChangePassword = signupRepository?.readMustChangePassword(user.uid) ?: false
+                // The server answered: this session is verified, so remember it for the next
+                // start and drop the offline banner.
+                _isOffline.value = false
+                sessionCacheRepository?.save(
+                    CachedSession(
+                        uid = user.uid,
+                        email = user.email,
+                        displayName = user.displayName,
+                        photoUrl = user.photoUrl,
+                        access = accessStatus,
+                        savedAtMs = System.currentTimeMillis()
+                    )
+                )
                 _uiState.value = if (accessStatus == AccessStatus.APPROVED && mustChangePassword) {
                     AppAccessState.PasswordChangeRequired(user)
                 } else {
                     toAppAccessState(user, accessStatus)
                 }
             } catch (e: Exception) {
-                // mapAuthError traduce lo que viene del SDK; sin eso el usuario veía el
-                // mensaje crudo en inglés.
+                resolveFailedVerification(e)
+            }
+        }
+    }
+
+    /**
+     * Decides what a failed verification means. The HTTP status is the whole signal: null means
+     * no response at all (offline), 401 means the session is gone, anything else means the
+     * server is reachable but unhelpful — see [sessionOutcomeFor].
+     */
+    private fun resolveFailedVerification(e: Exception) {
+        val cached = sessionCacheRepository?.load()
+        val code = (e as? AppwriteException)?.code
+        when (sessionOutcomeFor(code, hasCachedSession = cached != null)) {
+            SessionOutcome.SIGN_OUT -> {
+                // Revoked, deleted, or access withdrawn. This is what makes an offline session
+                // with no expiry acceptable: it ends the moment the device hears the server.
+                signOut()
+            }
+
+            SessionOutcome.USE_CACHE -> {
+                val session = cached ?: return run {
+                    _uiState.value = AppAccessState.Error(mapAuthError(e))
+                }
+
+                // An approved session still needs a membership to operate (plan 033), and
+                // offline the only source is the local cache. With no cached membership there
+                // is nothing to decide with: show the connection screen, which is the honest
+                // answer. Opening would reintroduce plan 033's hole, and `AwaitingAssignment`
+                // would blame the administrator for a network problem — while plan 033 alone
+                // would leave the session spinning in Loading forever.
+                val hasCachedMembership =
+                    memberCacheRepository?.load()?.takeIf { it.uid == session.uid } != null
+                if (session.access == AccessStatus.APPROVED && !hasCachedMembership) {
+                    _isOffline.value = false
+                    _uiState.value = AppAccessState.Error(
+                        "Sin conexión y sin datos guardados de tu cuenta. " +
+                            "Conéctate una vez para poder entrar sin internet más adelante."
+                    )
+                    return
+                }
+
+                _isOffline.value = true
+                // Keep polling: the membership — and connectivity — come back on their own.
+                observeMember(session.uid)
+                _uiState.value = toAppAccessState(session.toAuthUser(), session.access)
+            }
+
+            SessionOutcome.FAIL -> {
+                _isOffline.value = false
                 _uiState.value = AppAccessState.Error(mapAuthError(e))
             }
         }
@@ -173,19 +280,38 @@ class AuthViewModel(
             memberCacheRepository?.load()?.takeIf { it.uid == uid }?.let { _member.value = it }
         }
         memberJob = viewModelScope.launch {
-            membershipRepository.observeMember(uid).collect { member ->
-                // Either kind of answer resolves the question. The repository only emits null
-                // on a genuine 404 (plan 030), so this is not a transport failure.
-                _membershipResolved.value = true
-                if (member != null) {
-                    _member.value = member
-                    memberCacheRepository?.save(member)
-                } else if (memberCacheRepository?.load() == null) {
-                    // The row is genuinely missing and nothing was ever cached: since plan
-                    // 033 that means no access, not the old single-user free-for-all.
-                    _member.value = null
+            membershipRepository.observeMember(uid).collect { update ->
+                when (update) {
+                    is MembershipUpdate.Assigned -> {
+                        _membershipResolved.value = true
+                        // The poll answered, so connectivity is back — this is the cheapest
+                        // signal there is, and it is why the offline banner needs no timer.
+                        if (_isOffline.value) onConnectivityRestored()
+                        _isOffline.value = false
+                        _member.value = update.member
+                        memberCacheRepository?.save(update.member)
+                        seedCloudTenantIfNeeded(uid, update.member)
+                    }
+
+                    MembershipUpdate.Missing -> {
+                        _membershipResolved.value = true
+                        if (_isOffline.value) onConnectivityRestored()
+                        _isOffline.value = false
+                        if (memberCacheRepository?.load() == null) {
+                            // Genuinely absent and nothing was ever cached: since plan 033
+                            // that means no access, not the old single-user free-for-all.
+                            _member.value = null
+                        }
+                        seedCloudTenantIfNeeded(uid, null)
+                    }
+
+                    MembershipUpdate.Revoked -> {
+                        // Plan 034: a 401 here means the session died while the app was open —
+                        // revoked, deleted, or access withdrawn. Before, this was swallowed and
+                        // the app kept running on a dead session until the next restart.
+                        signOut()
+                    }
                 }
-                seedCloudTenantIfNeeded(uid, member)
             }
         }
     }
@@ -266,8 +392,10 @@ class AuthViewModel(
         _membershipResolved.value = false
         sessionPassword = null
         _knowsCurrentPassword.value = false
-        // Shared device: never let the next user inherit this session's role.
+        _isOffline.value = false
+        // Shared device: never let the next user inherit this session's role or identity.
         memberCacheRepository?.clear()
+        sessionCacheRepository?.clear()
         viewModelScope.launch {
             authRepository.signOut()
             _uiState.value = AppAccessState.SignedOut
