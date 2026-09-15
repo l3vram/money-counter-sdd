@@ -220,3 +220,40 @@ delta is derived server-side and never accepted from the client.
   `UUID.randomUUID()` — the design verified that at 9 call sites.
 - Authorization belongs to the Function, not the app. The app's gates are UX (plan 037's
   lesson: one source of truth, and for the server that source is here).
+
+
+---
+
+## Amendment, 2026-09-15 (orchestrator, after the first review)
+
+The executor delivered steps 0-2 and stopped at step 3 on this plan's own STOP condition. The
+review of that work changed two things in the plan and settled the STOP.
+
+**1. The ensure-row upsert must OMIT `quantityCents`.** This plan said the upsert "must be
+idempotent so a concurrent movement does not clobber a quantity" without saying how. Sending
+`quantityCents: 0` IS the clobber: `upsertRow` applies the fields you send, so on an existing
+row it resets the quantity and then applies the delta. Verified against the live table — see
+trap 9.14 in `docs/ESTADO-Y-PASOS.md` for the three-case table. Omitting the column is safe on
+a new row only because the column carries `default: 0`, which is why it was provisioned that
+way. A test must assert the operation's `data` has no `quantityCents` key.
+
+**2. Centiunits are converted from the decimal STRING, never through a float.** See trap 9.15.
+
+**3. The STOP is resolved: a two-lane top-level gate, with SUPERUSER as the default lane.**
+
+```js
+const OPERATIONAL_ACTIONS = new Set(['applyMovement']);
+if (!OPERATIONAL_ACTIONS.has(action) && (!caller || caller.role !== 'SUPERUSER')) return 403;
+```
+
+An explicit allowlist, not an `if/else` on the role: an unknown or misspelled action falls
+through to the SUPERUSER lane and is refused. Default-deny.
+
+This does not weaken the boundary, it moves it. The top-level gate stops being the only
+boundary and becomes the boundary for the **admin** actions; `applyMovement` carries its own
+complete authorization inside `movementPlan` (membership row required, org match, branch match,
+role/type matrix, sellerUid check), which is what this plan's contract item 1 always demanded
+and what design §42 requires. The alternative — a second Function — would duplicate the client,
+the dynamic-key handling and the transaction executor to avoid one allowlist.
+
+**Owner: this is the one decision in this plan I took without you.** It is flagged at Gate B.

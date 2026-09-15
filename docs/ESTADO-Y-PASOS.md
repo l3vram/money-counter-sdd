@@ -400,6 +400,46 @@ protección es el comentario en el código.
 mapearlo en el ViewModel lo degradaba a "Error inesperado", porque el español ya no coincide
 con ningún patrón en inglés. Lo atrapó un test.
 
+### 9.14. Un `upsertRow` que manda la columna la **resetea**
+
+El plan 039 pide asegurar la fila de stock antes de incrementarla, porque incrementar una fila
+que no existe da **404 y no la crea**. La primera implementación la aseguraba así:
+
+```js
+{ action: 'upsert', tableId: 'stock', rowId: id, data: { ..., quantityCents: 0 } }
+```
+
+Eso destruye el stock. `upsertRow` aplica los campos que le mandas, así que en una fila que
+**ya existe** pone `quantityCents` en 0 y después aplica el delta: el stock queda valiendo
+sólo el último movimiento y todo lo anterior se pierde **en silencio, sin ningún error**.
+
+Verificado contra la tabla real el 15/09, no leído en la documentación:
+
+| Fila antes | Upsert | Fila después |
+|---|---|---|
+| `quantityCents: 500` | **con** `quantityCents: 0` | **0** ← el desastre |
+| `quantityCents: 500` | **sin** la columna | `500` ← correcto |
+| no existe | **sin** la columna | `0` ← el default de la columna |
+
+La forma correcta es **omitir la columna**. Por eso `quantityCents` se provisionó con
+`default: 0`: es lo que hace que omitirla sea seguro en una fila nueva. Y por eso el test que
+afirma que el `data` del upsert **no** trae la clave `quantityCents` es el que importa — sin
+él, el próximo que pase vuelve a "arreglarlo" agregando el campo.
+
+Hermano de la §9.11quater: ahí un default reabría un agujero, acá un campo de más borra datos.
+Los dos son "escribir lo que no hacía falta escribir".
+
+### 9.15. `Number(x) * 100` no es convertir dinero a centésimos
+
+La app manda cantidades como `BigDecimal.toPlainString()`, o sea cadenas exactas: `"4.00"`,
+`"1.005"`. Pasar por float antes de redondear pierde la precisión primero:
+`Math.round(Number("1.005") * 100)` da **100**, no 101, porque `1.005 * 100` es
+`100.49999999999999`.
+
+Es el peor tipo de error de contabilidad: pierde centésimos en algunos valores y no en otros,
+así que el total queda *casi* bien y nadie lo nota hasta que hay que cuadrar. Se convierte
+desde la cadena, partiendo por el punto, nunca por float.
+
 ### 9.10. Cuidado con el N+1 en la Function
 
 `listUsers` hacía un `getRow` por usuario. Se arregló con lecturas masivas + `Map`. El olor a
