@@ -420,4 +420,11 @@ class MoneyCounterViewModelPureTest {
         assertEquals(bd("25.00"), newProducts.single().stock)
         assertEquals(bd("25.00"), row(newItems, "org-a", "branch-a", "p1")!!.quantity)
     }
+
+    // ---- Plan 036: the initial state stops claiming what it does not know ----
+
+    @Test
+    fun `a fresh MoneyCounterUiState starts in isLoadingData true`() {
+        assertTrue(MoneyCounterUiState().isLoadingData)
+    }
 }
