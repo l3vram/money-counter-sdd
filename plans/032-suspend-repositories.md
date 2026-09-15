@@ -318,6 +318,26 @@ Stop and report back (do not improvise) if:
 - You conclude an out-of-scope repository must also be converted. Report why; do
   not expand the scope.
 
+## Follow-up found in review (2026-09-15) — `suspend` alone does not leave the main thread
+
+The diff is compliant and behaviour-identical, which is exactly what was asked. But it is worth
+writing down what it does **not** do, because the word "suspend" invites a wrong assumption.
+
+`JsonStockRepository.load()` and its siblings still perform **blocking file I/O with no
+dispatcher switch**, and `viewModelScope` runs on `Dispatchers.Main.immediate`. So the read
+still blocks the main thread — exactly as it did before, since it was already a blocking call
+inside a `launch` on Main. Verified after the change: no `withContext` and no `Dispatchers`
+reference anywhere in the four implementations.
+
+**Not a regression, and not a review failure**: this plan promised the modifier and nothing
+else, and the executor was right not to add more. But anyone reading "the repositories are
+suspend now" may assume the I/O moved off the main thread. It did not.
+
+The natural completion is `withContext(Dispatchers.IO)` inside each `Json*Repository`, which is
+a behaviour change (it removes main-thread blocking) and therefore deserves its own plan with
+its own verification. It is also what makes the owner's loading-state decision matter: with the
+I/O off Main there is a real gap to show a spinner for.
+
 ## Maintenance notes
 
 - **This plan is deliberately behavior-free.** A reviewer should check exactly

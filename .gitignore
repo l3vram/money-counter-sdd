@@ -27,3 +27,7 @@ gradle/gradle-daemon-jvm.properties
 # Local secrets in editor/MCP config — contains Appwrite API key
 opencode.json
 
+
+# Worktrees de los agentes y estado del flujo: locales, nunca al repo
+.claude/worktrees/
+.flow/
