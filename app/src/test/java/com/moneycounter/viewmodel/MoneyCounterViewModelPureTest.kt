@@ -427,4 +427,21 @@ class MoneyCounterViewModelPureTest {
     fun `a fresh MoneyCounterUiState starts in isLoadingData true`() {
         assertTrue(MoneyCounterUiState().isLoadingData)
     }
+
+    @Test
+    fun `a fresh MoneyCounterUiState grants no operational permission`() {
+        val state = MoneyCounterUiState()
+        assertFalse(state.canAddStock)
+        assertFalse(state.canRegisterWriteoff)
+        assertFalse(state.canEditStock)
+        assertFalse(state.canCreateProduct)
+        assertFalse(state.canEditProduct)
+        assertFalse(state.canDeleteProduct)
+        assertFalse(state.canRegisterExpense)
+        assertFalse(state.canViewReports)
+        assertFalse(state.canCreateSellerClosing)
+        assertFalse(state.canCreateBranchClosing)
+        assertFalse(state.canManageCatalog)
+        assertFalse(state.canViewAllSellersDashboard)
+    }
 }
