@@ -66,12 +66,29 @@ MainActivity calls `setSeller*` from a `LaunchedEffect`, so between ViewModel co
 that effect the UI state claims **every operational permission granted**, and a SELLER sees the
 stock and write-off buttons.
 
-**Severity, stated honestly**: this is defence-in-depth and UX, **not** an exploitable
-escalation. `permissionService` is `NoAccessPermissionService` from construction, and it is the
-real boundary — every mutation consults it before acting, so a button tapped in that window
-does nothing. But it directly contradicts the principle plan 033 established: the UI gates
-mirror the permission service and **both** fail closed. Plan 033 flipped the `Role?.may*()`
-helpers to `false` and missed these defaults.
+**Severity — corrected during review, 2026-09-15.** The plan first called this
+defence-in-depth and not an exploitable escalation, on the assumption that `permissionService`
+gates every mutation. The review found that assumption is **wrong in one place**:
+
+```kotlin
+fun createClosing(movementIds: List<String>): String? {
+    val state = _uiState.value
+    val selection = resolveClosingSelection(
+        canCreateBranchClosing = state.canCreateBranchClosing,   // ← from the UI STATE
+        canCreateSellerClosing = state.canCreateSellerClosing,
+        ...
+    ) ?: return null
+```
+
+`createClosing()` reads its authorization from the **UI state**, not from `permissionService`.
+So with the defaults at `true`, a session whose role had not resolved yet could create a
+**branch closing** — a real escalation, not a cosmetic flash. Flipping the defaults closes it.
+
+That also exposes an architectural smell worth its own follow-up: there are **two sources of
+truth for authorization** in the ViewModel — `permissionService` for most mutations, the UI
+state for closings. `createClosing` should consult `permissionService` like everything else.
+Out of scope here (this plan changes defaults only), but it is the next thing to fix in that
+file, and until then the UI state is load-bearing for authorization.
 
 ## Current state
 
