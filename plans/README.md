@@ -73,6 +73,8 @@ Hallazgo que origina 030: el rol de sesión se resuelve por red y *cualquier* fa
 |---|------|--------|----------|--------|------|--------|
 | 030 | `030-role-fail-closed` | Rol cacheado localmente + no degradar por error de red + re-cableado | P1 | M | — | ✅ DONE en `plan/030` (`ff98b3f`, 444 tests) — **Gate B pendiente** |
 | 033 | `033-no-membership-no-access` | Sin membresía no se entra (fail-closed) + cerrar tablas de tenant | **P0** | M | 030 | 🔄 pasos 1–6 DONE en `plan/033` (460 tests) — **paso 7 (dispositivo) pendiente del dueño** |
+| 039 | `039-apply-movement-function` | La Function `applyMovement`: autoriza, es idempotente y aplica el delta de stock en una transacción | P1 | L | 038 (sólo el contrato) | TODO |
+| 038 | `038-movement-carries-product-id` | Cada línea de movimiento lleva su `productId` — sin eso el diario no puede derivar stock | P1 | M | — | TODO |
 | 037 | `037-single-authorization-source` | `createClosing` autoriza por el `permissionService`, no por el UiState | P1 | XS | 036 | ✅ DONE en `plan/037` (509 tests, sin cambio) |
 | 036 | `036-initial-state-honesty` | El I/O fuera del hilo principal + estado de carga + los permisos por defecto fallan cerrado | P1 | S/M | 032 | ✅ DONE en `plan/036` (509 tests) — **Gate B pendiente**. La revisión encontró que `createClosing` autoriza leyendo el UiState: la ventana era escalada real. Follow-up anotado |
 | 035 | `035-atomic-approval` | Aprobar un registro en **una** transacción + primer harness de tests de la Function | P2 | M | — | ✅ DONE en `plan/035` (25 tests de la Function, los primeros) |
