@@ -1,6 +1,6 @@
 # Estado y pasos — El Luiso
 
-> **Punto de entrada para retomar el trabajo.** Última actualización: **2026-09-15, 00:30 UTC**.
+> **Punto de entrada para retomar el trabajo.** Última actualización: **2026-09-15, 16:00 UTC**.
 >
 > Si sos un agente que arranca de cero: leé las secciones 1 a 5 antes de tocar nada. La
 > sección 9 ("Trampas") te va a ahorrar horas — cada una costó un diagnóstico equivocado.
@@ -30,19 +30,9 @@ dominio pero pasaban con la base abierta de par en par.
 
 | Rama | Commit | Estado |
 |---|---|---|
-| `main` | `d2f01c3` | Todo hasta el plan 034. Rama de deploy del panel |
-| `plan/035` | `fb19c69` | **Plan 035 completo, sin mergear.** Ver el aviso de abajo |
-| `plan/032` | — | Rama lista con las decisiones del dueño anotadas; **sin empezar** |
+| `main` | `391aefe` | **Todo mergeado**: planes 030, 032, 033, 034, 035 y 036 |
 
-> ### ⚠️ Mergear `plan/035` **es** desplegar
-> Con Git conectado, un push a `main` que toque `webadmin/function/**` dispara el deploy solo.
-> El plan 035 está terminado y verde (25 tests) pero **deliberadamente sin mergear**: el dueño
-> quiere probar el alta antes.
->
-> Lo que está desplegado hoy es la versión **anterior** de `approveSignup`, la de los parches
-> (upsert de `users` + idempotencia). Esa versión ya resuelve el bug que duplicaba
-> organizaciones, así que probar el alta ahora es seguro. Lo que no está vivo todavía es la
-> atomicidad.
+Ya no hay ramas con trabajo pendiente: `plan/032` a `plan/036` están todas dentro de `main`.
 
 Los cambios de la **app Android** del plan 033 y de los bugs de hoy **no están desplegados**:
 requieren instalar un APK nuevo (`./gradlew :app:installDebug`).
@@ -57,7 +47,7 @@ requieren instalar un APK nuevo (`./gradlew :app:installDebug`).
 | API | **https://api.elluiso.l3vram.com/v1** |
 | Function `admin` | deployment **`6aa842e61d6162ac0269`** |
 | Site `admin-web` | deployment **`6aa8344490f6a26140fd`** |
-| Tests app | **507**, 0 fallos (en `main`) |
+| Tests app | **509**, 0 fallos (en `main`) |
 | Tests Function | **25**, 0 fallos (en `plan/035`; antes eran **cero**) |
 | Duración de sesión | 1 año (máximo de Appwrite; no existe "para siempre") |
 
@@ -111,15 +101,14 @@ el cierre; la app lee sólo su propia fila.
 
 | # | Qué | Quién | Notas |
 |---|---|---|---|
-| 1 | **Probar el alta de nuevo** | **Dueño** | Con lo que está desplegado hoy. Ver §6 |
-| 2 | **Mergear `plan/035`** → despliega la aprobación atómica | Agente | Sólo cuando el dueño lo diga |
-| 3 | **Plan 032** — repos `suspend` | Agente | Rama lista, decisiones anotadas en el plan: estado de carga, y la retrocompatibilidad es un no-problema porque no toca la persistencia |
-| 4 | **F2 paso 3** — schema + Function `applyMovement` | Agente | Depende del 032. El diseño 008 tiene 3 preguntas abiertas (§8) y 2 verificaciones (§7) sin cerrar |
-| 5 | **Respaldo de los JSON locales** | **Dueño** | **Antes de F2.** Los datos operativos son locales y no tienen copia en el servidor: son los únicos que existen |
-| 6 | **Plan 031** — limpieza | Agente | P3, archivos disjuntos |
-| — | Limpieza menor | Agente | Plataformas Web y reglas de los deployments viejos (`*.appwrite.network`), y la de `adm.elluiso.com` (sin DNS) |
-| — | Paginación | Agente | Las lecturas masivas de la Function usan `Query.limit(1000)`. Pasadas mil filas **truncan en silencio** |
-| — | Expulsión inmediata al revocar | — | Aceptado como limitación por el dueño. Ver §9.11bis |
+| 1 | **`createClosing` debe autorizar por `permissionService`** | Agente | Plan por escribir. Hoy lee los flags del **UiState**: dos fuentes de verdad para autorización en el mismo ViewModel. Lo encontró la revisión del 036 |
+| 2 | **F2 paso 3** — schema + Function `applyMovement` | Agente | El desbloqueo estructural ya está (032 + 036). El diseño 008 tiene 3 preguntas abiertas (§8) y 2 verificaciones (§7) sin cerrar |
+| 3 | **Respaldo de los JSON locales** | **Dueño** | **Antes de F2.** Los datos operativos son locales y no tienen copia en el servidor |
+| 4 | **Plan 031** — limpieza | Agente | P3, archivos disjuntos |
+| — | `providerBranches` vacío | Agente | Construye en **todas** las ramas: empujar `plan/035` gastó un build al vacío (no se activó, no rompe nada). Acotarlo a `main` |
+| — | Limpieza menor | Agente | Plataformas Web y reglas de deployments viejos (`*.appwrite.network`), y `adm.elluiso.com` sin DNS |
+| — | Paginación | Agente | Las lecturas masivas de la Function usan `Query.limit(1000)`: pasadas mil filas **truncan en silencio** |
+| — | Expulsión inmediata al revocar | — | Aceptado como limitación. Ver §9.11bis |
 
 ### Lo hecho, en orden
 
@@ -129,6 +118,8 @@ el cierre; la app lee sólo su propia fila.
 | 033 | Sin membresía usable no se entra — ni como SELLER. Tablas de tenant cerradas |
 | 034 | La app abre sin conexión, con cartel; un 401 al arrancar expulsa |
 | 035 | Aprobar es una transacción, y la Function estrena 25 tests (tenía cero) |
+| 032 | Las 4 interfaces de repositorio son `suspend` — habilita cualquier implementación de red |
+| 036 | El I/O sale del hilo principal, hay estado de carga, y los permisos por defecto fallan cerrado |
 | — | Panel operativo: dominio propio, deploy por Git, y los ~10 bugs del alta |
 
 ---
@@ -347,6 +338,23 @@ de fila). Appwrite Auth queda afuera.
 Por eso `resetPassword` —contraseña en Auth, marca en `signups`— **nunca** puede ser atómico, y
 su parche best-effort no fue descuido. Cuando una acción mezcle Auth y filas: lo esencial
 primero, lo accesorio best-effort, y que quede en el log.
+
+### 9.11quater. Un default puede reabrir un agujero ya cerrado
+
+El plan 033 hizo que sin membresía no se conceda ningún permiso, y dio vuelta los helpers
+`Role?.may*()` a `false`. Pero **se le escaparon los defaults de `MoneyCounterUiState`**, donde
+once flags de permiso arrancaban en `true`. Y `refreshPermissions()` se llama sólo desde
+`setSellerContext`, nunca desde `init`.
+
+Peor: `createClosing()` **autoriza leyendo el UiState**, no el `permissionService`. Así que la
+ventana entre construir el ViewModel y el `LaunchedEffect` de MainActivity permitía crear un
+cierre de sucursal sin rol resuelto. Escalada real, no cosmética. Cerrado por el plan 036.
+
+Dos reglas que salen de esto:
+1. **El valor inicial de un campo de estado debe ser lo que la app sabe al construirse**, que
+   suele ser "nada". Un default que afirma capacidad es cómo vuelve un fail-open.
+2. **La autorización se consulta en un solo lugar.** Que `createClosing` la lea del UiState es
+   una segunda fuente de verdad, y es el pendiente #1 de §5.
 
 ### 9.12. Orden de inicialización en Kotlin
 
