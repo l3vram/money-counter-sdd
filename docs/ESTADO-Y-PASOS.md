@@ -30,7 +30,7 @@ dominio pero pasaban con la base abierta de par en par.
 
 | Rama | Commit | Estado |
 |---|---|---|
-| `main` | `0f0f5d6` | **Todo mergeado**: planes 030, 032, 033, 034, 035, 036 y 037 |
+| `main` | `458bab2` | **Todo mergeado**: planes 030, 032, 033, 034, 035, 036 y 037 |
 | `plan/038` | `47742fc` | ✅ verde, revisado, **sin mergear** — espera el Gate B |
 | `plan/039` | `3777f95` | ✅ verde, revisado, **sin mergear** — espera el Gate B |
 
