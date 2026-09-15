@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -169,6 +170,7 @@ fun MoneyCounterScreen(
                         products = uiState.products,
                         currencies = uiState.currencies,
                         selectedCurrencyId = currency.id,
+                        isLoadingData = uiState.isLoadingData,
                         productLineTotal = { viewModel.productLineTotal(it) },
                         onAddRow = { viewModel.addProductRow() },
                         onRemoveRow = { index -> viewModel.removeProductRow(index) },
@@ -485,6 +487,7 @@ private fun ProductsSection(
     products: List<Product>,
     currencies: List<Currency>,
     selectedCurrencyId: String,
+    isLoadingData: Boolean,
     productLineTotal: (ProductSelection) -> BigDecimal,
     onAddRow: () -> Unit,
     onRemoveRow: (Int) -> Unit,
@@ -520,7 +523,20 @@ private fun ProductsSection(
                 )
             }
 
-            if (productsWithPrice.isEmpty()) {
+            if (isLoadingData && productsWithPrice.isEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(32.dp),
+                        strokeWidth = 3.dp
+                    )
+                }
+            } else if (productsWithPrice.isEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 LuisoNotice(
                     message = "El Luiso está listo. Registra tu primer conteo.",
