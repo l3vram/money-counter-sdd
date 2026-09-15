@@ -192,24 +192,56 @@ Verified in the repo at `cfd8809`:
 - All operational repositories are `Json*` (local); only identity/access/tenant
   master data is on Appwrite.
 
-**Must be verified before a plan depends on it** — do not assume:
-- The exact atomic increment/decrement API available on the pinned Appwrite
-  server and Node SDK version, and its behavior on a missing row (create-or-fail).
-  If no atomic primitive exists, the Function must serialize per stock row by
-  another documented mechanism — and that changes step 3's design, not the rest.
-- Whether `quantity` as an integer in minor units is compatible with every
-  existing consumer of `StockItem.quantity` (`Money.SCALE` handling).
+**Verified against the live project on 2026-09-15** (all of §7's open items are now closed):
 
-## 8. Open questions still worth deciding
+| Question | Answer, verified empirically |
+|---|---|
+| Is there an atomic increment/decrement? | **Yes.** `incrementRowColumn` / `decrementRowColumn` in `node-appwrite@25.2.0`, and the same operations exist in the MCP catalog |
+| Do they accept a transaction? | **Yes** — both take `transactionId`, so a stock delta and the movement insert commit together |
+| Are `min` / `max` real bounds? | **Yes, on the RESULT.** Decrementing `1789407949223` by 3 with `min: 1789407949221` was refused by the server: `400 column_limit_exceeded — "updatedAt" has reached the minimum value of…`, and the row was left untouched |
+| Behaviour on a missing row? | **Fails, does not create**: `404 column_not_found`. The Function must ensure the stock row exists (idempotent upsert of quantity 0) before incrementing — in the same transaction |
+| Is `quantity` compatible? | `StockItem.quantity` is `BigDecimal` with `Money.SCALE = 2`. The increment API takes a *number*, so the server column must be a **bigint of centiunits** (quantity × 100) to keep deltas exact. Floats would drift |
 
-1. **Should the server reject an offline sale that oversells on arrival?**
-   Today: warn-and-allow, may go negative. Rejecting means refusing a sale the
-   seller already made — a business decision, not a technical one.
-2. **How much movement history does an OWNER device pull?** Determines the
-   pagination and index work in step 7.
-3. **Do existing local installs need their data migrated into the cloud** (FASE
-   11), or does the cloud start empty? Migration is its own plan and must not
-   invent history.
+**What this changes in the design**: §7 warned that without an atomic primitive, step 3 would
+need another serialization mechanism. That contingency is off the table. Better still, `min: 0`
+would give server-enforced oversell protection as a single parameter — see decision 1 below for
+why it is deliberately **not** used.
+
+## 8. Owner decisions (2026-09-15) — the open questions, closed
+
+### 1. An offline sale that oversells on arrival: **allow it, stock goes negative**
+
+The sale already happened and the money is in the drawer. Refusing it creates a worse problem
+than a negative number: someone has to decide what happens to the cash. A negative quantity is
+an honest signal that something needs reconciling — a shortage, an unrecorded write-off, a bad
+count.
+
+**Implementation**: sales do **not** pass `min`. The `min: 0` protection verified above is
+available and deliberately unused for sales. It may still be right for operations that are not
+a completed fact (a manual stock correction, say), which is a separate decision when that
+arrives.
+
+### 2. An OWNER device pulls **the last 30 days**, older history on demand
+
+A phone with an unbounded journal gets slow. 30 days covers the operation and the month's
+closings; older pages are fetched when asked for. This sets the pagination and index work in
+step 7.
+
+### 3. **The cloud starts empty** — no stock migration, no history migration
+
+Neither existing stock nor existing movements are uploaded. Inventory is loaded through normal
+stock entries (`altas`).
+
+This was the owner's call over the advisor's recommendation to seed stock, and on reflection it
+is the better one: an `alta` is a **movement**, so it flows through `recordMovement` →
+`applyMovement` like everything else. The stock therefore arrives through the single write
+funnel, leaves an audit trail, and needs **no migration code at all** — removing a whole plan
+whose main risk was inventing history. The cost is one manual load, once.
+
+**Consequence to hold in view**: until that load happens, shared stock reads zero while the
+shop has merchandise. So the rollout order is: deploy, load inventory via altas, then trust the
+shared numbers. Local `Product.stock` remains the source for the app until step 9 retires it,
+which is what makes that window survivable.
 
 ## 9. What this document is not
 
