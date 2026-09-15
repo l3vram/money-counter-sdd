@@ -101,7 +101,7 @@ el cierre; la app lee sólo su propia fila.
 
 | # | Qué | Quién | Notas |
 |---|---|---|---|
-| 1 | **`createClosing` debe autorizar por `permissionService`** | Agente | Plan por escribir. Hoy lee los flags del **UiState**: dos fuentes de verdad para autorización en el mismo ViewModel. Lo encontró la revisión del 036 |
+| ~~1~~ | ~~`createClosing` debe autorizar por `permissionService`~~ | Agente | ✅ plan 037. Verificado: **cero** lecturas de `can*` desde el estado en todo el ViewModel |
 | 2 | **F2 paso 3** — schema + Function `applyMovement` | Agente | El desbloqueo estructural ya está (032 + 036). El diseño 008 tiene 3 preguntas abiertas (§8) y 2 verificaciones (§7) sin cerrar |
 | 3 | **Respaldo de los JSON locales** | **Dueño** | **Antes de F2.** Los datos operativos son locales y no tienen copia en el servidor |
 | 4 | **Plan 031** — limpieza | Agente | P3, archivos disjuntos |
@@ -353,8 +353,11 @@ cierre de sucursal sin rol resuelto. Escalada real, no cosmética. Cerrado por e
 Dos reglas que salen de esto:
 1. **El valor inicial de un campo de estado debe ser lo que la app sabe al construirse**, que
    suele ser "nada". Un default que afirma capacidad es cómo vuelve un fail-open.
-2. **La autorización se consulta en un solo lugar.** Que `createClosing` la lea del UiState es
-   una segunda fuente de verdad, y es el pendiente #1 de §5.
+2. **La autorización se consulta en un solo lugar.** Que `createClosing` la leyera del UiState
+   era una segunda fuente de verdad. **Cerrado por el plan 037**: hoy `grep -n
+   "state\.can[A-Z]"` sobre el ViewModel no devuelve nada, y los flags del UiState existen
+   sólo para renderizar. La regla general: una proyección refrescada por un callback de ciclo
+   de vida nunca puede ser la autoridad de una decisión.
 
 ### 9.12. Orden de inicialización en Kotlin
 

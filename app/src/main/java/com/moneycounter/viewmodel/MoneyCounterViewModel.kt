@@ -1083,8 +1083,14 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         val selection = resolveClosingSelection(
             requestedIds = movementIds.toSet(),
             visibleMovements = state.visibleMovements,
-            canCreateBranchClosing = state.canCreateBranchClosing,
-            canCreateSellerClosing = state.canCreateSellerClosing,
+            // Autorización desde el servicio, NUNCA desde el estado de UI (plan 037). Los
+            // flags `can*` del UiState son una proyección para renderizar, refrescada por
+            // `refreshPermissions()` desde `setSellerContext`. Autorizar con ellos convertía
+            // cualquier cambio en cuándo se refresca esa proyección en un cambio de
+            // autorización silencioso: antes del plan 036 arrancaban en `true`, así que una
+            // sesión sin rol resuelto podía crear un cierre de sucursal.
+            canCreateBranchClosing = permissionService.canCreateBranchClosing(),
+            canCreateSellerClosing = permissionService.canCreateSellerClosing(),
             sellerUid = sellerUid,
             branchId = currentBranchId
         ) ?: return null
