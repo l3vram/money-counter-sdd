@@ -59,10 +59,12 @@ import com.moneycounter.repository.TenantRepository
 import com.moneycounter.repository.UnitRepository
 import com.moneycounter.repository.branchBelongsToOrg
 import com.moneycounter.repository.resolveOrganizationId
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -96,21 +98,22 @@ data class MoneyCounterUiState(
     val closings: List<Closing> = emptyList(),
     val collectingFiado: Movement? = null,
     val lastFiadoId: String? = null,
-    val canAddStock: Boolean = true,
-    val canRegisterWriteoff: Boolean = true,
-    val canEditStock: Boolean = true,
-    val canCreateProduct: Boolean = true,
-    val canEditProduct: Boolean = true,
-    val canDeleteProduct: Boolean = true,
-    val canRegisterExpense: Boolean = true,
-    val canViewReports: Boolean = true,
-    val canCreateSellerClosing: Boolean = true,
-    val canCreateBranchClosing: Boolean = true,
-    val canManageCatalog: Boolean = true,
+    val canAddStock: Boolean = false,
+    val canRegisterWriteoff: Boolean = false,
+    val canEditStock: Boolean = false,
+    val canCreateProduct: Boolean = false,
+    val canEditProduct: Boolean = false,
+    val canDeleteProduct: Boolean = false,
+    val canRegisterExpense: Boolean = false,
+    val canViewReports: Boolean = false,
+    val canCreateSellerClosing: Boolean = false,
+    val canCreateBranchClosing: Boolean = false,
+    val canManageCatalog: Boolean = false,
     val canViewAllSellersDashboard: Boolean = false,
     val organization: Organization? = null,
     val branches: List<Branch> = emptyList(),
-    val selectedBranchId: String? = null
+    val selectedBranchId: String? = null,
+    val isLoadingData: Boolean = true,   // arranca en true: al construirse, nada se leyó todavía
 )
 
 /**
@@ -180,12 +183,20 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     init {
         loadDenominations()
         loadCurrencySettings()
-        loadProducts()
+        val productsJob = loadProducts()
         loadUnits()
-        loadMovements()
-        loadClosings()
-        resolveTenantContext()
+        val movementsJob = loadMovements()
+        val closingsJob = loadClosings()
+        val stockJob = resolveTenantContext()
         refreshTenantScope()
+        // isLoadingData starts true (honest: nothing has been read yet). One launch awaits
+        // the four initial-load jobs and clears it once, instead of a flag per list — the UI
+        // only needs to know "has the first read finished", and the four loads are already
+        // independent coroutines so joining them here changes nothing else about how they run.
+        viewModelScope.launch {
+            joinAll(productsJob, stockJob, movementsJob, closingsJob)
+            _uiState.update { it.copy(isLoadingData = false) }
+        }
     }
 
     fun setSeller(uid: String?, name: String?) {
@@ -208,7 +219,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         refreshTenantScope()
     }
 
-    private fun resolveTenantContext() {
+    private fun resolveTenantContext(): Job {
         val (org, branch) = tenantRepository.ensureDefaultBootstrap(sellerUid)
         val allBranches = tenantRepository.loadBranches().ifEmpty { listOf(branch) }
         val orgId = resolveOrganizationId(memberOrgId, org.id)
@@ -222,7 +233,7 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
             )
         }
         context = context?.copy(organizationId = orgId, branchId = branch.id)
-        loadStock()
+        return loadStock()
     }
 
     fun selectBranch(branchId: String): Boolean {
@@ -286,8 +297,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    private fun loadProducts() {
-        viewModelScope.launch {
+    private fun loadProducts(): Job {
+        return viewModelScope.launch {
             val products = productRepository.load().map { it.withOrgId(currentOrgId) }
             _uiState.update { it.copy(products = products) }
             recalculate()
@@ -297,8 +308,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
     /** Loads every branch-scoped stock row and idempotently backfills rows for the
      *  current (org, branch) from `Product.stock` — only rows that are missing.
      *  Persists only when backfill created rows. See [backfillStock]. */
-    private fun loadStock() {
-        viewModelScope.launch {
+    private fun loadStock(): Job {
+        return viewModelScope.launch {
             val items = stockRepository.load()
             val state = _uiState.value
             val backfilled = backfillStock(items, state.products, currentOrgId, currentBranchId)
@@ -977,8 +988,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         return fiadoId
     }
 
-    private fun loadMovements() {
-        viewModelScope.launch {
+    private fun loadMovements(): Job {
+        return viewModelScope.launch {
             val movements = movementRepository.load()
             _uiState.update { it.copy(movements = movements) }
             refreshTenantScope()
@@ -1035,8 +1046,8 @@ class MoneyCounterViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch { movementRepository.saveAll(movements) }
     }
 
-    private fun loadClosings() {
-        viewModelScope.launch {
+    private fun loadClosings(): Job {
+        return viewModelScope.launch {
             val closings = closingRepository.load()
             _uiState.update { it.copy(closings = closings) }
             refreshTenantScope()

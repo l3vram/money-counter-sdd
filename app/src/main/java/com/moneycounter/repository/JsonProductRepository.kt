@@ -5,6 +5,8 @@ import com.moneycounter.domain.DefaultCurrencies
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.Product
 import com.moneycounter.domain.ProductPrice
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -114,13 +116,13 @@ class JsonProductRepository(private val context: Context) : ProductRepository {
 
     private val fileName = "products.json"
 
-    override suspend fun load(): List<Product> {
-        return try {
+    override suspend fun load(): List<Product> = withContext(Dispatchers.IO) {
+        try {
             val file = File(context.filesDir, fileName)
-            if (!file.exists()) return emptyList()
+            if (!file.exists()) return@withContext emptyList()
 
             val jsonString = file.readText()
-            if (jsonString.isBlank()) return emptyList()
+            if (jsonString.isBlank()) return@withContext emptyList()
 
             ProductJson.fromJson(jsonString)
         } catch (e: Exception) {
@@ -128,7 +130,7 @@ class JsonProductRepository(private val context: Context) : ProductRepository {
         }
     }
 
-    override suspend fun save(products: List<Product>) {
+    override suspend fun save(products: List<Product>): Unit = withContext(Dispatchers.IO) {
         try {
             val file = File(context.filesDir, fileName)
             val tempFile = File(context.filesDir, "$fileName.tmp")

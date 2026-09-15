@@ -7,6 +7,8 @@ import com.moneycounter.domain.MovementDenomination
 import com.moneycounter.domain.MovementMigration
 import com.moneycounter.domain.MovementProductLine
 import com.moneycounter.domain.MovementType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -23,7 +25,7 @@ class JsonMovementRepository(private val context: Context) : MovementRepository 
 
     private val fileName = "movements.json"
 
-    override suspend fun load(): List<Movement> {
+    override suspend fun load(): List<Movement> = withContext(Dispatchers.IO) {
         val file = File(context.filesDir, fileName)
         val existing = try {
             if (!file.exists()) null
@@ -34,7 +36,7 @@ class JsonMovementRepository(private val context: Context) : MovementRepository 
         } catch (e: Exception) {
             null
         }
-        if (existing != null) return existing
+        if (existing != null) return@withContext existing
 
         val migrated = try {
             MovementMigration.fromLegacy(
@@ -47,7 +49,7 @@ class JsonMovementRepository(private val context: Context) : MovementRepository 
             emptyList()
         }
         saveAll(migrated)
-        return migrated
+        migrated
     }
 
     private fun <T> readLegacy(fileName: String, parse: (String) -> List<T>): List<T> {
@@ -62,7 +64,7 @@ class JsonMovementRepository(private val context: Context) : MovementRepository 
         }
     }
 
-    override suspend fun saveAll(movements: List<Movement>) {
+    override suspend fun saveAll(movements: List<Movement>): Unit = withContext(Dispatchers.IO) {
         try {
             val json = MovementJson.toJson(movements)
             val file = File(context.filesDir, fileName)

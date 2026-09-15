@@ -3,6 +3,8 @@ package com.moneycounter.repository
 import android.content.Context
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.StockItem
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -75,13 +77,13 @@ class JsonStockRepository(private val context: Context) : StockRepository {
 
     private val fileName = "stock.json"
 
-    override suspend fun load(): List<StockItem> {
-        return try {
+    override suspend fun load(): List<StockItem> = withContext(Dispatchers.IO) {
+        try {
             val file = File(context.filesDir, fileName)
-            if (!file.exists()) return emptyList()
+            if (!file.exists()) return@withContext emptyList()
 
             val jsonString = file.readText()
-            if (jsonString.isBlank()) return emptyList()
+            if (jsonString.isBlank()) return@withContext emptyList()
 
             StockJson.fromJson(jsonString)
         } catch (e: Exception) {
@@ -89,7 +91,7 @@ class JsonStockRepository(private val context: Context) : StockRepository {
         }
     }
 
-    override suspend fun saveAll(items: List<StockItem>) {
+    override suspend fun saveAll(items: List<StockItem>): Unit = withContext(Dispatchers.IO) {
         try {
             val file = File(context.filesDir, fileName)
             val tempFile = File(context.filesDir, "$fileName.tmp")

@@ -6,6 +6,8 @@ import com.moneycounter.domain.ClosingScope
 import com.moneycounter.domain.ClosingStockLine
 import com.moneycounter.domain.Money
 import com.moneycounter.domain.MovementType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -20,10 +22,10 @@ class JsonClosingRepository(private val context: Context) : ClosingRepository {
 
     private val fileName = "closings.json"
 
-    override suspend fun load(): List<Closing> {
-        return try {
+    override suspend fun load(): List<Closing> = withContext(Dispatchers.IO) {
+        try {
             val file = File(context.filesDir, fileName)
-            if (!file.exists()) return emptyList()
+            if (!file.exists()) return@withContext emptyList()
             val jsonString = file.readText()
             if (jsonString.isBlank()) emptyList() else ClosingJson.fromJson(jsonString)
         } catch (e: Exception) {
@@ -31,7 +33,7 @@ class JsonClosingRepository(private val context: Context) : ClosingRepository {
         }
     }
 
-    override suspend fun saveAll(closings: List<Closing>) {
+    override suspend fun saveAll(closings: List<Closing>): Unit = withContext(Dispatchers.IO) {
         try {
             val json = ClosingJson.toJson(closings)
             val file = File(context.filesDir, fileName)
