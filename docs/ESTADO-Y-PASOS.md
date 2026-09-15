@@ -61,10 +61,34 @@ requieren instalar un APK nuevo (`./gradlew :app:installDebug`).
 | `branches` | `[]` | ✅ true | cerrada |
 | `signups` | `create("users")` | ✅ true | cerrada; el `rowSecurity` se activó el 14/09 para que el usuario pueda leer SU fila — ver §9.11 |
 | `settings` | `read("users")` | false | **legible a propósito**: la app necesita el WhatsApp del superusuario |
+| `movements` | `[]` | ✅ true | creada el 15/09 para el plan 039 |
+| `stock` | `[]` | ✅ true | creada el 15/09 para el plan 039 |
 
 Antes, `members`, `users`, `orgs` y `branches` tenían `read("users")`: cualquier usuario
 autenticado leía el rol y el negocio de todos. La Function usa API key, así que **no le afecta**
 el cierre; la app lee sólo su propia fila.
+
+### El esquema de F2 (provisionado por MCP el 15/09, antes de que el plan 039 corriera)
+
+Sin permisos de tabla: **sólo la Function escribe**. Los permisos de lectura se reparten por fila
+por miembro, igual que hace `approveSignup` (§9.11).
+
+| Tabla | Row id | Columnas |
+|---|---|---|
+| `movements` | **el id del movimiento** — es la clave de idempotencia | `orgId`, `branchId`, `sellerUid`, `type`, `at` (bigint), `currencyId`, `amountCents` (bigint), `linesJson` (text), `appliedAt` (bigint) |
+| `stock` | `{branchId}_{productId}` | `orgId`, `branchId`, `productId`, `quantityCents` (bigint, default `0`), `updatedAt` (bigint) |
+
+`quantityCents` es **bigint en centiunidades** (cantidad × 100), nunca float: los deltas de un
+float derivan y el stock deja de cuadrar. El default `0` es el cinturón del upsert del plan 039
+—incrementar una fila que no existe da 404, no la crea—, y el planificador igual escribe el `0`
+explícito.
+
+`stock` lleva un índice **único** en `(branchId, productId)`. El row id ya lo garantiza; el
+índice está para que, si alguien algún día escribe una fila con otro id, la base lo rechace en
+vez de quedarse con dos stocks del mismo producto.
+
+`linesJson` es `text`, no `varchar`: un `varchar` grande se come el presupuesto de bytes de la
+fila (65535 por fila en Appwrite) y el `text` se guarda fuera.
 
 ### Datos actuales
 
@@ -163,7 +187,7 @@ y para instalar sin el IDE, `./gradlew :app:installDebug`.
 | Project ID | `6aa332f40001072d0747` ("El luiso (MoneyCounter)", región `fra`) |
 | Organización | `6aa332f3000389e6ee16` ("Personal Projects", tier-0) |
 | Database | `main` |
-| Tablas | `users`, `members`, `signups`, `orgs`, `branches`, `settings` |
+| Tablas | `users`, `members`, `signups`, `orgs`, `branches`, `settings`, `movements`, `stock` |
 | Repo | `github.com/l3vram/money-counter-sdd` (público) |
 | DNS | Cloudflare en `l3vram.com`: `elluiso` y `api.elluiso` → CNAME `fastly.appwrite.systems`, **DNS-only (nube gris)** |
 | Reglas de proxy | site `ab9f3b7e336130d966494e480d290c45`, api `ac4b789cdb6c8669bac01d9f912e76f7` |
