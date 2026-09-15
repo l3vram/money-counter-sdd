@@ -7,7 +7,7 @@
 > in `plans/README.md`.
 >
 > **Drift check (run first)**:
-> `git diff --stat cfd8809..HEAD -- app/src/main/java/com/moneycounter/repository/ app/src/main/java/com/moneycounter/viewmodel/MoneyCounterViewModel.kt`
+> `git diff --stat 7286ff1..HEAD -- app/src/main/java/com/moneycounter/repository/ app/src/main/java/com/moneycounter/viewmodel/MoneyCounterViewModel.kt`
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
@@ -20,6 +20,19 @@
 - **Depends on**: `plans/030-role-fail-closed.md` (land 030 first so the permission path is settled before this touches the ViewModel)
 - **Category**: tech-debt
 - **Planned at**: commit `cfd8809`, 2026-09-12
+- **Reconciled at**: commit `7286ff1`, 2026-09-15. Drift checked and resolved by the
+  orchestrator before dispatch:
+  - The four in-scope repositories and their `Json*` implementations are **untouched** since
+    the plan was written. Only `MoneyCounterViewModel.kt` moved (+33/−13), from plans 030, 033
+    and 034.
+  - Every structural claim still holds: `viewModelScope` is used at exactly 15 sites, all
+    reads and writes of the four repositories sit inside coroutine blocks, and
+    `resolveTenantContext()` is still the one synchronous exception, called from `init` and
+    from `setSellerContext`.
+  - **Gap found and fixed**: the call-site list below cited five writes; there are **six**.
+    `loadStock()` performs a conditional `stockRepository.saveAll(backfilled)` inside the same
+    `launch` as its read. An executor working from the old list would have missed it. Line
+    numbers were replaced with function names, which do not drift.
 
 ## Owner decisions (2026-09-14)
 
@@ -85,25 +98,32 @@ interface ProductRepository  { /* load / save,    same shape */ }
 `PaymentRepository` and `WriteoffRepository` also exist — see Scope for which are
 included.
 
-### The call sites — most are already inside coroutines
+### The call sites — all of them are already inside coroutines
 
-In `app/src/main/java/com/moneycounter/viewmodel/MoneyCounterViewModel.kt`, every
-**write** is already wrapped, so making it `suspend` is a no-op at the call site:
+In `app/src/main/java/com/moneycounter/viewmodel/MoneyCounterViewModel.kt`. Identified by
+**enclosing function**, not line number, because line numbers drift with every plan:
 
-```kotlin
-312:  viewModelScope.launch { stockRepository.saveAll(items) }
-376:  viewModelScope.launch { unitRepository.save(units) }
-1015: viewModelScope.launch { movementRepository.saveAll(movements) }
-1028: viewModelScope.launch { closingRepository.saveAll(closings) }
-1171: viewModelScope.launch { productRepository.save(products) }
-```
+| Function | Repository calls inside its `viewModelScope.launch` |
+|---|---|
+| `loadProducts()` | `productRepository.load()` |
+| `loadStock()` | `stockRepository.load()` **and** a conditional `saveAll(backfilled)` |
+| `loadMovements()` | `movementRepository.load()` |
+| `loadClosings()` | `closingRepository.load()` |
+| `persistStock()` | `stockRepository.saveAll(items)` |
+| `persistMovements()` | `movementRepository.saveAll(movements)` |
+| `persistClosings()` | `closingRepository.saveAll(closings)` |
+| `persistProducts()` | `productRepository.save(products)` |
 
-Reads at lines 256, 271, 282, 322, 962 and 1020 are likewise inside coroutine
-blocks — **confirm each one before changing it** rather than trusting this list.
+Every one is already wrapped, so adding `suspend` is a no-op at the call site. **Confirm each
+one in the live file before changing it** — `grep -n` for the repository name rather than
+trusting this table, which is a map, not the territory.
 
-**The one genuine exception** is `resolveTenantContext()` (line 191), which is
-**not** in a coroutine and is called from `init { }` (line 165) and from
-`setSellerContext(...)` (line 187):
+Note `loadStock()` specifically: its write is *conditional* (`if (backfilled != items)`) and
+shares the coroutine with its read. It is easy to miss when scanning for `viewModelScope.launch
+{ …saveAll` one-liners, which is exactly what happened to the first version of this list.
+
+**The one genuine exception** is `resolveTenantContext()`, which is **not** in a coroutine and
+is called from `init { }` and from `setSellerContext(...)`:
 
 ```kotlin
 private fun resolveTenantContext() {
@@ -114,11 +134,10 @@ private fun resolveTenantContext() {
 }
 ```
 
-This is why `TenantRepository` is **out of scope** for this plan — converting it
-would force `init` and `setSellerContext` to become asynchronous, changing
-startup ordering and interacting with plan 030's role wiring. It stays
-synchronous and local; it will be handled separately when tenant data moves to
-the cloud.
+This is why `TenantRepository` is **out of scope**: converting it would force `init` and
+`setSellerContext` to become asynchronous. That is not hypothetical — plan 033's device
+testing produced a crash (`sellerUid` read as JVM-null) precisely because `init` does more than
+it looks like. See §9.12 of `docs/ESTADO-Y-PASOS.md` before touching anything `init` reads.
 
 ### Conventions
 
@@ -137,8 +156,9 @@ the cloud.
 | Unit tests | `./gradlew :app:testDebugUnitTest` | exit 0, same count as baseline, 0 failures |
 | Build APK | `./gradlew :app:assembleDebug` | exit 0 |
 
-**Record the baseline test count before changing anything** — this plan must not
-change it.
+**Baseline: 507 tests on `main` @ `fcfe380`** (the plan was written when it was 424). This plan
+must not change the count: it adds no behavior and no tests. A different number at Step 0 is a
+STOP condition.
 
 ## Scope
 
