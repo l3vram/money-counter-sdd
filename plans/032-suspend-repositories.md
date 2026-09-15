@@ -21,6 +21,27 @@
 - **Category**: tech-debt
 - **Planned at**: commit `cfd8809`, 2026-09-12
 
+## Owner decisions (2026-09-14)
+
+1. **Backwards compatibility is a non-issue here, and deliberately so.** This plan adds the
+   `suspend` modifier and nothing else: the `*Json` objects that read and write the files are
+   explicitly out of scope, so the file names, the format and the version numbers
+   (`Movement` v2, `Closing` v3, `Product` v5) are untouched. An APK with this plan reads
+   exactly what the previous one wrote. There is no migration, so there is nothing a migration
+   could break. The versioned-migration machinery (`fromJson` reading `optInt("version", 1)`)
+   stays available for the plan that does need it — F2 step 9, when `Product.stock` is retired.
+
+2. **The real risk is timing, and the owner chose the loading state.** Today `init` loads
+   synchronously, so the first frame already has data. With `load()` suspending, `init` must
+   launch a coroutine and the first frame can be briefly empty. The owner's call: **show a
+   loading state** rather than seeding the initial state from a second source. Reason: less
+   code, less coupling, and when F2 makes stock server-authoritative the "loading" will be real
+   anyway — so this builds the shape that is needed later instead of a stopgap.
+
+   Note for the executor: this is the class of bug that produced the `sellerUid` NPE — `init`
+   does more than it looks like. Anything `init` reads transitively must be declared above it
+   (see §9.12 of `docs/ESTADO-Y-PASOS.md`).
+
 ## Why this matters
 
 Every operational repository is local-JSON-only and synchronous:
