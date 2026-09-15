@@ -30,9 +30,13 @@ dominio pero pasaban con la base abierta de par en par.
 
 | Rama | Commit | Estado |
 |---|---|---|
-| `main` | `391aefe` | **Todo mergeado**: planes 030, 032, 033, 034, 035 y 036 |
+| `main` | `0f0f5d6` | **Todo mergeado**: planes 030, 032, 033, 034, 035, 036 y 037 |
+| `plan/038` | `47742fc` | ✅ verde, revisado, **sin mergear** — espera el Gate B |
+| `plan/039` | `3777f95` | ✅ verde, revisado, **sin mergear** — espera el Gate B |
 
-Ya no hay ramas con trabajo pendiente: `plan/032` a `plan/036` están todas dentro de `main`.
+Los planes 038 y 039 están verificados y su integración también (`integration/f2-step3`:
+merge limpio, 516 + 64 tests). **No se mergearon**: mergear a `main` despliega el panel, así
+que la decisión es del dueño.
 
 Los cambios de la **app Android** del plan 033 y de los bugs de hoy **no están desplegados**:
 requieren instalar un APK nuevo (`./gradlew :app:installDebug`).
@@ -47,8 +51,8 @@ requieren instalar un APK nuevo (`./gradlew :app:installDebug`).
 | API | **https://api.elluiso.l3vram.com/v1** |
 | Function `admin` | deployment **`6aa842e61d6162ac0269`** |
 | Site `admin-web` | deployment **`6aa8344490f6a26140fd`** |
-| Tests app | **509**, 0 fallos (en `main`) |
-| Tests Function | **25**, 0 fallos (en `plan/035`; antes eran **cero**) |
+| Tests app | **509** en `main`; **516** con el plan 038 |
+| Tests Function | **25** en `main`; **64** con el plan 039 (antes de todo esto eran **cero**) |
 | Duración de sesión | 1 año (máximo de Appwrite; no existe "para siempre") |
 
 ### Permisos de las tablas (ya aplicado en producción)
@@ -126,7 +130,10 @@ fila (65535 por fila en Appwrite) y el `text` se guarda fuera.
 | # | Qué | Quién | Notas |
 |---|---|---|---|
 | ~~1~~ | ~~`createClosing` debe autorizar por `permissionService`~~ | Agente | ✅ plan 037. Verificado: **cero** lecturas de `can*` desde el estado en todo el ViewModel |
-| 2 | **F2 paso 3** — schema + Function `applyMovement` | Agente | El desbloqueo estructural ya está (032 + 036). El diseño 008 tiene 3 preguntas abiertas (§8) y 2 verificaciones (§7) sin cerrar |
+| ~~2~~ | ~~**F2 paso 3** — schema + Function `applyMovement`~~ | Agente | ✅ planes 038 + 039, **en ramas, sin mergear**. El schema ya está en producción |
+| 2 | **F2 paso 4/5** — que la app llame a `applyMovement` y lea el stock del servidor | Agente | El servidor ya acepta movimientos; **nadie se los manda todavía**. Hasta que esto se haga, el stock compartido no existe en la práctica |
+| — | Cruzar las dos matrices duplicadas | Agente | `Role.kt` y `movementPlan.js` codifican la **misma** matriz rol→tipo, y ningún test puede cruzar Kotlin y JS. Hoy coinciden (verificado). Mitigación mínima: un comentario en `Role.kt` apuntando a `movementPlan.js` |
+| — | Permisos de lectura en `movements` y `stock` | Agente | Las filas se crean sin ningún permiso (a propósito, falla cerrado). Cuando la app tenga que leerlas, hay que repartir lecturas por miembro como hace `approveSignup` |
 | 3 | **Respaldo de los JSON locales** | **Dueño** | **Antes de F2.** Los datos operativos son locales y no tienen copia en el servidor |
 | 4 | **Plan 031** — limpieza | Agente | P3, archivos disjuntos |
 | — | `providerBranches` vacío | Agente | Construye en **todas** las ramas: empujar `plan/035` gastó un build al vacío (no se activó, no rompe nada). Acotarlo a `main` |
@@ -144,6 +151,9 @@ fila (65535 por fila en Appwrite) y el `text` se guarda fuera.
 | 035 | Aprobar es una transacción, y la Function estrena 25 tests (tenía cero) |
 | 032 | Las 4 interfaces de repositorio son `suspend` — habilita cualquier implementación de red |
 | 036 | El I/O sale del hilo principal, hay estado de carga, y los permisos por defecto fallan cerrado |
+| 037 | `createClosing` autoriza por el servicio, no por el estado de UI |
+| 038 | Cada línea de movimiento lleva su `productId` — sin eso el diario no podía derivar stock |
+| 039 | `applyMovement`: autoriza, es idempotente y aplica el delta de stock en una transacción |
 | — | Panel operativo: dominio propio, deploy por Git, y los ~10 bugs del alta |
 
 ---
