@@ -1,4 +1,6 @@
 const sdk = require('node-appwrite');
+const { approvalPlan } = require('./approvalPlan');
+const { runOperations } = require('./transaction');
 
 const DATABASE_ID = 'main';
 
@@ -84,107 +86,61 @@ async function listAll(tablesDB, tableId, queries) {
   return { rows: result.rows || [], total: result.total || result.rows.length };
 }
 
+/**
+ * Aprobación en UNA transacción (plan 035).
+ *
+ * La decisión vive en `approvalPlan` -pura y con tests- y la atomicidad en `runOperations`.
+ * Acá sólo queda el cableado: leer lo que el planificador necesita, pedirle el plan, y
+ * ejecutarlo. Un cambio de regla toca la función pura; un cambio de cómo se logra la
+ * atomicidad toca el ejecutor. Ninguno arrastra al otro.
+ *
+ * Antes esto escribía cinco o más filas en secuencia y sin transacción: un fallo a mitad
+ * dejaba la organización creada, el signup en PENDING, y cada reintento minteaba una
+ * organización nueva.
+ */
 async function approveSignup(tablesDB, params, error, log) {
   const { signupId } = params;
+
   const signup = await getRowOrNull(tablesDB, TABLE_SIGNUPS, signupId);
-  if (!signup) throw httpError(404, 'Solicitud no encontrada (signupId=' + signupId + ')');
-  if (signup.status && signup.status !== 'PENDING') {
-    throw httpError(400, 'La solicitud ya fue procesada (estado actual: ' + signup.status + ')');
-  }
-
-  const now = Date.now();
-  let orgId = params.orgId;
-  let branchIds = params.branchIds;
-  const createdBranches = [];
-
-  // Idempotence for the OWNER path. The approval writes several rows in sequence and is not
-  // a transaction, so a failure halfway leaves the signup PENDING with the organization
-  // already created. Retrying used to mint a brand new `orgId` and duplicate everything —
-  // three "Las Pepas" organizations came out of three attempts. If this signup already has a
-  // membership pointing at an organization, finish that one instead of starting another.
   const existingMember = await getRowOrNull(tablesDB, TABLE_MEMBERS, signupId);
-  const alreadyAssignedOrg = existingMember && existingMember.orgId;
 
-  if (signup.role === 'OWNER' && alreadyAssignedOrg) {
-    orgId = existingMember.orgId;
-    branchIds = Array.isArray(existingMember.branchIds) ? existingMember.branchIds : [];
-    if (log) log(`Reanudando aprobacion de ${signupId}: ya tenia la organizacion ${orgId}`);
-  } else if (signup.role === 'OWNER') {
-    orgId = sdk.ID.unique();
-    const orgName = (signup.businessName && String(signup.businessName).trim()) || 'Negocio sin nombre';
-    await tablesDB.createRow({
-      databaseId: DATABASE_ID,
-      tableId: TABLE_ORGS,
-      rowId: orgId,
-      data: { name: orgName, whatsappNumber: '', status: 'ACTIVE', createdAt: now },
-    });
-    const names = Array.isArray(signup.branches) && signup.branches.length ? signup.branches : ['Sucursal principal'];
-    for (const name of names) {
-      const branchId = sdk.ID.unique();
-      await tablesDB.createRow({
-        databaseId: DATABASE_ID,
-        tableId: TABLE_BRANCHES,
-        rowId: branchId,
-        data: { orgId, name: String(name), status: 'ACTIVE', createdAt: now },
-      });
-      createdBranches.push(branchId);
-    }
-    branchIds = createdBranches;
-  } else {
-    if (!orgId) throw httpError(400, 'Se requiere orgId para aprobar una solicitud de rol ' + signup.role);
-    if (!Array.isArray(branchIds) || branchIds.length === 0) {
-      throw httpError(400, 'Se requiere al menos una branchId para aprobar una solicitud de rol ' + signup.role);
-    }
-    const org = await getRowOrNull(tablesDB, TABLE_ORGS, orgId);
-    if (!org) throw httpError(400, 'Organización no encontrada: ' + orgId);
-    const orgBranches = await listAll(tablesDB, TABLE_BRANCHES, [sdk.Query.equal('orgId', [orgId])]);
-    const validIds = new Set(orgBranches.rows.map((r) => r.$id));
-    const unknown = branchIds.filter((b) => !validIds.has(b));
-    if (unknown.length) {
-      throw httpError(400, 'Las branchIds no pertenecen a la organización ' + orgId + ': ' + unknown.join(', '));
+  // La organización y sus sucursales sólo hacen falta para los roles que no son DUEÑO: el
+  // DUEÑO las crea. Evita dos lecturas en el camino más común.
+  let org = null;
+  let orgBranches = [];
+  const necesitaOrgExistente = signup && signup.role !== 'OWNER' && params.orgId;
+  if (necesitaOrgExistente) {
+    org = await getRowOrNull(tablesDB, TABLE_ORGS, params.orgId);
+    if (org) {
+      const listado = await listAll(tablesDB, TABLE_BRANCHES, [
+        sdk.Query.equal('orgId', [params.orgId]),
+      ]);
+      orgBranches = listado.rows;
     }
   }
 
-  // `members` has rowSecurity enabled and no table-level read, so the row must
-  // carry its own read grant: the Android app polls `members/{uid}` as the signed-in
-  // user. Without this the read 404s, and a 404 is how the app spells "no membership".
-  await tablesDB.upsertRow({
-    databaseId: DATABASE_ID,
-    tableId: TABLE_MEMBERS,
-    rowId: signupId,
-    data: { orgId, role: signup.role, branchIds },
-    permissions: [sdk.Permission.read(sdk.Role.user(signupId))],
-  });
-  // Upsert, not update: the signup flow writes the `signups` row, while the `users` row is
-  // only created when the app next boots with a session (`ensureUserDocument`). Someone who
-  // registers and closes the app therefore has no `users` row yet, and an update would 404 —
-  // which made approving them impossible from the panel. The signup row carries the email, so
-  // the row can be completed here.
-  await tablesDB.upsertRow({
-    databaseId: DATABASE_ID,
-    tableId: TABLE_USERS,
-    rowId: signupId,
-    data: {
-      email: signup.email || '',
-      access: 'APPROVED',
-      updatedAt: now,
-      createdAt: signup.createdAt != null ? signup.createdAt : now,
-    },
-    permissions: [
-      sdk.Permission.read(sdk.Role.user(signupId)),
-      sdk.Permission.update(sdk.Role.user(signupId)),
-    ],
-  });
-  await tablesDB.updateRow({
-    databaseId: DATABASE_ID,
-    tableId: TABLE_SIGNUPS,
-    rowId: signupId,
-    data: { status: 'APPROVED', approvedAt: now },
+  const plan = approvalPlan({
+    signupId,
+    signup,
+    params,
+    existingMember,
+    org,
+    orgBranches,
+    now: Date.now(),
+    newId: () => sdk.ID.unique(),
+    readGrant: (uid) => sdk.Permission.read(sdk.Role.user(uid)),
+    updateGrant: (uid) => sdk.Permission.update(sdk.Role.user(uid)),
   });
 
-  await grantTenantRead(tablesDB, signupId, orgId, branchIds, error);
+  if (!plan.ok) throw httpError(plan.error.statusCode, plan.error.message);
 
-  return { signupId, orgId, branchIds };
+  if (plan.resumed && log) {
+    log(`Reanudando aprobacion de ${signupId}: ya tenia la organizacion ${plan.orgId}`);
+  }
+
+  await runOperations(tablesDB, DATABASE_ID, plan.operations, error);
+
+  return { signupId, orgId: plan.orgId, branchIds: plan.branchIds };
 }
 
 // Every list action answers `{ rows, total }` — the shape the panel's `ListResult<T>`
@@ -197,52 +153,6 @@ async function approveSignup(tablesDB, params, error, log) {
 // registration, its enum cannot even express SUPERUSER, and a seeded account (the superuser
 // itself) has no signup row at all — so reading the role from there showed no role for the
 // one account that has the highest one.
-/**
- * Adds a read grant for one user to a row's existing permissions, without disturbing them.
- * Several members share one organization, so this must merge and never overwrite — and it
- * must be idempotent, because approving again would otherwise pile up duplicates.
- */
-function withUserRead(existing, uid) {
-  const grant = sdk.Permission.read(sdk.Role.user(uid));
-  const current = Array.isArray(existing) ? existing : [];
-  return current.includes(grant) ? current : current.concat([grant]);
-}
-
-/**
- * Plan 033 step 5: let an approved member read its own organization and branches.
- * The Android app reads `orgs/{orgId}` and lists `branches` client-side for the
- * post-approval sync (plan 028), so once those tables are closed (step 6) each row needs to
- * name its readers explicitly. Granting here, at approval time, is what makes closing them
- * safe.
- */
-async function grantTenantRead(tablesDB, uid, orgId, branchIds, error) {
-  const targets = [{ tableId: TABLE_ORGS, rowId: orgId }].concat(
-    (Array.isArray(branchIds) ? branchIds : []).map((id) => ({ tableId: TABLE_BRANCHES, rowId: id }))
-  );
-  for (const target of targets) {
-    if (!target.rowId) continue;
-    try {
-      const row = await tablesDB.getRow({
-        databaseId: DATABASE_ID,
-        tableId: target.tableId,
-        rowId: target.rowId,
-      });
-      await tablesDB.updateRow({
-        databaseId: DATABASE_ID,
-        tableId: target.tableId,
-        rowId: target.rowId,
-        permissions: withUserRead(row.$permissions, uid),
-      });
-    } catch (e) {
-      // Never fail an approval over this: the membership is already written and the panel
-      // can re-grant. But say so, or a user silently loses sight of its own business.
-      if (error) {
-        error(`No se pudo dar lectura de ${target.tableId}/${target.rowId} a ${uid}: ${e && e.message}`);
-      }
-    }
-  }
-}
-
 async function listUsers(tablesDB) {
   const [users, signups, members] = await Promise.all([
     listAll(tablesDB, TABLE_USERS, []),

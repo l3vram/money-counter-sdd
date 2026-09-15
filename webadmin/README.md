@@ -34,6 +34,41 @@ datacenters; base64 inline vía MCP arriesga corrupción) y crear deployment:
 mime_type:"application/gzip"}, install_command:"npm install", build_command:"npm run build",
 output_directory:"dist", activate:true}`.
 
+## Tests de la Function
+
+```
+npm --prefix webadmin/function test      # node:test, integrado en Node 18: cero dependencias
+npm --prefix webadmin/function run check # sintaxis
+```
+
+Los tests corren **sin instalar nada**, y eso no es casualidad: `src/approvalPlan.js` no importa
+`node-appwrite` a propósito. Si alguna vez lo importa, los tests dejan de correr en limpio y se
+pierde lo que los hizo posibles.
+
+## La aprobación es atómica (plan 035)
+
+`approveSignup` escribe sus filas en **una transacción**. La forma es: decidir y después
+escribir.
+
+| Pieza | Qué sabe | Qué NO sabe |
+|---|---|---|
+| `src/approvalPlan.js` | todas las reglas de aprobación | nada de Appwrite |
+| `src/transaction.js` | cómo etapar y commitear | nada de aprobaciones |
+| `src/index.js` | el cableado entre las dos | — |
+
+Un cambio de regla toca la función pura, con tests. Un cambio de cómo se logra la atomicidad
+toca el ejecutor. Cualquier acción nueva que escriba más de una fila usa `runOperations`.
+
+### ⚠️ La frontera: Auth no entra en una transacción de filas
+
+**Sólo las filas de TablesDB son transaccionales.** `users.updatePassword`, `users.create` y
+todo lo de Appwrite Auth quedan afuera y no se pueden atomizar con escrituras de filas.
+
+`resetPassword` es el ejemplo vivo: cambia una contraseña (Auth) y después marca `signups`
+(fila). Esas dos **nunca** van a ser atómicas, y por eso la marca es best-effort con log — no
+por descuido. **No intentar hacerla transaccional.** Cuando una acción mezcle Auth y filas: lo
+esencial primero, lo accesorio best-effort, y que quede en el log.
+
 ## Requisitos provisionados por el orquestador (NO ejecutar aquí)
 
 1. **Function** en Appwrite: runtime Node, entrypoint `src/index.js`, dependencia
